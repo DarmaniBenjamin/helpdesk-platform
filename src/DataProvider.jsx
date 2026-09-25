@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DataContext } from "./useData";
+import { STARTING_ANSWERS } from "./Components/Knowledge";
 import {
   tickets as startingTickets,
   customers as startingCustomers,
@@ -170,6 +171,44 @@ export default function DataProvider({ children }) {
   const [customers, setCustomers] = useState(startingCustomers);
   const [rules, setRules] = useState(STARTING_RULES);
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
+  const [answers, setAnswers] = useState(STARTING_ANSWERS);
+
+  // ---------- Saved answers (knowledge base) ----------
+
+  function addAnswer(fields) {
+    const now = Date.now();
+    const answer = {
+      ticketId: null,
+      source: "manual",
+      author: CURRENT_USER,
+      ...fields,
+      id: Math.max(0, ...answers.map((a) => a.id)) + 1,
+      createdAt: now,
+      updatedAt: now,
+      uses: 0,
+    };
+    setAnswers((list) => [answer, ...list]); // newest first
+    return answer;
+  }
+
+  function updateAnswer(id, changes) {
+    setAnswers((list) =>
+      list.map((a) =>
+        a.id === id ? { ...a, ...changes, updatedAt: Date.now() } : a,
+      ),
+    );
+  }
+
+  function deleteAnswer(id) {
+    setAnswers((list) => list.filter((a) => a.id !== id));
+  }
+
+  // Count how often an answer gets copied, so the most useful ones can rise to the top
+  function recordAnswerUse(id) {
+    setAnswers((list) =>
+      list.map((a) => (a.id === id ? { ...a, uses: a.uses + 1 } : a)),
+    );
+  }
 
   // ---------- Automations ----------
 
@@ -378,6 +417,11 @@ export default function DataProvider({ children }) {
         addAutomation,
         updateAutomation,
         deleteAutomation,
+        answers,
+        addAnswer,
+        updateAnswer,
+        deleteAnswer,
+        recordAnswerUse,
       }}
     >
       {children}

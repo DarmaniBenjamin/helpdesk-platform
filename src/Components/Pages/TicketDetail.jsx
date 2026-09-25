@@ -11,12 +11,15 @@ import {
   UserRound,
   ExternalLink,
   TicketX,
+  BookOpen,
+  CircleCheck,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
 import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
 import { inputClass, labelClass } from "../formStyles";
+import { extractKeywords, relevance } from "../Knowledge";
 import useData from "../../useData";
 import {
   STATUSES,
@@ -105,10 +108,16 @@ function Composer({ ticket, onSend }) {
   const [kind, setKind] = useState("agent"); // "agent" = reply to customer, "note" = internal
   const [body, setBody] = useState("");
   const [thenStatus, setThenStatus] = useState(""); // "" = keep the current status
+  const [saveToAnswers, setSaveToAnswers] = useState(true); // notes only
 
   function send() {
     if (!body.trim()) return;
-    onSend(kind, body.trim(), thenStatus || null);
+    onSend(
+      kind,
+      body.trim(),
+      thenStatus || null,
+      kind === "note" && saveToAnswers,
+    );
     setBody("");
     setThenStatus("");
   }
@@ -159,6 +168,17 @@ function Composer({ ticket, onSend }) {
       />
 
       <div className="flex flex-col gap-2 border-t border-line p-3 sm:flex-row sm:items-center sm:justify-end">
+        {isNote && (
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-amber-800 sm:mr-auto">
+            <input
+              type="checkbox"
+              checked={saveToAnswers}
+              onChange={(e) => setSaveToAnswers(e.target.checked)}
+              className="h-4 w-4 cursor-pointer accent-amber-500"
+            />
+            Also save to Saved Answers
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm text-muted">
           <span className="whitespace-nowrap">Then set status</span>
           <select
@@ -284,8 +304,9 @@ function Properties({ ticket, onChange }) {
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tickets, updateTicket, addMessage } = useData();
+  const { tickets, updateTicket, addMessage, answers, addAnswer } = useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
+  const [savedAnswer, setSavedAnswer] = useState(null); // the answer just saved from a note
 
   const ticket = tickets.find((t) => t.id === Number(id));
 
@@ -315,6 +336,40 @@ export default function TicketDetail() {
     (t) =>
       t.customerId === ticket.customerId && t.id !== ticket.id && !isDone(t),
   );
+
+  // Saved answers that share keywords with this ticket: likely fixes
+  const ticketKeywords = extractKeywords(
+    `${ticket.subject} ${ticket.subject} ${ticket.description}`,
+    8,
+  );
+  const suggested = answers
+    .map((a) => ({ answer: a, score: relevance(a, ticketKeywords) }))
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((s) => s.answer);
+
+  function handleSend(kind, body, status, saveToAnswers) {
+    addMessage(ticket.id, kind, body, status);
+    if (saveToAnswers) {
+      // The ticket's subject becomes the title, the ticket's description the problem,
+      // and the note the fix. Keywords are picked from all three.
+      const answer = addAnswer({
+        title: ticket.subject,
+        problem: ticket.description,
+        solution: body,
+        department: ticket.department,
+        ticketId: ticket.id,
+        source: "note",
+        keywords: extractKeywords(
+          `${ticket.subject} ${ticket.subject} ${ticket.description} ${body}`,
+        ),
+      });
+      setSavedAnswer(answer);
+    } else {
+      setSavedAnswer(null);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -372,6 +427,32 @@ export default function TicketDetail() {
           <div className="hidden rounded-xl border border-line bg-white p-4 lg:block">
             <CustomerCard customer={customer} otherOpen={otherOpen} />
           </div>
+
+          {suggested.length > 0 && (
+            <div className="rounded-xl border border-line bg-white p-4">
+              <p className="mb-2 flex items-center gap-2 font-semibold">
+                <BookOpen className="h-4 w-4 text-brand" />
+                Suggested fixes
+              </p>
+              <ul className="flex flex-col gap-1">
+                {suggested.map((a) => (
+                  <li key={a.id}>
+                    <Link
+                      to={`/saved-answers?search=${encodeURIComponent(a.title)}`}
+                      className="block rounded-md px-2 py-1.5 text-sm transition hover:bg-brand/5 hover:text-brand"
+                    >
+                      <span className="block truncate font-medium">
+                        {a.title}
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {a.solution}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </aside>
 
         {/* Left side: the conversation */}
@@ -382,12 +463,23 @@ export default function TicketDetail() {
             ))}
           </ul>
 
-          <Composer
-            ticket={ticket}
-            onSend={(kind, body, status) =>
-              addMessage(ticket.id, kind, body, status)
-            }
-          />
+          {savedAnswer?.ticketId === ticket.id && (
+            <div className="flex items-center gap-2 rounded-lg bg-brand/10 px-3 py-2.5 text-sm text-brand">
+              <CircleCheck className="h-4 w-4 shrink-0" />
+              <p className="flex-1">
+                Note saved to{" "}
+                <Link
+                  to={`/saved-answers?search=${encodeURIComponent(savedAnswer.title)}`}
+                  className="font-medium underline"
+                >
+                  Saved Answers
+                </Link>{" "}
+                with keywords: {savedAnswer.keywords.join(", ")}
+              </p>
+            </div>
+          )}
+
+          <Composer ticket={ticket} onSend={handleSend} />
 
           {/* Phones and tablets: customer card goes below the conversation */}
           <div className="rounded-xl border border-line bg-white p-4 lg:hidden">
