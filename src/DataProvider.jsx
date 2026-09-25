@@ -56,11 +56,77 @@ function describeChange(field, value) {
   }
 }
 
+// Assignment rules to start with. They're saved and shown, but don't
+// run automatically yet: that gets decided later.
+const STARTING_RULES = [
+  {
+    id: 1,
+    name: "Billing questions",
+    description:
+      "Invoices, payments and quotes go straight to the billing team.",
+    keywords: ["invoice", "billing", "payment", "quote"],
+    department: "bill",
+    agent: "a4",
+    enabled: true,
+  },
+  {
+    id: 2,
+    name: "Network problems",
+    description: "Wi-Fi, VPN and internet issues go to the networking team.",
+    keywords: ["wi-fi", "vpn", "internet", "access point"],
+    department: "net",
+    agent: null,
+    enabled: true,
+  },
+  {
+    id: 3,
+    name: "Email and accounts",
+    description:
+      "Outlook, mailboxes, OneDrive and sign-in problems go to Microsoft 365.",
+    keywords: ["outlook", "mailbox", "onedrive", "authenticator"],
+    department: "m365",
+    agent: "a2",
+    enabled: true,
+  },
+  {
+    id: 4,
+    name: "Backups and servers",
+    description: "Failed backups, restores and server space warnings.",
+    keywords: ["backup", "restore", "server"],
+    department: "srv",
+    agent: null,
+    enabled: false,
+  },
+];
+
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
   const [tickets, setTickets] = useState(startingTickets);
   const [customers, setCustomers] = useState(startingCustomers);
+  const [rules, setRules] = useState(STARTING_RULES);
+
+  // ---------- Assignment rules ----------
+
+  function addRule(fields) {
+    const rule = {
+      ...fields,
+      id: Math.max(0, ...rules.map((r) => r.id)) + 1,
+      enabled: true,
+    };
+    setRules((list) => [...list, rule]);
+    return rule;
+  }
+
+  function updateRule(id, changes) {
+    setRules((list) =>
+      list.map((r) => (r.id === id ? { ...r, ...changes } : r)),
+    );
+  }
+
+  function deleteRule(id) {
+    setRules((list) => list.filter((r) => r.id !== id));
+  }
 
   // ---------- Customers ----------
 
@@ -216,6 +282,10 @@ export default function DataProvider({ children }) {
         addCustomer,
         updateCustomer,
         findCustomerByEmail,
+        rules,
+        addRule,
+        updateRule,
+        deleteRule,
       }}
     >
       {children}

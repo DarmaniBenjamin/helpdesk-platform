@@ -8,6 +8,7 @@ import Customers from "./Components/Pages/Customers";
 import TicketDetail from "./Components/Pages/TicketDetail";
 import CustomerDetail from "./Components/Pages/CustomerDetail";
 import TicketTopics from "./Components/Pages/TicketTopics";
+import TicketAssignment from "./Components/Pages/TicketAssignment";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -39,10 +40,7 @@ export default function App() {
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/customers/:id" element={<CustomerDetail />} />
-            <Route
-              path="/assignment"
-              element={<ComingSoon title="Ticket Assignment" />}
-            />
+            <Route path="/assignment" element={<TicketAssignment />} />
             <Route path="/topics" element={<TicketTopics />} />
             <Route
               path="/sla"
