@@ -46,6 +46,11 @@ function formatDate(time) {
   });
 }
 
+// Link to one saved answer in the Knowledge Base, already searched and opened
+function answerLink(answer) {
+  return `/knowledge-base?search=${encodeURIComponent(answer.title)}&open=${answer.id}`;
+}
+
 const SOURCES = {
   email: "Email",
   portal: "Customer portal",
@@ -108,7 +113,13 @@ function Composer({ ticket, onSend }) {
   const [kind, setKind] = useState("agent"); // "agent" = reply to customer, "note" = internal
   const [body, setBody] = useState("");
   const [thenStatus, setThenStatus] = useState(""); // "" = keep the current status
-  const [saveToAnswers, setSaveToAnswers] = useState(true); // notes only
+
+  // Save the note to the Knowledge Base? null = decide automatically:
+  // yes when resolving or closing (the note is probably the fix), otherwise no.
+  // Once the checkbox is clicked, that choice is used instead.
+  const [saveChoice, setSaveChoice] = useState(null);
+  const resolving = thenStatus === "resolved" || thenStatus === "closed";
+  const saveToAnswers = saveChoice ?? resolving;
 
   function send() {
     if (!body.trim()) return;
@@ -120,6 +131,7 @@ function Composer({ ticket, onSend }) {
     );
     setBody("");
     setThenStatus("");
+    setSaveChoice(null);
   }
 
   const isNote = kind === "note";
@@ -153,8 +165,11 @@ function Composer({ ticket, onSend }) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
-          // Ctrl+Enter (or Cmd+Enter on Mac) sends
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
+          // Ctrl+Enter (or Cmd+Enter on Mac) sends, without adding a new line
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            send();
+          }
         }}
         rows={4}
         placeholder={
@@ -173,10 +188,10 @@ function Composer({ ticket, onSend }) {
             <input
               type="checkbox"
               checked={saveToAnswers}
-              onChange={(e) => setSaveToAnswers(e.target.checked)}
+              onChange={(e) => setSaveChoice(e.target.checked)}
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
-            Also save to Saved Answers
+            Also save to Knowledge Base
           </label>
         )}
         <label className="flex items-center gap-2 text-sm text-muted">
@@ -337,12 +352,14 @@ export default function TicketDetail() {
       t.customerId === ticket.customerId && t.id !== ticket.id && !isDone(t),
   );
 
-  // Saved answers that share keywords with this ticket: likely fixes
+  // Saved answers that share keywords with this ticket: likely fixes.
+  // Answers that were saved from this same ticket are left out.
   const ticketKeywords = extractKeywords(
     `${ticket.subject} ${ticket.subject} ${ticket.description}`,
     8,
   );
   const suggested = answers
+    .filter((a) => a.ticketId !== ticket.id)
     .map((a) => ({ answer: a, score: relevance(a, ticketKeywords) }))
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -438,7 +455,7 @@ export default function TicketDetail() {
                 {suggested.map((a) => (
                   <li key={a.id}>
                     <Link
-                      to={`/saved-answers?search=${encodeURIComponent(a.title)}`}
+                      to={answerLink(a)}
                       className="block rounded-md px-2 py-1.5 text-sm transition hover:bg-brand/5 hover:text-brand"
                     >
                       <span className="block truncate font-medium">
@@ -467,19 +484,20 @@ export default function TicketDetail() {
             <div className="flex items-center gap-2 rounded-lg bg-brand/10 px-3 py-2.5 text-sm text-brand">
               <CircleCheck className="h-4 w-4 shrink-0" />
               <p className="flex-1">
-                Note saved to{" "}
+                Note saved to the{" "}
                 <Link
-                  to={`/saved-answers?search=${encodeURIComponent(savedAnswer.title)}`}
+                  to={answerLink(savedAnswer)}
                   className="font-medium underline"
                 >
-                  Saved Answers
+                  Knowledge Base
                 </Link>{" "}
                 with keywords: {savedAnswer.keywords.join(", ")}
               </p>
             </div>
           )}
 
-          <Composer ticket={ticket} onSend={handleSend} />
+          {/* key: a fresh reply box for every ticket, so drafts never follow you */}
+          <Composer key={ticket.id} ticket={ticket} onSend={handleSend} />
 
           {/* Phones and tablets: customer card goes below the conversation */}
           <div className="rounded-xl border border-line bg-white p-4 lg:hidden">

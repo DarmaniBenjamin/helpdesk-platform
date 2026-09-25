@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
-// A reusable pop-up: bottom sheet on phones, centered box on bigger screens.
+// A reusable pop-up: a centered box with space around it on every screen size,
+// so you can still see the page behind it.
 // Fixed header and footer, and only the middle scrolls.
 // Pass onSubmit to turn the middle + footer into a form.
 export default function Modal({ title, onClose, onSubmit, footer, children }) {
@@ -50,14 +51,14 @@ export default function Modal({ title, onClose, onSubmit, footer, children }) {
   return createPortal(
     <div
       onClick={close}
-      className="fixed inset-0 z-50 flex items-end justify-center overscroll-none bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-ink/40 p-4 backdrop-blur-sm sm:p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-3rem)]"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3 sm:px-6">
           <h2 className="text-lg font-semibold">{title}</h2>

@@ -285,10 +285,10 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
             }`}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-medium text-white ring-2 ring-transparent transition group-hover:ring-brand/40">
-              SA
+              DB
             </div>
             <span className="hidden text-sm font-medium lg:block">
-              SM Ashik
+              Darmani Benjamin
             </span>
             <ChevronDown
               className={`hidden h-4 w-4 text-muted transition-transform duration-200 sm:block ${
@@ -299,7 +299,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
           {userOpen && (
             <div className={`${panelClass} sm:w-56`}>
               <div className="border-b border-line px-4 py-3">
-                <p className="text-sm font-semibold">SM Ashik</p>
+                <p className="text-sm font-semibold">Darmani Benjamin</p>
                 <p className="text-xs text-muted">Admin</p>
               </div>
               <div className="p-2">

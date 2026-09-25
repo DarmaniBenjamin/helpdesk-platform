@@ -173,7 +173,10 @@ export default function SavedAnswers() {
 
   const [team, setTeam] = useState("all");
   const [sort, setSort] = useState("recent");
-  const [openId, setOpenId] = useState(null);
+  // A ticket page can also say which answer to open (?open=3)
+  const [openId, setOpenId] = useState(
+    () => Number(searchParams.get("open")) || null,
+  );
   const [editing, setEditing] = useState(null); // null, "new", or an answer
 
   function setSearch(value) {
@@ -197,7 +200,7 @@ export default function SavedAnswers() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Saved Answers</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Knowledge Base</h1>
           <p className="mt-1 text-sm text-muted">
             Your team's knowledge base: {answers.length} fixes, {fromNotes}{" "}
             saved straight from ticket notes.

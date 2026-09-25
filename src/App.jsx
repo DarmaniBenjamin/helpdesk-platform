@@ -10,7 +10,7 @@ import CustomerDetail from "./Components/Pages/CustomerDetail";
 import TicketTopics from "./Components/Pages/TicketTopics";
 import TicketAssignment from "./Components/Pages/TicketAssignment";
 import Automation from "./Components/Pages/Automation";
-import SavedAnswers from "./Components/Pages/SavedAnswers";
+import KnowledgeBase from "./Components/Pages/KnowledgeBase";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -53,7 +53,7 @@ export default function App() {
               element={<ComingSoon title="Custom Ticket Status" />}
             />
             <Route path="/automation" element={<Automation />} />
-            <Route path="/saved-answers" element={<SavedAnswers />} />
+            <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/team" element={<ComingSoon title="Team work" />} />
             <Route
               path="/joint-editing"

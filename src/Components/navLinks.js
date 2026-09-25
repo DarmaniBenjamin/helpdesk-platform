@@ -29,7 +29,7 @@ export const mainLinks = [
 export const moreLinks = [
   { label: "Custom Ticket Status", path: "/statuses", icon: Box },
   { label: "Automation", path: "/automation", icon: Zap },
-  { label: "Saved Answers", path: "/saved-answers", icon: MessageSquareText },
+  { label: "Knowledge Base", path: "/knowledge-base", icon: MessageSquareText },
   { label: "Team work", path: "/team", icon: Users },
   { label: "Joint Editing", path: "/joint-editing", icon: GitMerge },
   { label: "Email Integration", path: "/email", icon: Mail },
