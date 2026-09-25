@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { NavLink } from "react-router";
 import {
   LayoutDashboard,
   Inbox,
@@ -18,62 +19,64 @@ import {
 } from "lucide-react";
 
 const mainLinks = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Inbox", icon: Inbox },
-  { label: "Ticket Assignment", icon: UserCheck },
-  { label: "Ticket Topics", icon: Tag },
-  { label: "SLA Management", icon: Clock },
+  { label: "Dashboard", path: "/", icon: LayoutDashboard },
+  { label: "Inbox", path: "/inbox", icon: Inbox },
+  { label: "Ticket Assignment", path: "/assignment", icon: UserCheck },
+  { label: "Ticket Topics", path: "/topics", icon: Tag },
+  { label: "SLA Management", path: "/sla", icon: Clock },
 ];
 
 const moreLinks = [
-  { label: "Custom Ticket Status", icon: Box },
-  { label: "Automation", icon: Zap },
-  { label: "Saved Answers", icon: MessageSquareText },
-  { label: "Team work", icon: Users },
-  { label: "Joint Editing", icon: GitMerge },
-  { label: "Email Integration", icon: Mail },
-  { label: "Report and Statistics", icon: ChartColumn },
-  { label: "Settings", icon: Settings },
+  { label: "Custom Ticket Status", path: "/statuses", icon: Box },
+  { label: "Automation", path: "/automation", icon: Zap },
+  { label: "Saved Answers", path: "/saved-answers", icon: MessageSquareText },
+  { label: "Team work", path: "/team", icon: Users },
+  { label: "Joint Editing", path: "/joint-editing", icon: GitMerge },
+  { label: "Email Integration", path: "/email", icon: Mail },
+  { label: "Report and Statistics", path: "/reports", icon: ChartColumn },
+  { label: "Settings", path: "/settings", icon: Settings },
 ];
 
-function NavLink({ link, active, onSelect }) {
+function SidebarLink({ link, onClick }) {
   const Icon = link.icon;
 
   return (
     <li>
-      <a
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          onSelect(link.label);
-        }}
-        className={`group relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition-all duration-200 active:scale-[0.97] ${
-          active
-            ? "bg-brand/10 font-medium text-brand"
-            : "text-muted hover:bg-brand/10 hover:text-brand"
-        }`}
+      <NavLink
+        to={link.path}
+        end={link.path === "/"}
+        onClick={onClick}
+        className={({ isActive }) =>
+          `group relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition-all duration-200 active:scale-[0.97] ${
+            isActive
+              ? "bg-brand/10 font-medium text-brand"
+              : "text-muted hover:bg-brand/10 hover:text-brand"
+          }`
+        }
       >
-        <span
-          className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-300 ${
-            active ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0"
-          }`}
-        />
-        <Icon
-          className={`h-4 w-4 transition-transform duration-200 ${
-            active ? "scale-110" : "group-hover:scale-110"
-          }`}
-        />
-        <span className="transition-transform duration-200 group-hover:translate-x-0.5">
-          {link.label}
-        </span>
-      </a>
+        {({ isActive }) => (
+          <>
+            <span
+              className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-300 ${
+                isActive ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0"
+              }`}
+            />
+            <Icon
+              className={`h-4 w-4 transition-transform duration-200 ${
+                isActive ? "scale-110" : "group-hover:scale-110"
+              }`}
+            />
+            <span className="transition-transform duration-200 group-hover:translate-x-0.5">
+              {link.label}
+            </span>
+          </>
+        )}
+      </NavLink>
     </li>
   );
 }
 
 export default function Sidebar({ open, onClose }) {
-  const [active, setActive] = useState("Dashboard");
-
   // Close the menu when Escape is pressed
   useEffect(() => {
     function handleKey(e) {
@@ -82,12 +85,6 @@ export default function Sidebar({ open, onClose }) {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
-
-  // Picking a link selects it and closes the menu on phones/tablets
-  function handleSelect(label) {
-    setActive(label);
-    onClose();
-  }
 
   return (
     <>
@@ -119,12 +116,7 @@ export default function Sidebar({ open, onClose }) {
         <nav className="flex-1 overflow-y-auto px-6 py-4">
           <ul className="flex flex-col gap-1">
             {mainLinks.map((link) => (
-              <NavLink
-                key={link.label}
-                link={link}
-                active={active === link.label}
-                onSelect={handleSelect}
-              />
+              <SidebarLink key={link.path} link={link} onClick={onClose} />
             ))}
           </ul>
 
@@ -132,12 +124,7 @@ export default function Sidebar({ open, onClose }) {
 
           <ul className="flex flex-col gap-1">
             {moreLinks.map((link) => (
-              <NavLink
-                key={link.label}
-                link={link}
-                active={active === link.label}
-                onSelect={handleSelect}
-              />
+              <SidebarLink key={link.path} link={link} onClick={onClose} />
             ))}
           </ul>
         </nav>
