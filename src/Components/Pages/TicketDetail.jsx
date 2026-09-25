@@ -418,8 +418,11 @@ export default function TicketDetail() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[1fr_20rem]">
-        {/* Right side on desktop: ticket details and customer */}
-        <aside className="flex flex-col gap-4 lg:order-2">
+        {/* Right side on desktop: ticket details and customer.
+            Desktop: stays pinned in view while the conversation scrolls,
+            and scrolls on its own if it's taller than the screen
+            (7rem = the top bar plus the page's padding above and below). */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-0 lg:order-2 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain">
           <div className="rounded-xl border border-line bg-white">
             <button
               type="button"
