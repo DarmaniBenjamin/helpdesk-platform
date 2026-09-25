@@ -7,6 +7,7 @@ import Inbox from "./Components/Pages/Inbox";
 import Customers from "./Components/Pages/Customers";
 import TicketDetail from "./Components/Pages/TicketDetail";
 import CustomerDetail from "./Components/Pages/CustomerDetail";
+import TicketTopics from "./Components/Pages/TicketTopics";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -42,10 +43,7 @@ export default function App() {
               path="/assignment"
               element={<ComingSoon title="Ticket Assignment" />}
             />
-            <Route
-              path="/topics"
-              element={<ComingSoon title="Ticket Topics" />}
-            />
+            <Route path="/topics" element={<TicketTopics />} />
             <Route
               path="/sla"
               element={<ComingSoon title="SLA Management" />}
