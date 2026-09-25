@@ -33,14 +33,15 @@ export default function CustomerPicker({ customers, selected, onSelect }) {
 
   // Match the search against name, email, phone and business
   const text = query.trim().toLowerCase();
-  const matches = text
-    ? customers.filter((c) =>
-        [c.name, c.email, c.phone, c.company ?? ""].some((field) =>
-          field.toLowerCase().includes(text),
-        ),
-      )
-    : customers;
-  const shown = matches.slice(0, 5);
+  const matches = (
+    text
+      ? customers.filter((c) =>
+          [c.name, c.email, c.phone, c.company ?? ""].some((field) =>
+            field.toLowerCase().includes(text),
+          ),
+        )
+      : [...customers]
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="flex flex-col gap-2">
@@ -56,8 +57,14 @@ export default function CustomerPicker({ customers, selected, onSelect }) {
         />
       </div>
 
-      <ul className="overflow-hidden rounded-lg border border-line">
-        {shown.map((c) => (
+      <p className="text-xs text-muted">
+        {matches.length} customer{matches.length === 1 ? "" : "s"}
+        {text ? " found" : ", scroll to see them all"}
+      </p>
+
+      {/* Scrollable list: about 5 customers tall, scroll inside for the rest */}
+      <ul className="max-h-72 overflow-y-auto rounded-lg border border-line">
+        {matches.map((c) => (
           <li key={c.id} className="border-b border-line last:border-0">
             <button
               type="button"
@@ -82,18 +89,13 @@ export default function CustomerPicker({ customers, selected, onSelect }) {
             </button>
           </li>
         ))}
-        {shown.length === 0 && (
+        {matches.length === 0 && (
           <li className="px-3 py-4 text-center text-sm text-muted">
             No customers match. Switch to{" "}
             <span className="font-medium">New customer</span> to add them.
           </li>
         )}
       </ul>
-      {matches.length > shown.length && (
-        <p className="text-xs text-muted">
-          Showing 5 of {matches.length}. Keep typing to narrow it down.
-        </p>
-      )}
     </div>
   );
 }
