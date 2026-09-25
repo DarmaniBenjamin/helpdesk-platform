@@ -146,13 +146,15 @@ export default function Customers() {
                     <tr
                       key={c.id}
                       onClick={() => openCustomer(c)}
-                      className="cursor-pointer border-b border-line transition last:border-0 hover:bg-page active:bg-brand/5"
+                      className="group cursor-pointer border-b border-line transition last:border-0 hover:bg-brand/5 active:bg-brand/10"
                     >
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar name={c.name} />
                           <div className="min-w-0">
-                            <p className="font-medium">{c.name}</p>
+                            <p className="font-medium transition group-hover:text-brand">
+                              {c.name}
+                            </p>
                             <a
                               href={`mailto:${c.email}`}
                               onClick={stop}
@@ -208,12 +210,14 @@ export default function Customers() {
                 <li key={c.id}>
                   <div
                     onClick={() => openCustomer(c)}
-                    className="cursor-pointer rounded-xl border border-line bg-white p-4 transition active:scale-[0.99] active:bg-brand/5"
+                    className="group cursor-pointer rounded-xl border border-line bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md active:scale-[0.99] active:bg-brand/5"
                   >
                     <div className="flex items-center gap-3">
                       <Avatar name={c.name} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{c.name}</p>
+                        <p className="truncate font-medium transition group-hover:text-brand">
+                          {c.name}
+                        </p>
                         <p className="truncate text-sm">
                           <BusinessLabel company={c.company} />
                         </p>

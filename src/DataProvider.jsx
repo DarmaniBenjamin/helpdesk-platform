@@ -99,12 +99,100 @@ const STARTING_RULES = [
   },
 ];
 
+// Automations to start with. Like the rules, they're saved and shown
+// but don't run yet.
+const STARTING_AUTOMATIONS = [
+  {
+    id: 1,
+    name: "Auto-close resolved tickets",
+    description:
+      "Close tickets that have been resolved for 7 days without a customer reply.",
+    trigger: { type: "resolvedFor", value: 7 },
+    actions: [
+      { type: "setStatus", value: "closed" },
+      {
+        type: "emailCustomer",
+        value: "We've closed your ticket. Just reply if you still need help.",
+      },
+    ],
+    enabled: true,
+    runs: 234,
+  },
+  {
+    id: 2,
+    name: "Welcome email for new tickets",
+    description:
+      "Let customers know we got their request as soon as a ticket is created.",
+    trigger: { type: "created", value: null },
+    actions: [
+      {
+        type: "emailCustomer",
+        value:
+          "Thanks, we've received your request and will be in touch shortly.",
+      },
+      { type: "addTag", value: "new" },
+    ],
+    enabled: true,
+    runs: 2134,
+  },
+  {
+    id: 3,
+    name: "Priority escalation",
+    description: "Raise the priority if nobody has replied within 4 hours.",
+    trigger: { type: "noAgentReply", value: 4 },
+    actions: [
+      { type: "setPriority", value: 4 },
+      { type: "notifyTeam", value: null },
+      {
+        type: "addNote",
+        value: "Escalated automatically: no reply within 4 hours.",
+      },
+    ],
+    enabled: true,
+    runs: 432,
+  },
+  {
+    id: 4,
+    name: "Reopen when the customer replies",
+    description:
+      "If a customer answers a ticket we're waiting on, put it back in the queue.",
+    trigger: { type: "customerReply", value: null },
+    actions: [{ type: "setStatus", value: "open" }],
+    enabled: false,
+    runs: 0,
+  },
+];
+
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
   const [tickets, setTickets] = useState(startingTickets);
   const [customers, setCustomers] = useState(startingCustomers);
   const [rules, setRules] = useState(STARTING_RULES);
+  const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
+
+  // ---------- Automations ----------
+
+  function addAutomation(fields) {
+    const automation = {
+      ...fields,
+      id: Math.max(0, ...automations.map((a) => a.id)) + 1,
+      enabled: true,
+      runs: 0,
+    };
+    setAutomations((list) => [...list, automation]);
+    return automation;
+  }
+
+  function updateAutomation(id, changes) {
+    setAutomations((list) =>
+      list.map((a) => (a.id === id ? { ...a, ...changes } : a)),
+    );
+  }
+
+  function deleteAutomation(id) {
+    setAutomations((list) => list.filter((a) => a.id !== id));
+  }
 
   // ---------- Assignment rules ----------
 
@@ -286,6 +374,10 @@ export default function DataProvider({ children }) {
         addRule,
         updateRule,
         deleteRule,
+        automations,
+        addAutomation,
+        updateAutomation,
+        deleteAutomation,
       }}
     >
       {children}

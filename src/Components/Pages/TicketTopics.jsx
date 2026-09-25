@@ -179,9 +179,13 @@ export default function TicketTopics() {
                     <tr
                       key={t.id}
                       onClick={() => openTicket(t)}
-                      className="group cursor-pointer transition hover:bg-page active:bg-brand/5"
+                      className="group cursor-pointer transition hover:bg-brand/5 active:bg-brand/10"
                     >
-                      <td className={`${cell} font-medium`}>#{t.id}</td>
+                      <td
+                        className={`${cell} font-medium transition group-hover:text-brand`}
+                      >
+                        #{t.id}
+                      </td>
                       <td className={`${cell} whitespace-nowrap`}>
                         {t.requester.name}
                       </td>
@@ -193,7 +197,11 @@ export default function TicketTopics() {
                           {t.requester.email}
                         </span>
                       </td>
-                      <td className={`${cell} min-w-48`}>{t.subject}</td>
+                      <td
+                        className={`${cell} min-w-48 transition group-hover:text-brand`}
+                      >
+                        {t.subject}
+                      </td>
                       <td className={`${cell} whitespace-nowrap text-muted`}>
                         {timeAgo(t.createdAt)}
                       </td>
@@ -213,13 +221,15 @@ export default function TicketTopics() {
                   <button
                     type="button"
                     onClick={() => openTicket(t)}
-                    className="-mx-2 flex w-[calc(100%+1rem)] cursor-pointer flex-col gap-1.5 rounded-lg px-2 py-3 text-left transition active:bg-brand/5"
+                    className="group -mx-2 flex w-[calc(100%+1rem)] cursor-pointer flex-col gap-1.5 rounded-lg px-2 py-3 text-left transition hover:bg-brand/5 active:bg-brand/10"
                   >
                     <div className="flex items-center justify-between gap-2 text-xs text-muted">
                       <span className="font-medium">#{t.id}</span>
                       <span>{timeAgo(t.createdAt)}</span>
                     </div>
-                    <p className="font-medium">{t.subject}</p>
+                    <p className="font-medium transition group-hover:text-brand">
+                      {t.subject}
+                    </p>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm text-muted">
                         {t.requester.name}

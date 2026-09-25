@@ -320,14 +320,14 @@ export default function Inbox() {
                   <tr
                     key={t.id}
                     onClick={() => openTicket(t)}
-                    className={`cursor-pointer border-b border-line transition last:border-0 hover:bg-page active:bg-brand/5 ${
+                    className={`group cursor-pointer border-b border-line transition last:border-0 hover:bg-brand/5 active:bg-brand/10 ${
                       isOverdue(t) ? "bg-red-50/50" : ""
                     }`}
                   >
                     <td className="px-3 py-3">
                       {/* max-w + truncate: long subjects get "…" instead of stretching the table */}
                       <div className="max-w-80 2xl:max-w-md">
-                        <p className="truncate font-medium">
+                        <p className="truncate font-medium transition group-hover:text-brand">
                           <span className="mr-2 text-muted">#{t.id}</span>
                           {t.subject}
                         </p>
@@ -367,7 +367,7 @@ export default function Inbox() {
               <li key={t.id}>
                 <div
                   onClick={() => openTicket(t)}
-                  className={`cursor-pointer rounded-xl border bg-white p-4 transition active:scale-[0.99] active:bg-brand/5 ${
+                  className={`group cursor-pointer rounded-xl border bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md active:scale-[0.99] active:bg-brand/5 ${
                     isOverdue(t) ? "border-red-200" : "border-line"
                   }`}
                 >
@@ -375,7 +375,9 @@ export default function Inbox() {
                     <span className="font-medium">#{t.id}</span>
                     <span>{timeAgo(t.updatedAt)}</span>
                   </div>
-                  <p className="mt-1 font-medium">{t.subject}</p>
+                  <p className="mt-1 font-medium transition group-hover:text-brand">
+                    {t.subject}
+                  </p>
                   <p className="truncate text-sm text-muted">
                     {t.requester.name}
                     {t.requester.company && ` · ${t.requester.company}`}
