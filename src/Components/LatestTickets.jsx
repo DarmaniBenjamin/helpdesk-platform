@@ -1,3 +1,4 @@
+import { Link, useNavigate } from "react-router";
 import Card from "./Card";
 
 const latestTickets = [
@@ -78,13 +79,18 @@ function StatusBadge({ status }) {
 }
 
 export default function LatestTickets() {
+  const navigate = useNavigate();
+
   return (
     <Card
       title="Latest Tickets"
       action={
-        <a href="#" className="text-sm font-medium text-brand hover:underline">
+        <Link
+          to="/inbox"
+          className="text-sm font-medium text-brand hover:underline"
+        >
           View all
-        </a>
+        </Link>
       }
     >
       <div className="overflow-x-auto">
@@ -103,7 +109,8 @@ export default function LatestTickets() {
             {latestTickets.map((ticket) => (
               <tr
                 key={ticket.id}
-                className="group cursor-pointer transition hover:bg-page"
+                onClick={() => navigate(`/tickets/${ticket.id}`)}
+                className="group cursor-pointer transition hover:bg-page active:bg-brand/5"
               >
                 <td className="border-b border-line px-4 py-3.5 font-medium group-last:border-0">
                   #{ticket.id}
