@@ -3,7 +3,9 @@ import { Routes, Route, useParams } from "react-router";
 import Sidebar from "./Components/Sidebar";
 import Topbar from "./Components/Topbar";
 import Dashboard from "./Components/Pages/Dashboard";
+import Customers from "./Components/Pages/Customers";
 import ComingSoon from "./Components/Pages/ComingSoon";
+import { customers as startingCustomers } from "./data";
 
 // Placeholder for a single ticket until the ticket page is built
 function TicketPlaceholder() {
@@ -11,11 +13,35 @@ function TicketPlaceholder() {
   return <ComingSoon title={`Ticket #${id}`} />;
 }
 
+// Placeholder for a customer's own page
+function CustomerPlaceholder({ customers }) {
+  const { id } = useParams();
+  const customer = customers.find((c) => c.id === Number(id));
+  return <ComingSoon title={customer ? customer.name : "Customer not found"} />;
+}
+
 export default function App() {
   // Is the menu open on phones/tablets?
   const [menuOpen, setMenuOpen] = useState(false);
   // Is the sidebar shrunk to icons on desktop?
   const [collapsed, setCollapsed] = useState(false);
+
+  // Customers live here, so the Customers page and the New ticket
+  // form both see the same list (and new customers show up in both)
+  const [customers, setCustomers] = useState(startingCustomers);
+
+  function addCustomer(fields) {
+    const customer = {
+      id: Math.max(...customers.map((c) => c.id)) + 1,
+      name: fields.name.trim(),
+      email: fields.email.trim().toLowerCase(),
+      phone: fields.phone.trim(),
+      company: fields.company.trim() || null, // empty means an individual
+      createdAt: Date.now(),
+    };
+    setCustomers((list) => [customer, ...list]);
+    return customer;
+  }
 
   return (
     // Phones/tablets: the whole page scrolls (so the browser bars can hide).
@@ -31,11 +57,23 @@ export default function App() {
         <Topbar
           onMenuClick={() => setMenuOpen(true)}
           onToggleSidebar={() => setCollapsed((c) => !c)}
+          customers={customers}
+          onAddCustomer={addCustomer}
         />
         <main className="flex-1 p-4 sm:p-6 lg:overflow-y-auto">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inbox" element={<ComingSoon title="Inbox" />} />
+            <Route
+              path="/customers"
+              element={
+                <Customers customers={customers} onAddCustomer={addCustomer} />
+              }
+            />
+            <Route
+              path="/customers/:id"
+              element={<CustomerPlaceholder customers={customers} />}
+            />
             <Route
               path="/assignment"
               element={<ComingSoon title="Ticket Assignment" />}

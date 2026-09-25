@@ -99,7 +99,12 @@ function IconButton({
 const panelClass =
   "fixed left-3 right-3 top-18 z-30 rounded-xl border border-line bg-white shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2";
 
-export default function Topbar({ onMenuClick, onToggleSidebar }) {
+export default function Topbar({
+  onMenuClick,
+  onToggleSidebar,
+  customers,
+  onAddCustomer,
+}) {
   const navigate = useNavigate();
 
   // The current page's name, from the URL
@@ -355,10 +360,14 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
         </form>
       )}
 
-      <NewTicketModal
-        open={newTicketOpen}
-        onClose={() => setNewTicketOpen(false)}
-      />
+      {/* Only drawn while open, so the form starts fresh each time */}
+      {newTicketOpen && (
+        <NewTicketModal
+          customers={customers}
+          onAddCustomer={onAddCustomer}
+          onClose={() => setNewTicketOpen(false)}
+        />
+      )}
     </header>
   );
 }

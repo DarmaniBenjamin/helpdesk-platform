@@ -91,7 +91,7 @@ export function timeAgo(time) {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-// ---------- Fake tickets (until the backend exists) ----------
+// ---------- Fake data (until the backend exists) ----------
 
 // A "seeded" random generator: gives the same random numbers every time,
 // so the fake data doesn't change on every refresh.
@@ -250,6 +250,43 @@ const ISSUES = {
   ],
 };
 
+// ---------- Fake customers ----------
+
+function makeCustomers() {
+  const now = Date.now();
+  const list = [];
+  const usedEmails = new Set();
+
+  while (list.length < 48) {
+    const first = pick(FIRST_NAMES);
+    const last = pick(LAST_NAMES);
+    // Most customers belong to a business; some are individuals
+    const company = random() < 0.8 ? pick(COMPANIES) : null;
+    const domain = company
+      ? `${company.toLowerCase().replace(/[^a-z]/g, "")}.gd`
+      : pick(["gmail.com", "yahoo.com", "outlook.com"]);
+    const email = `${first}.${last}@${domain}`.toLowerCase();
+
+    if (usedEmails.has(email)) continue; // no two customers share an email
+    usedEmails.add(email);
+
+    const phone = `+1 (473) ${400 + Math.floor(random() * 100)}-${String(Math.floor(random() * 10000)).padStart(4, "0")}`;
+    list.push({
+      id: 1001 + list.length,
+      name: `${first} ${last}`,
+      email,
+      phone,
+      company,
+      createdAt: now - (90 + random() * 400) * DAY,
+    });
+  }
+  return list;
+}
+
+export const customers = makeCustomers();
+
+// ---------- Fake tickets ----------
+
 function makeTickets() {
   const now = Date.now();
   const list = [];
@@ -261,9 +298,8 @@ function makeTickets() {
     const [subject, description] = pick(ISSUES[department.id]);
     const r = random();
     const priority = r < 0.28 ? 1 : r < 0.68 ? 2 : r < 0.92 ? 3 : 4;
-    const company = pick(COMPANIES);
-    const first = pick(FIRST_NAMES);
-    const last = pick(LAST_NAMES);
+    const customer = pick(customers);
+    const first = customer.name.split(" ")[0];
     const agents = AGENTS.filter((a) => a.departments.includes(department.id));
     let assignee = pick(agents).id;
 
@@ -298,12 +334,8 @@ function makeTickets() {
       status,
       priority,
       department: department.id,
-      company,
-      requester: {
-        name: `${first} ${last}`,
-        email:
-          `${first}.${last}@${company.toLowerCase().replace(/[^a-z]/g, "")}.gd`.toLowerCase(),
-      },
+      customerId: customer.id,
+      requester: customer, // the customer who asked (name, email, phone, company)
       assignee,
       source: pick(["email", "email", "portal", "portal", "phone"]),
       createdAt,

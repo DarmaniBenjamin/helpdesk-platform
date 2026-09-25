@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Inbox,
+  BookUser,
   UserCheck,
   Tag,
   Clock,
@@ -19,6 +20,7 @@ import {
 export const mainLinks = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Inbox", path: "/inbox", icon: Inbox },
+  { label: "Customers", path: "/customers", icon: BookUser },
   { label: "Ticket Assignment", path: "/assignment", icon: UserCheck },
   { label: "Ticket Topics", path: "/topics", icon: Tag },
   { label: "SLA Management", path: "/sla", icon: Clock },
@@ -41,6 +43,7 @@ export function getPageTitle(pathname) {
   if (link) return link.label;
   if (pathname.startsWith("/tickets/"))
     return `Ticket #${pathname.split("/")[2]}`;
+  if (pathname.startsWith("/customers/")) return "Customer";
   if (pathname === "/login") return "Login";
   return "Page not found";
 }
