@@ -1,41 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Link } from "react-router";
-import {
-  LayoutDashboard,
-  Inbox,
-  UserCheck,
-  Tag,
-  Clock,
-  Box,
-  Zap,
-  MessageSquareText,
-  Users,
-  GitMerge,
-  Mail,
-  ChartColumn,
-  Settings,
-  ChevronRight,
-  X,
-} from "lucide-react";
-
-const mainLinks = [
-  { label: "Dashboard", path: "/", icon: LayoutDashboard },
-  { label: "Inbox", path: "/inbox", icon: Inbox },
-  { label: "Ticket Assignment", path: "/assignment", icon: UserCheck },
-  { label: "Ticket Topics", path: "/topics", icon: Tag },
-  { label: "SLA Management", path: "/sla", icon: Clock },
-];
-
-const moreLinks = [
-  { label: "Custom Ticket Status", path: "/statuses", icon: Box },
-  { label: "Automation", path: "/automation", icon: Zap },
-  { label: "Saved Answers", path: "/saved-answers", icon: MessageSquareText },
-  { label: "Team work", path: "/team", icon: Users },
-  { label: "Joint Editing", path: "/joint-editing", icon: GitMerge },
-  { label: "Email Integration", path: "/email", icon: Mail },
-  { label: "Report and Statistics", path: "/reports", icon: ChartColumn },
-  { label: "Settings", path: "/settings", icon: Settings },
-];
+import { ChevronRight, X } from "lucide-react";
+import { mainLinks, moreLinks } from "./navLinks";
 
 function SidebarLink({ link, onClick, collapsed }) {
   const Icon = link.icon;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, CircleCheck } from "lucide-react";
+import { SLA_HOURS, PRIORITIES, HOUR } from "../data";
 
 const departments = [
   "IT Support",
@@ -10,19 +11,37 @@ const departments = [
   "CCTV & Security",
   "Billing",
 ];
-const priorities = ["Low", "Medium", "High", "Urgent"];
+
+// Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
+function toInputValue(time) {
+  const date = new Date(time);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
+// Default due time for a priority, from its SLA (e.g. Urgent = 4 hours from now)
+function defaultDue(priority) {
+  return toInputValue(Date.now() + SLA_HOURS[priority].resolve * HOUR);
+}
 
 // Shared input style. text-base on phones stops iPhones zooming in.
 const inputClass =
   "h-11 w-full rounded-lg border border-line bg-white px-3 text-base placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:text-sm";
 
 export default function NewTicketModal({ open, onClose }) {
-  const [priority, setPriority] = useState("Medium");
+  const [priority, setPriority] = useState(2);
+  const [dueBy, setDueBy] = useState(() => defaultDue(2));
+  const [dueEdited, setDueEdited] = useState(false); // did the agent change the due time by hand?
   const [submitted, setSubmitted] = useState(false);
 
   // While open: stop the page behind from scrolling, and let Escape close it
   useEffect(() => {
     if (!open) return;
+
+    // Fresh defaults every time the form opens
+    setPriority(2);
+    setDueBy(defaultDue(2));
+    setDueEdited(false);
 
     const html = document.documentElement;
     html.style.overflow = "hidden";
@@ -47,8 +66,14 @@ export default function NewTicketModal({ open, onClose }) {
     // keyboard is up can leave iPhones stuck at a strange scroll position.
     document.activeElement?.blur();
     setSubmitted(false);
-    setPriority("Medium");
     onClose();
+  }
+
+  // Picking a priority also moves the due time to match its SLA,
+  // unless the agent already set a due time themselves
+  function choosePriority(value) {
+    setPriority(value);
+    if (!dueEdited) setDueBy(defaultDue(value));
   }
 
   function handleDone() {
@@ -147,22 +172,42 @@ export default function NewTicketModal({ open, onClose }) {
             <div className="flex flex-col gap-1.5 text-sm font-medium">
               Priority
               <div className="grid grid-cols-4 gap-2">
-                {priorities.map((p) => (
+                {Object.entries(PRIORITIES).map(([value, { label }]) => (
                   <button
-                    key={p}
+                    key={value}
                     type="button"
-                    onClick={() => setPriority(p)}
+                    onClick={() => choosePriority(Number(value))}
                     className={`h-10 cursor-pointer rounded-lg border text-sm transition active:scale-[0.97] ${
-                      priority === p
+                      priority === Number(value)
                         ? "border-brand bg-brand/10 font-medium text-brand"
                         : "border-line text-muted hover:border-brand/40 hover:text-brand"
                     }`}
                   >
-                    {p}
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
+
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Due by
+              <input
+                type="datetime-local"
+                required
+                value={dueBy}
+                min={toInputValue(Date.now())}
+                onChange={(e) => {
+                  setDueBy(e.target.value);
+                  setDueEdited(true);
+                }}
+                className={`${inputClass} cursor-pointer`}
+              />
+              <span className="text-xs font-normal text-muted">
+                {dueEdited
+                  ? "Custom due time."
+                  : `Set from the priority: ${PRIORITIES[priority].label} tickets are due within ${SLA_HOURS[priority].resolve} hours.`}
+              </span>
+            </label>
 
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               Description

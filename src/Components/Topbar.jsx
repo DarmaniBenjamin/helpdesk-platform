@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router";
 import {
   Menu,
   PanelLeft,
@@ -18,36 +18,52 @@ import {
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import NewTicketModal from "./NewTicketModal";
+import { getPageTitle } from "./navLinks";
+import { tickets, isOverdue, timeAgo } from "../data";
 
-const startingNotifications = [
-  {
+// Notifications built from the real ticket data
+function buildNotifications() {
+  const list = [];
+
+  const newest = tickets[0];
+  list.push({
     id: 1,
     icon: Ticket,
-    title: "New ticket #4821",
-    text: "Liam Smith: PC not turning on",
-    time: "30 min ago",
-    ticketId: 4821,
     unread: true,
-  },
-  {
-    id: 2,
-    icon: Clock,
-    title: "SLA warning",
-    text: "Ticket #4817 is due in 1 hour",
-    time: "45 min ago",
-    ticketId: 4817,
-    unread: true,
-  },
-  {
-    id: 3,
-    icon: MessageSquare,
-    title: "Customer replied",
-    text: "Olivia Brown replied on #4820",
-    time: "1 hour ago",
-    ticketId: 4820,
-    unread: false,
-  },
-];
+    ticketId: newest.id,
+    title: `New ticket #${newest.id}`,
+    text: `${newest.requester.name}: ${newest.subject}`,
+    time: timeAgo(newest.createdAt),
+  });
+
+  const overdue = tickets.find(isOverdue);
+  if (overdue) {
+    list.push({
+      id: 2,
+      icon: Clock,
+      unread: true,
+      ticketId: overdue.id,
+      title: "SLA warning",
+      text: `Ticket #${overdue.id} is overdue`,
+      time: timeAgo(overdue.dueBy),
+    });
+  }
+
+  const waiting = tickets.find((t) => t.status === "waiting");
+  if (waiting) {
+    list.push({
+      id: 3,
+      icon: MessageSquare,
+      unread: false,
+      ticketId: waiting.id,
+      title: "Waiting on customer",
+      text: `${waiting.requester.name} hasn't replied on #${waiting.id}`,
+      time: timeAgo(waiting.updatedAt),
+    });
+  }
+
+  return list;
+}
 
 function IconButton({
   icon: Icon,
@@ -86,6 +102,15 @@ const panelClass =
 export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const navigate = useNavigate();
 
+  // The current page's name, from the URL
+  const location = useLocation();
+  const pageTitle = getPageTitle(location.pathname);
+
+  // Also show it in the browser tab
+  useEffect(() => {
+    document.title = `${pageTitle} · Ticket Support`;
+  }, [pageTitle]);
+
   // Mobile search
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -94,7 +119,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
-  const [notifications, setNotifications] = useState(startingNotifications);
+  const [notifications, setNotifications] = useState(buildNotifications);
 
   const notifRef = useRef(null);
   const userRef = useRef(null);
@@ -144,7 +169,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
         />
 
         <div className="hidden items-center gap-3 text-sm text-muted sm:flex">
-          <span>Dashboard</span>
+          <span className="whitespace-nowrap">{pageTitle}</span>
           <span className="text-muted/50">/</span>
         </div>
 

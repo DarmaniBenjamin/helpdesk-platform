@@ -1,0 +1,46 @@
+import {
+  LayoutDashboard,
+  Inbox,
+  UserCheck,
+  Tag,
+  Clock,
+  Box,
+  Zap,
+  MessageSquareText,
+  Users,
+  GitMerge,
+  Mail,
+  ChartColumn,
+  Settings,
+} from "lucide-react";
+
+// The sidebar menu. Used by the Sidebar (to draw the links)
+// and the Topbar (to show the current page's name).
+export const mainLinks = [
+  { label: "Dashboard", path: "/", icon: LayoutDashboard },
+  { label: "Inbox", path: "/inbox", icon: Inbox },
+  { label: "Ticket Assignment", path: "/assignment", icon: UserCheck },
+  { label: "Ticket Topics", path: "/topics", icon: Tag },
+  { label: "SLA Management", path: "/sla", icon: Clock },
+];
+
+export const moreLinks = [
+  { label: "Custom Ticket Status", path: "/statuses", icon: Box },
+  { label: "Automation", path: "/automation", icon: Zap },
+  { label: "Saved Answers", path: "/saved-answers", icon: MessageSquareText },
+  { label: "Team work", path: "/team", icon: Users },
+  { label: "Joint Editing", path: "/joint-editing", icon: GitMerge },
+  { label: "Email Integration", path: "/email", icon: Mail },
+  { label: "Report and Statistics", path: "/reports", icon: ChartColumn },
+  { label: "Settings", path: "/settings", icon: Settings },
+];
+
+// Turns a URL like "/inbox" or "/tickets/4821" into a page name
+export function getPageTitle(pathname) {
+  const link = [...mainLinks, ...moreLinks].find((l) => l.path === pathname);
+  if (link) return link.label;
+  if (pathname.startsWith("/tickets/"))
+    return `Ticket #${pathname.split("/")[2]}`;
+  if (pathname === "/login") return "Login";
+  return "Page not found";
+}
