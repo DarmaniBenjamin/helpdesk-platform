@@ -11,6 +11,7 @@ import TicketTopics from "./Components/Pages/TicketTopics";
 import TicketAssignment from "./Components/Pages/TicketAssignment";
 import Automation from "./Components/Pages/Automation";
 import KnowledgeBase from "./Components/Pages/KnowledgeBase";
+import Reports from "./Components/Pages/Reports";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -63,10 +64,7 @@ export default function App() {
               path="/email"
               element={<ComingSoon title="Email Integration" />}
             />
-            <Route
-              path="/reports"
-              element={<ComingSoon title="Report and Statistics" />}
-            />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<ComingSoon title="Settings" />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/login" element={<ComingSoon title="Login" />} />
