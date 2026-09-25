@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import Card from "./Card";
-import { tickets, STATUSES } from "../data";
+import { STATUSES } from "../data";
+import useData from "../useData";
 
 // Green shades from the design, one per status
 const COLORS = {
@@ -32,6 +33,7 @@ function lastThreeMonths() {
 }
 
 export default function TicketVolumeChart() {
+  const { tickets } = useData();
   const months = lastThreeMonths();
   const [monthKey, setMonthKey] = useState(months[0].key);
   const [hovered, setHovered] = useState(null);

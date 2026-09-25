@@ -10,7 +10,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import Card from "./Card";
-import { tickets, DAY } from "../data";
+import { DAY } from "../data";
+import useData from "../useData";
 
 // Short labels for the side of the chart: 120 -> "2h", 45 -> "45m"
 function axisLabel(minutes) {
@@ -25,7 +26,7 @@ function formatMinutes(minutes) {
 }
 
 // Average first-response time (in minutes) for each of the last `days` days
-function responseTimesByDay(days) {
+function responseTimesByDay(tickets, days) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const result = [];
@@ -74,9 +75,10 @@ function ChartTooltip({ active, payload }) {
 }
 
 export default function ResponseTimeChart() {
+  const { tickets } = useData();
   const [days, setDays] = useState(14);
   const [hovered, setHovered] = useState(null);
-  const data = responseTimesByDay(days);
+  const data = responseTimesByDay(tickets, days);
 
   return (
     <Card

@@ -11,7 +11,8 @@ import {
 import Avatar from "../Avatar";
 import NewCustomerModal from "../NewCustomerModal";
 import { inputClass } from "../formStyles";
-import { tickets, isDone } from "../../data";
+import { isDone } from "../../data";
+import useData from "../../useData";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -36,7 +37,8 @@ function BusinessLabel({ company }) {
   );
 }
 
-export default function Customers({ customers, onAddCustomer }) {
+export default function Customers() {
+  const { tickets, customers } = useData();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -248,13 +250,7 @@ export default function Customers({ customers, onAddCustomer }) {
         </>
       )}
 
-      {adding && (
-        <NewCustomerModal
-          customers={customers}
-          onAddCustomer={onAddCustomer}
-          onClose={() => setAdding(false)}
-        />
-      )}
+      {adding && <NewCustomerModal onClose={() => setAdding(false)} />}
     </div>
   );
 }

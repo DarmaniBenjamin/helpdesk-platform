@@ -19,10 +19,11 @@ import {
 import useDismiss from "./useDismiss";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
-import { tickets, isOverdue, timeAgo } from "../data";
+import { isOverdue, timeAgo } from "../data";
+import useData from "../useData";
 
 // Notifications built from the real ticket data
-function buildNotifications() {
+function buildNotifications(tickets) {
   const list = [];
 
   const newest = tickets[0];
@@ -66,7 +67,7 @@ function buildNotifications() {
 }
 
 function IconButton({
-  icon: Icon,
+  icon,
   label,
   dot,
   iconEffect = "",
@@ -74,6 +75,7 @@ function IconButton({
   className = "",
   active = false,
 }) {
+  const Icon = icon;
   return (
     <button
       type="button"
@@ -99,13 +101,9 @@ function IconButton({
 const panelClass =
   "fixed left-3 right-3 top-18 z-30 rounded-xl border border-line bg-white shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2";
 
-export default function Topbar({
-  onMenuClick,
-  onToggleSidebar,
-  customers,
-  onAddCustomer,
-}) {
+export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const navigate = useNavigate();
+  const { tickets } = useData();
 
   // The current page's name, from the URL
   const location = useLocation();
@@ -124,7 +122,9 @@ export default function Topbar({
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
-  const [notifications, setNotifications] = useState(buildNotifications);
+  const [notifications, setNotifications] = useState(() =>
+    buildNotifications(tickets),
+  );
 
   const notifRef = useRef(null);
   const userRef = useRef(null);
@@ -362,11 +362,7 @@ export default function Topbar({
 
       {/* Only drawn while open, so the form starts fresh each time */}
       {newTicketOpen && (
-        <NewTicketModal
-          customers={customers}
-          onAddCustomer={onAddCustomer}
-          onClose={() => setNewTicketOpen(false)}
-        />
+        <NewTicketModal onClose={() => setNewTicketOpen(false)} />
       )}
     </header>
   );

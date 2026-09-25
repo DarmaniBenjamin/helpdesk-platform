@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Calendar,
   Upload,
@@ -8,7 +9,8 @@ import {
 import TicketVolumeChart from "../TicketVolumeChart";
 import ResponseTimeChart from "../ResponseTimeChart";
 import LatestTickets from "../LatestTickets";
-import { tickets, isOverdue, DAY } from "../../data";
+import { isOverdue, DAY } from "../../data";
+import useData from "../../useData";
 
 // % change from last week to this week (null if last week was 0)
 function percentChange(thisWeek, lastWeek) {
@@ -17,7 +19,7 @@ function percentChange(thisWeek, lastWeek) {
 }
 
 // Counts tickets whose `field` time falls between `from` and `to`
-function countBetween(field, from, to) {
+function countBetween(tickets, field, from, to) {
   return tickets.filter((t) => t[field] && t[field] >= from && t[field] < to)
     .length;
 }
@@ -56,17 +58,29 @@ function StatCard({ label, value, note, warn, trend, upIsGood }) {
 }
 
 export default function Dashboard() {
-  const now = Date.now();
+  const { tickets } = useData();
+  // The time when the page opened (all the "this week" numbers count from here)
+  const [now] = useState(() => Date.now());
   const weekAgo = now - 7 * DAY;
   const twoWeeksAgo = now - 14 * DAY;
 
   const openCount = tickets.filter((t) => t.status === "open").length;
   const overdueCount = tickets.filter(isOverdue).length;
   const waitingCount = tickets.filter((t) => t.status === "waiting").length;
-  const createdThisWeek = countBetween("createdAt", weekAgo, now);
-  const createdLastWeek = countBetween("createdAt", twoWeeksAgo, weekAgo);
-  const resolvedThisWeek = countBetween("resolvedAt", weekAgo, now);
-  const resolvedLastWeek = countBetween("resolvedAt", twoWeeksAgo, weekAgo);
+  const createdThisWeek = countBetween(tickets, "createdAt", weekAgo, now);
+  const createdLastWeek = countBetween(
+    tickets,
+    "createdAt",
+    twoWeeksAgo,
+    weekAgo,
+  );
+  const resolvedThisWeek = countBetween(tickets, "resolvedAt", weekAgo, now);
+  const resolvedLastWeek = countBetween(
+    tickets,
+    "resolvedAt",
+    twoWeeksAgo,
+    weekAgo,
+  );
 
   const stats = [
     {

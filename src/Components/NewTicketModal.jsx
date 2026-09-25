@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { CircleCheck } from "lucide-react";
 import Modal from "./Modal";
 import CustomerPicker from "./CustomerPicker";
@@ -10,6 +11,7 @@ import {
   secondaryButton,
 } from "./formStyles";
 import { SLA_HOURS, PRIORITIES, DEPARTMENTS, HOUR } from "../data";
+import useData from "../useData";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
 function toInputValue(time) {
@@ -27,10 +29,13 @@ const blankCustomer = { name: "", email: "", phone: "", company: "" };
 
 // This component is only drawn while the form is open, so every time it
 // opens, all of these start fresh (fresh due time, nothing selected, etc.)
-export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
+export default function NewTicketModal({ onClose }) {
+  const navigate = useNavigate();
+  const { customers, addCustomer, addTicket } = useData();
   const [priority, setPriority] = useState(2);
   const [dueBy, setDueBy] = useState(() => defaultDue(2));
   const [dueEdited, setDueEdited] = useState(false);
+  const [earliestDue] = useState(() => toInputValue(Date.now())); // can't pick a time in the past
 
   // Customer: pick an existing one, or type in a new one
   const [customerMode, setCustomerMode] = useState("existing");
@@ -39,7 +44,7 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
   const [customerError, setCustomerError] = useState("");
   const [duplicate, setDuplicate] = useState(null); // existing customer with the same email
 
-  // After submitting: who the ticket was for, and whether they were new
+  // After submitting: the new ticket, and whether the customer was new
   const [result, setResult] = useState(null);
 
   const businesses = [
@@ -83,13 +88,28 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
         setDuplicate(existing);
         return;
       }
-      customer = onAddCustomer(newCustomer);
+      customer = addCustomer(newCustomer);
       isNew = true;
     }
 
-    // Later: send the ticket to the backend here
+    // Read the ticket fields straight from the form, using their "name"s
+    const form = new FormData(e.currentTarget);
+    const ticket = addTicket({
+      customer,
+      subject: form.get("subject").trim(),
+      department: form.get("department"),
+      description: form.get("description").trim(),
+      priority,
+      dueBy: new Date(dueBy).getTime(),
+    });
+
     document.activeElement?.blur();
-    setResult({ customer, isNew });
+    setResult({ ticket, isNew });
+  }
+
+  function viewInInbox() {
+    onClose();
+    navigate("/inbox");
   }
 
   function handleDone() {
@@ -106,16 +126,33 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
         title="Ticket created"
         onClose={handleDone}
         footer={
-          <button type="button" onClick={handleDone} className={primaryButton}>
-            Done
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handleDone}
+              className={secondaryButton}
+            >
+              Done
+            </button>
+            <button
+              type="button"
+              onClick={viewInInbox}
+              className={primaryButton}
+            >
+              View in Inbox
+            </button>
+          </>
         }
       >
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <CircleCheck className="h-12 w-12 text-brand" />
           <p className="text-sm">
-            Ticket created for{" "}
-            <span className="font-semibold">{result.customer.name}</span>.
+            Ticket <span className="font-semibold">#{result.ticket.id}</span>{" "}
+            created for{" "}
+            <span className="font-semibold">
+              {result.ticket.requester.name}
+            </span>
+            .
           </p>
           {result.isNew && (
             <p className="text-sm text-muted">
@@ -123,8 +160,7 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
             </p>
           )}
           <p className="text-xs text-muted">
-            The ticket will show in the ticket list once the backend is
-            connected.
+            It's now at the top of your Inbox.
           </p>
         </div>
       </Modal>
@@ -213,6 +249,7 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
       <label className={labelClass}>
         Subject
         <input
+          name="subject"
           required
           placeholder="Short summary of the issue"
           className={inputClass}
@@ -221,7 +258,7 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
 
       <label className={labelClass}>
         Department
-        <select className={`${inputClass} cursor-pointer`}>
+        <select name="department" className={`${inputClass} cursor-pointer`}>
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -256,12 +293,12 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
           type="datetime-local"
           required
           value={dueBy}
-          min={toInputValue(Date.now())}
+          min={earliestDue}
           onChange={(e) => {
             setDueBy(e.target.value);
             setDueEdited(true);
           }}
-          className={`${inputClass} cursor-pointer`}
+          className={`${inputClass} block cursor-pointer appearance-none text-left`}
         />
         <span className="text-xs font-normal text-muted">
           {dueEdited
@@ -273,6 +310,7 @@ export default function NewTicketModal({ customers, onAddCustomer, onClose }) {
       <label className={labelClass}>
         Description
         <textarea
+          name="description"
           required
           rows={4}
           placeholder="What's happening?"

@@ -3,13 +3,15 @@ import Card from "./Card";
 import StatusBadge from "./StatusBadge";
 import PriorityBadge from "./PriorityBadge";
 import DueLabel from "./DueLabel";
-import { tickets, timeAgo } from "../data";
+import { timeAgo } from "../data";
+import useData from "../useData";
 
 // Same padding and bottom line for every cell
 const cell = "border-b border-line px-4 py-3.5 group-last:border-0";
 
 export default function LatestTickets() {
   const navigate = useNavigate();
+  const { tickets } = useData();
 
   // tickets is already sorted newest first, so the first 7 are the latest
   const latest = tickets.slice(0, 7);

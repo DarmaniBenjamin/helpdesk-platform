@@ -2,7 +2,7 @@
 
 // text-base on phones (16px) stops iPhones zooming in when you tap a field
 export const inputClass =
-  "h-11 w-full rounded-lg border border-line bg-white px-3 text-base placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:text-sm";
+  "h-11 w-full min-w-0 rounded-lg border border-line bg-white px-3 text-base placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:text-sm";
 
 export const labelClass = "flex flex-col gap-1.5 text-sm font-medium";
 

@@ -11,7 +11,7 @@ function formatDuration(ms) {
 }
 
 // Works out what to show for a ticket's due time
-export function getDueInfo(ticket) {
+function getDueInfo(ticket) {
   if (isDone(ticket)) {
     const onTime = ticket.resolvedAt <= ticket.dueBy;
     return {

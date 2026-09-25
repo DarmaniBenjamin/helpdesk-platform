@@ -35,7 +35,8 @@ export default function Modal({ title, onClose, onSubmit, footer, children }) {
 
   const content = (
     <>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+      {/* overflow-x-hidden + touch-pan-y: only up/down scrolling, never sideways */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden overscroll-contain px-5 py-4 touch-pan-y sm:px-6">
         {children}
       </div>
       {footer && (
@@ -56,7 +57,7 @@ export default function Modal({ title, onClose, onSubmit, footer, children }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
+        className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3 sm:px-6">
           <h2 className="text-lg font-semibold">{title}</h2>

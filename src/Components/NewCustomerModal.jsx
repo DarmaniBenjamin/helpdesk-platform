@@ -2,12 +2,10 @@ import { useState } from "react";
 import Modal from "./Modal";
 import CustomerFields from "./CustomerFields";
 import { primaryButton, secondaryButton } from "./formStyles";
+import useData from "../useData";
 
-export default function NewCustomerModal({
-  customers,
-  onAddCustomer,
-  onClose,
-}) {
+export default function NewCustomerModal({ onClose }) {
+  const { customers, addCustomer } = useData();
   const [fields, setFields] = useState({
     name: "",
     email: "",
@@ -28,7 +26,7 @@ export default function NewCustomerModal({
       setEmailError(`${existing.name} already uses this email.`);
       return;
     }
-    onAddCustomer(fields);
+    addCustomer(fields);
     document.activeElement?.blur();
     onClose();
   }
