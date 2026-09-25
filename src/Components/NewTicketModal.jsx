@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, CircleCheck } from "lucide-react";
 
 const departments = [
@@ -19,31 +20,56 @@ export default function NewTicketModal({ open, onClose }) {
   const [priority, setPriority] = useState("Medium");
   const [submitted, setSubmitted] = useState(false);
 
-  // Escape closes the modal
+  // While open: stop the page behind from scrolling, and let Escape close it
   useEffect(() => {
     if (!open) return;
+
+    const html = document.documentElement;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
     function handleKey(e) {
       if (e.key === "Escape") handleClose();
     }
     window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  });
+
+    // Cleanup runs when the modal closes: give scrolling back to the page
+    return () => {
+      html.style.overflow = "";
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function handleClose() {
+    // Close the phone keyboard first. Removing a focused input while the
+    // keyboard is up can leave iPhones stuck at a strange scroll position.
+    document.activeElement?.blur();
     setSubmitted(false);
     setPriority("Medium");
     onClose();
   }
 
+  function handleDone() {
+    handleClose();
+    // Back to the top of the page, like a fresh load
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
+    document.activeElement?.blur();
     // Later: send the form to the backend here
     setSubmitted(true);
   }
 
   if (!open) return null;
 
-  return (
+  // createPortal draws the modal directly inside <body>, outside the sticky
+  // top bar, so nothing on the page can clip it or trap the scrolling.
+  return createPortal(
     <div
       onClick={handleClose}
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4"
@@ -76,7 +102,7 @@ export default function NewTicketModal({ open, onClose }) {
             </p>
             <button
               type="button"
-              onClick={handleClose}
+              onClick={handleDone}
               className="mt-2 h-11 cursor-pointer rounded-lg bg-brand px-6 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
             >
               Done
@@ -166,6 +192,7 @@ export default function NewTicketModal({ open, onClose }) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
