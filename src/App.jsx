@@ -1,26 +1,14 @@
 import { useState } from "react";
-import { Routes, Route, useParams } from "react-router";
+import { Routes, Route } from "react-router";
 import Sidebar from "./Components/Sidebar";
 import Topbar from "./Components/Topbar";
 import Dashboard from "./Components/Pages/Dashboard";
 import Inbox from "./Components/Pages/Inbox";
 import Customers from "./Components/Pages/Customers";
+import TicketDetail from "./Components/Pages/TicketDetail";
+import CustomerDetail from "./Components/Pages/CustomerDetail";
 import ComingSoon from "./Components/Pages/ComingSoon";
-import useData from "./useData";
-
-// Placeholder for a single ticket until the ticket page is built
-function TicketPlaceholder() {
-  const { id } = useParams();
-  return <ComingSoon title={`Ticket #${id}`} />;
-}
-
-// Placeholder for a customer's own page
-function CustomerPlaceholder() {
-  const { id } = useParams();
-  const { customers } = useData();
-  const customer = customers.find((c) => c.id === Number(id));
-  return <ComingSoon title={customer ? customer.name : "Customer not found"} />;
-}
+import ScrollToTop from "./Components/ScrollToTop";
 
 export default function App() {
   // Is the menu open on phones/tablets?
@@ -32,6 +20,7 @@ export default function App() {
     // Phones/tablets: the whole page scrolls (so the browser bars can hide).
     // Desktop (lg): fixed height, only the content area scrolls.
     <div className="flex min-h-dvh bg-page lg:h-screen">
+      <ScrollToTop />
       <Sidebar
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
@@ -48,7 +37,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/customers" element={<Customers />} />
-            <Route path="/customers/:id" element={<CustomerPlaceholder />} />
+            <Route path="/customers/:id" element={<CustomerDetail />} />
             <Route
               path="/assignment"
               element={<ComingSoon title="Ticket Assignment" />}
@@ -87,7 +76,7 @@ export default function App() {
               element={<ComingSoon title="Report and Statistics" />}
             />
             <Route path="/settings" element={<ComingSoon title="Settings" />} />
-            <Route path="/tickets/:id" element={<TicketPlaceholder />} />
+            <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/login" element={<ComingSoon title="Login" />} />
             <Route path="*" element={<ComingSoon title="Page not found" />} />
           </Routes>

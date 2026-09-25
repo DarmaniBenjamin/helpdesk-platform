@@ -5,7 +5,7 @@ import { primaryButton, secondaryButton } from "./formStyles";
 import useData from "../useData";
 
 export default function NewCustomerModal({ onClose }) {
-  const { customers, addCustomer } = useData();
+  const { customers, addCustomer, findCustomerByEmail } = useData();
   const [fields, setFields] = useState({
     name: "",
     email: "",
@@ -20,8 +20,7 @@ export default function NewCustomerModal({ onClose }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    const email = fields.email.trim().toLowerCase();
-    const existing = customers.find((c) => c.email === email);
+    const existing = findCustomerByEmail(fields.email);
     if (existing) {
       setEmailError(`${existing.name} already uses this email.`);
       return;

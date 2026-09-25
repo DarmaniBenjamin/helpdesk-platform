@@ -31,7 +31,7 @@ const blankCustomer = { name: "", email: "", phone: "", company: "" };
 // opens, all of these start fresh (fresh due time, nothing selected, etc.)
 export default function NewTicketModal({ onClose }) {
   const navigate = useNavigate();
-  const { customers, addCustomer, addTicket } = useData();
+  const { customers, addCustomer, addTicket, findCustomerByEmail } = useData();
   const [priority, setPriority] = useState(2);
   const [dueBy, setDueBy] = useState(() => defaultDue(2));
   const [dueEdited, setDueEdited] = useState(false);
@@ -82,8 +82,7 @@ export default function NewTicketModal({ onClose }) {
       }
       customer = selectedCustomer;
     } else {
-      const email = newCustomer.email.trim().toLowerCase();
-      const existing = customers.find((c) => c.email === email);
+      const existing = findCustomerByEmail(newCustomer.email);
       if (existing) {
         setDuplicate(existing);
         return;
