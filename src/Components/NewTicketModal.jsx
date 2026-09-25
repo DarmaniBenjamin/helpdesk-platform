@@ -97,14 +97,16 @@ export default function NewTicketModal({ open, onClose }) {
   return createPortal(
     <div
       onClick={handleClose}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-none bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4"
     >
-      {/* stopPropagation: clicks inside the box shouldn't close it */}
+      {/* The box: fixed header, scrolling middle, fixed footer.
+          stopPropagation: clicks inside the box shouldn't close it. */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6"
+        className="flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
       >
-        <div className="mb-5 flex items-center justify-between">
+        {/* Header: always visible */}
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3 sm:px-6">
           <h2 className="text-lg font-semibold">
             {submitted ? "Ticket created" : "New ticket"}
           </h2>
@@ -119,7 +121,7 @@ export default function NewTicketModal({ open, onClose }) {
         </div>
 
         {submitted ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <div className="flex flex-col items-center gap-3 px-5 py-8 text-center sm:px-6">
             <CircleCheck className="h-12 w-12 text-brand" />
             <p className="text-sm text-muted">
               The ticket was submitted. It will show up in the ticket list once
@@ -134,92 +136,103 @@ export default function NewTicketModal({ open, onClose }) {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            {/* Middle: the only part that scrolls */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  Customer name
+                  <input
+                    required
+                    placeholder="Jane Doe"
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  Customer email
+                  <input
+                    required
+                    type="email"
+                    placeholder="jane@company.com"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
               <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Customer name
-                <input required placeholder="Jane Doe" className={inputClass} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Customer email
+                Subject
                 <input
                   required
-                  type="email"
-                  placeholder="jane@company.com"
+                  placeholder="Short summary of the issue"
                   className={inputClass}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Department
+                <select className={`${inputClass} cursor-pointer`}>
+                  {departments.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="flex flex-col gap-1.5 text-sm font-medium">
+                Priority
+                <div className="grid grid-cols-4 gap-2">
+                  {Object.entries(PRIORITIES).map(([value, { label }]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => choosePriority(Number(value))}
+                      className={`h-10 cursor-pointer rounded-lg border text-sm transition active:scale-[0.97] ${
+                        priority === Number(value)
+                          ? "border-brand bg-brand/10 font-medium text-brand"
+                          : "border-line text-muted hover:border-brand/40 hover:text-brand"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Due by
+                <input
+                  type="datetime-local"
+                  required
+                  value={dueBy}
+                  min={toInputValue(Date.now())}
+                  onChange={(e) => {
+                    setDueBy(e.target.value);
+                    setDueEdited(true);
+                  }}
+                  className={`${inputClass} cursor-pointer`}
+                />
+                <span className="text-xs font-normal text-muted">
+                  {dueEdited
+                    ? "Custom due time."
+                    : `Set from the priority: ${PRIORITIES[priority].label} tickets are due within ${SLA_HOURS[priority].resolve} hours.`}
+                </span>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Description
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="What's happening?"
+                  className={`${inputClass} h-auto shrink-0 py-2.5`}
                 />
               </label>
             </div>
 
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Subject
-              <input
-                required
-                placeholder="Short summary of the issue"
-                className={inputClass}
-              />
-            </label>
-
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Department
-              <select className={`${inputClass} cursor-pointer`}>
-                {departments.map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-
-            <div className="flex flex-col gap-1.5 text-sm font-medium">
-              Priority
-              <div className="grid grid-cols-4 gap-2">
-                {Object.entries(PRIORITIES).map(([value, { label }]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => choosePriority(Number(value))}
-                    className={`h-10 cursor-pointer rounded-lg border text-sm transition active:scale-[0.97] ${
-                      priority === Number(value)
-                        ? "border-brand bg-brand/10 font-medium text-brand"
-                        : "border-line text-muted hover:border-brand/40 hover:text-brand"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Due by
-              <input
-                type="datetime-local"
-                required
-                value={dueBy}
-                min={toInputValue(Date.now())}
-                onChange={(e) => {
-                  setDueBy(e.target.value);
-                  setDueEdited(true);
-                }}
-                className={`${inputClass} cursor-pointer`}
-              />
-              <span className="text-xs font-normal text-muted">
-                {dueEdited
-                  ? "Custom due time."
-                  : `Set from the priority: ${PRIORITIES[priority].label} tickets are due within ${SLA_HOURS[priority].resolve} hours.`}
-              </span>
-            </label>
-
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Description
-              <textarea
-                required
-                rows={4}
-                placeholder="What's happening?"
-                className={`${inputClass} h-auto py-2.5`}
-              />
-            </label>
-
-            <div className="mt-1 flex gap-2 sm:justify-end">
+            {/* Footer: always visible, so Create ticket is never scrolled away */}
+            <div className="flex shrink-0 gap-2 border-t border-line px-5 py-3 sm:justify-end sm:px-6">
               <button
                 type="button"
                 onClick={handleClose}
