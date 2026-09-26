@@ -1,16 +1,15 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
-  KeyRound,
   Upload,
   FileJson,
   Download,
-  Lock,
   CircleCheck,
   TriangleAlert,
   X,
 } from "lucide-react";
 import Card from "./Card";
+import FreshdeskConnect from "./FreshdeskConnect";
 import {
   inputClass,
   labelClass,
@@ -52,7 +51,9 @@ function SectionToggle({ on, onChange, children }) {
 }
 
 // One table of "this app's field <- Freshdesk field", with a tick box
-// to leave a field out, and an example value from the file
+// to leave a field out, and an example value from the file.
+// Underneath: the Freshdesk fields that are left behind, and everything
+// Freshdesk sent for the first record.
 function MappingTable({
   fields,
   mapping,
@@ -60,70 +61,119 @@ function MappingTable({
   keys,
   firstRecord,
   disabled,
+  what,
 }) {
+  const used = new Set(
+    Object.values(mapping)
+      .filter((m) => m.on && m.source)
+      .map((m) => m.source),
+  );
+  const leftBehind = keys.filter((k) => !used.has(k));
+
   return (
-    <ul
-      className={`-mx-5 divide-y divide-line border-t border-line ${disabled ? "pointer-events-none opacity-40" : ""}`}
-    >
-      {fields.map((field) => {
-        const m = mapping[field.key];
-        return (
-          <li
-            key={field.key}
-            className="grid gap-2 px-5 py-3 transition hover:bg-brand/5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"
-          >
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={m.on}
-                disabled={field.required}
-                onChange={(e) =>
-                  onChange(field.key, { ...m, on: e.target.checked })
-                }
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand disabled:cursor-default"
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">
-                  {field.label}
-                  {field.required && (
-                    <span className="ml-1.5 text-xs font-normal text-muted">
-                      required
+    <>
+      <p className="-mt-2 mb-3 text-sm text-muted">
+        Pick which Freshdesk field fills each of your fields. Untick anything
+        you don't want. Fields you don't use are left behind in Freshdesk.
+      </p>
+      <ul
+        className={`-mx-5 divide-y divide-line border-t border-line ${disabled ? "pointer-events-none opacity-40" : ""}`}
+      >
+        {fields.map((field) => {
+          const m = mapping[field.key];
+          return (
+            <li
+              key={field.key}
+              className="grid gap-2 px-5 py-3 transition hover:bg-brand/5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"
+            >
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={m.on}
+                  disabled={field.required}
+                  onChange={(e) =>
+                    onChange(field.key, { ...m, on: e.target.checked })
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand disabled:cursor-default"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    {field.label}
+                    {field.required && (
+                      <span className="ml-1.5 text-xs font-normal text-muted">
+                        required
+                      </span>
+                    )}
+                  </span>
+                  {field.hint && (
+                    <span className="block text-xs text-muted">
+                      {field.hint}
                     </span>
                   )}
                 </span>
-                {field.hint && (
-                  <span className="block text-xs text-muted">{field.hint}</span>
-                )}
+              </label>
+
+              <select
+                aria-label={`Freshdesk field for ${field.label}`}
+                value={m.source}
+                disabled={!m.on}
+                onChange={(e) =>
+                  onChange(field.key, { ...m, source: e.target.value })
+                }
+                className={`${inputClass} cursor-pointer disabled:cursor-default disabled:opacity-50`}
+              >
+                <option value="">Leave empty</option>
+                {keys.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+
+              <p className="truncate text-xs text-muted sm:col-span-2 lg:col-span-1">
+                <span className="lg:hidden">Example: </span>
+                {m.on && m.source && firstRecord
+                  ? sampleText(firstRecord[m.source])
+                  : "—"}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+
+      {leftBehind.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-muted">
+            Not brought over ({leftBehind.length})
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {leftBehind.map((k) => (
+              <span
+                key={k}
+                className="rounded-md bg-page px-2 py-0.5 text-xs text-muted line-through decoration-muted/50"
+              >
+                {k}
               </span>
-            </label>
+            ))}
+          </div>
+        </div>
+      )}
 
-            <select
-              aria-label={`Freshdesk field for ${field.label}`}
-              value={m.source}
-              disabled={!m.on}
-              onChange={(e) =>
-                onChange(field.key, { ...m, source: e.target.value })
-              }
-              className={`${inputClass} cursor-pointer disabled:cursor-default disabled:opacity-50`}
-            >
-              <option value="">Not in the file</option>
-              {keys.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-
-            <p className="truncate text-xs text-muted sm:col-span-2 lg:col-span-1">
-              <span className="lg:hidden">Example: </span>
-              {m.on && m.source && firstRecord
-                ? sampleText(firstRecord[m.source])
-                : "—"}
-            </p>
-          </li>
-        );
-      })}
-    </ul>
+      {firstRecord && (
+        <details className="group mt-4 rounded-lg border border-line">
+          <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-medium transition hover:bg-brand/5">
+            <span className="text-brand group-open:hidden">Show</span>
+            <span className="hidden text-brand group-open:inline">
+              Hide
+            </span>{" "}
+            everything Freshdesk sent for the first {what}
+          </summary>
+          <pre className="max-h-80 overflow-auto border-t border-line bg-page p-3 text-xs leading-relaxed">
+            {JSON.stringify(firstRecord, null, 2)}
+          </pre>
+        </details>
+      )}
+    </>
   );
 }
 
@@ -148,8 +198,7 @@ function countLine(label, r) {
 // ---------- The page section ----------
 
 export default function FreshdeskImport() {
-  const { customers, tickets, settings, updateSettings, saveImport } =
-    useData();
+  const { customers, tickets, saveImport } = useData();
   const navigate = useNavigate();
   const fileInput = useRef(null);
 
@@ -165,7 +214,37 @@ export default function FreshdeskImport() {
   const [replace, setReplace] = useState(false);
   const [result, setResult] = useState(null);
 
-  // ----- Loading files -----
+  // ----- Loading data (from Freshdesk or from files) -----
+
+  // Shows the matching screen for what was found
+  function showFound(found, names) {
+    if (found.tickets.length === 0 && found.contacts.length === 0) {
+      setFileError("No tickets or contacts were found.");
+      return;
+    }
+    const contactKeys = sourceKeys(found.contacts);
+    const ticketKeys = sourceKeys(found.tickets);
+    setSource({ ...found, contactKeys, ticketKeys, fileNames: names });
+    setContactMapping(guessMapping(CONTACT_FIELDS, contactKeys));
+    setTicketMapping(guessMapping(TICKET_FIELDS, ticketKeys));
+    setIncludeContacts(found.contacts.length > 0);
+    setIncludeTickets(found.tickets.length > 0);
+    setResult(null);
+    setFileError("");
+  }
+
+  // Saves exactly what Freshdesk sent as a JSON file, to keep or import later
+  function saveAsFile() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadJson(
+      {
+        companies: source.companies,
+        contacts: source.contacts,
+        tickets: source.tickets,
+      },
+      `freshdesk-export-${stamp}.json`,
+    );
+  }
 
   async function loadFiles(fileList) {
     const files = [...fileList];
@@ -186,23 +265,10 @@ export default function FreshdeskImport() {
       return;
     }
 
-    if (found.tickets.length === 0 && found.contacts.length === 0) {
-      setFileError("No tickets or contacts were found in that file.");
-      return;
-    }
-
-    const contactKeys = sourceKeys(found.contacts);
-    const ticketKeys = sourceKeys(found.tickets);
-    setSource({
-      ...found,
-      contactKeys,
-      ticketKeys,
-      fileNames: files.map((f) => f.name),
-    });
-    setContactMapping(guessMapping(CONTACT_FIELDS, contactKeys));
-    setTicketMapping(guessMapping(TICKET_FIELDS, ticketKeys));
-    setIncludeContacts(found.contacts.length > 0);
-    setIncludeTickets(found.tickets.length > 0);
+    showFound(
+      found,
+      files.map((f) => f.name),
+    );
   }
 
   function clearFiles() {
@@ -272,64 +338,17 @@ export default function FreshdeskImport() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      {/* Connect with the API (needs the backend) */}
-      <Card title="Connect to Freshdesk">
-        <div className="-mt-2 flex flex-col gap-4">
-          <p className="text-sm text-muted">
-            Pull tickets and contacts straight from your Freshdesk account.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className={labelClass}>
-              Freshdesk address
-              <div className="flex items-center rounded-lg border border-line bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
-                <input
-                  value={settings.freshdesk.domain}
-                  onChange={(e) =>
-                    updateSettings("freshdesk", {
-                      domain: e.target.value.trim().toLowerCase(),
-                    })
-                  }
-                  placeholder="yourcompany"
-                  autoComplete="off"
-                  className="h-11 w-full min-w-0 rounded-l-lg bg-transparent px-3 text-base placeholder:text-muted focus:outline-none sm:text-sm"
-                />
-                <span className="shrink-0 pr-3 text-sm font-normal text-muted">
-                  .freshdesk.com
-                </span>
-              </div>
-            </label>
-            <label className={labelClass}>
-              API key
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                <input
-                  disabled
-                  placeholder="Added on the server"
-                  className={`${inputClass} pl-9 disabled:cursor-not-allowed disabled:bg-page`}
-                />
-              </div>
-            </label>
-          </div>
-          <div className="flex items-start gap-3 rounded-lg bg-page p-3 text-sm">
-            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-            <p className="text-muted">
-              This switches on once the backend is built. Your API key has to
-              stay secret on the server, and Freshdesk blocks requests made
-              straight from a browser. For now, upload a JSON export below, like
-              the one your{" "}
-              <code className="rounded bg-white px-1 text-ink">
-                freshdesk_export.py
-              </code>{" "}
-              script makes.
-            </p>
-          </div>
-        </div>
-      </Card>
+      {/* Step 1a: get the data straight from Freshdesk */}
+      {!source && (
+        <FreshdeskConnect
+          onFetched={(data, label) => showFound(data, [label])}
+        />
+      )}
 
       {/* Upload */}
       {!source && (
         <Card
-          title="Import a JSON export"
+          title="Or upload a JSON file"
           action={
             <button
               type="button"
@@ -369,8 +388,9 @@ export default function FreshdeskImport() {
               Choose JSON files, or drop them here
             </span>
             <span className="max-w-md text-xs text-muted">
-              One file with tickets, contacts and companies, or separate files
-              for each. Pick several at once.
+              A file you saved from here earlier, or from your
+              freshdesk_export.py script. One file with everything, or separate
+              files for tickets, contacts and companies.
             </span>
           </button>
           <input
@@ -452,6 +472,14 @@ export default function FreshdeskImport() {
             </p>
             <button
               type="button"
+              onClick={saveAsFile}
+              className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm text-brand transition hover:bg-white active:scale-[0.97]"
+            >
+              <Download className="h-4 w-4" />
+              Save as JSON
+            </button>
+            <button
+              type="button"
               onClick={clearFiles}
               className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm text-muted transition hover:bg-white hover:text-ink active:scale-[0.97]"
             >
@@ -483,6 +511,7 @@ export default function FreshdeskImport() {
                 keys={source.contactKeys}
                 firstRecord={source.contacts[0]}
                 disabled={!includeContacts}
+                what="contact"
               />
             )}
           </Card>
@@ -507,6 +536,7 @@ export default function FreshdeskImport() {
                 keys={source.ticketKeys}
                 firstRecord={source.tickets[0]}
                 disabled={!includeTickets}
+                what="ticket"
               />
             )}
           </Card>
