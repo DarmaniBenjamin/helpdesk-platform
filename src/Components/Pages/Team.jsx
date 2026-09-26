@@ -22,10 +22,10 @@ import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
 import CustomerInviteModal from "../CustomerInviteModal";
 import { inputClass, secondaryButton } from "../formStyles";
-import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
+import { ROLES, PERMISSIONS, AVAILABILITY, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
 import useData from "../../useData";
-import { CURRENT_USER } from "../../DataProvider";
+import { CURRENT_USER_ID } from "../../DataProvider";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -188,7 +188,7 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
       }
     >
       <div className="flex items-center gap-3">
-        <Avatar name={name} />
+        <Avatar name={name} photo={member.photo} />
         <div className="min-w-0">
           <p className="truncate font-medium">{name}</p>
           <p className="truncate text-sm text-muted">{member.email}</p>
@@ -306,7 +306,7 @@ function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
               className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition hover:bg-brand/5"
             >
               <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
-                <Avatar name={displayName(m)} />
+                <Avatar name={displayName(m)} photo={m.photo} />
                 <div className="min-w-0">
                   <p className="truncate font-medium">{displayName(m)}</p>
                   <p className="truncate text-xs text-muted">{m.email}</p>
@@ -405,12 +405,24 @@ export default function Team() {
     );
   }
 
-  // "SM Ashik" + a "You" tag if this is the logged-in user
+  // Their photo, with a colored dot for active staff (available, busy, away)
+  function avatarFor(member) {
+    const showStatus = member.status === "active" && member.role !== "customer";
+    return (
+      <Avatar
+        name={displayName(member)}
+        photo={member.photo}
+        status={showStatus ? AVAILABILITY[member.availability]?.dot : undefined}
+      />
+    );
+  }
+
+  // Their name + a "You" tag if this is the logged-in user
   function nameFor(member) {
     return (
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-medium">{displayName(member)}</span>
-        {member.name === CURRENT_USER && (
+        {member.id === CURRENT_USER_ID && (
           <span className="shrink-0 rounded bg-page px-1.5 py-0.5 text-xs text-muted">
             You
           </span>
@@ -526,7 +538,7 @@ export default function Team() {
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar name={displayName(m)} />
+                        {avatarFor(m)}
                         <div className="min-w-0">
                           {nameFor(m)}
                           {m.name && (
@@ -567,7 +579,7 @@ export default function Team() {
                 className="rounded-xl border border-line bg-white p-4 transition duration-200 hover:border-brand/30 hover:shadow-md"
               >
                 <div className="flex items-start gap-3">
-                  <Avatar name={displayName(m)} />
+                  {avatarFor(m)}
                   <div className="min-w-0 flex-1">
                     {nameFor(m)}
                     {m.name && (

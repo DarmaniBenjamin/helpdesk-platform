@@ -14,6 +14,7 @@ import KnowledgeBase from "./Components/Pages/KnowledgeBase";
 import Reports from "./Components/Pages/Reports";
 import Performance from "./Components/Pages/Performance";
 import Team from "./Components/Pages/Team";
+import Profile from "./Components/Pages/Profile";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -64,6 +65,7 @@ export default function App() {
               element={<ComingSoon title="Email Integration" />}
             />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<ComingSoon title="Settings" />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/login" element={<ComingSoon title="Login" />} />

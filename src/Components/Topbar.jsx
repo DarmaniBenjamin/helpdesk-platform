@@ -17,6 +17,8 @@ import {
   LogOut,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
+import Avatar from "./Avatar";
+import { AVAILABILITY, ROLES } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
 import { isOverdue, timeAgo } from "../data";
@@ -103,7 +105,7 @@ const panelClass =
 
 export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const navigate = useNavigate();
-  const { tickets } = useData();
+  const { tickets, me } = useData();
 
   // The current page's name, from the URL
   const location = useLocation();
@@ -284,11 +286,16 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
               userOpen ? "bg-brand/10" : ""
             }`}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-medium text-white ring-2 ring-transparent transition group-hover:ring-brand/40">
-              DB
-            </div>
-            <span className="hidden text-sm font-medium lg:block">
-              Darmani Benjamin
+            <span className="rounded-full ring-2 ring-transparent transition group-hover:ring-brand/40">
+              <Avatar
+                name={me.name}
+                photo={me.photo}
+                size="sm"
+                status={AVAILABILITY[me.availability]?.dot}
+              />
+            </span>
+            <span className="hidden max-w-40 truncate text-sm font-medium lg:block">
+              {me.name}
             </span>
             <ChevronDown
               className={`hidden h-4 w-4 text-muted transition-transform duration-200 sm:block ${
@@ -299,12 +306,13 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
           {userOpen && (
             <div className={`${panelClass} sm:w-56`}>
               <div className="border-b border-line px-4 py-3">
-                <p className="text-sm font-semibold">Darmani Benjamin</p>
-                <p className="text-xs text-muted">Admin</p>
+                <p className="truncate text-sm font-semibold">{me.name}</p>
+                <p className="truncate text-xs text-muted">{me.email}</p>
+                <p className="text-xs text-muted">{ROLES[me.role].label}</p>
               </div>
               <div className="p-2">
                 {[
-                  { label: "My profile", icon: User, to: "/settings" },
+                  { label: "My profile", icon: User, to: "/profile" },
                   { label: "Settings", icon: Settings, to: "/settings" },
                 ].map((item) => (
                   <Link

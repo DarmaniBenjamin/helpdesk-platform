@@ -14,8 +14,10 @@ import {
   findDepartment,
 } from "./data";
 
-// Who is logged in. Becomes the real user once login exists.
-export const CURRENT_USER = "SM Ashik";
+// Which member of the team is logged in. Becomes the real user once
+// login exists. Their name, photo etc. live in the team list below, so
+// changing them on the My profile page updates the whole app.
+export const CURRENT_USER_ID = "owner";
 
 // Setting a status also sets/clears the resolved and closed times
 function applyStatus(ticket, status, now) {
@@ -170,12 +172,17 @@ const STARTING_AUTOMATIONS = [
 // agents in data.js, so tickets already assigned to them still match.
 // "invited" people haven't set their password yet.
 // Customers are linked to their customer record with customerId.
+// Everyone has the same profile fields: name, email, phone and photo.
+// Staff also have an availability (see AVAILABILITY in teamRoles.js).
 const now = Date.now();
 const STARTING_TEAM = [
   {
     id: "owner",
-    name: CURRENT_USER,
+    name: "SM Ashik",
     email: "ashik@example.com",
+    phone: "+1 (473) 440-1200",
+    photo: null,
+    availability: "available",
     role: "owner",
     departments: [],
     status: "active",
@@ -187,6 +194,9 @@ const STARTING_TEAM = [
     id: "a1",
     name: "Alex Charles",
     email: "alex.charles@example.com",
+    phone: "+1 (473) 405-2231",
+    photo: null,
+    availability: "available",
     role: "admin",
     departments: ["it", "net", "srv"],
     status: "active",
@@ -198,6 +208,9 @@ const STARTING_TEAM = [
     id: "a2",
     name: "Kerry-Ann Joseph",
     email: "kerryann.joseph@example.com",
+    phone: "+1 (473) 418-7764",
+    photo: null,
+    availability: "busy",
     role: "agent",
     departments: ["m365", "it"],
     status: "active",
@@ -209,6 +222,9 @@ const STARTING_TEAM = [
     id: "a3",
     name: "Marcus Pierre",
     email: "marcus.pierre@example.com",
+    phone: "+1 (473) 409-3380",
+    photo: null,
+    availability: "away",
     role: "agent",
     departments: ["net", "cctv"],
     status: "active",
@@ -220,6 +236,9 @@ const STARTING_TEAM = [
     id: "a4",
     name: "Shanice Thomas",
     email: "shanice.thomas@example.com",
+    phone: "+1 (473) 421-5519",
+    photo: null,
+    availability: "available",
     role: "supervisor",
     departments: ["bill", "it", "srv"],
     status: "active",
@@ -231,6 +250,9 @@ const STARTING_TEAM = [
     id: "m1",
     name: "Jordan Baptiste",
     email: "jordan.baptiste@example.com",
+    phone: "",
+    photo: null,
+    availability: "available",
     role: "agent",
     departments: ["it"],
     status: "invited",
@@ -242,6 +264,9 @@ const STARTING_TEAM = [
     id: "m2",
     name: "",
     email: "helpdesk.temp@example.com",
+    phone: "",
+    photo: null,
+    availability: "available",
     role: "agent",
     departments: ["cctv"],
     status: "invited",
@@ -253,6 +278,8 @@ const STARTING_TEAM = [
     id: "c1",
     name: startingCustomers[0].name,
     email: startingCustomers[0].email,
+    phone: startingCustomers[0].phone,
+    photo: null,
     role: "customer",
     customerId: startingCustomers[0].id,
     departments: [],
@@ -265,6 +292,8 @@ const STARTING_TEAM = [
     id: "c2",
     name: startingCustomers[1].name,
     email: startingCustomers[1].email,
+    phone: startingCustomers[1].phone,
+    photo: null,
     role: "customer",
     customerId: startingCustomers[1].id,
     departments: [],
@@ -285,6 +314,10 @@ export default function DataProvider({ children }) {
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
   const [team, setTeam] = useState(STARTING_TEAM);
 
+  // The logged-in person, and the name written on their replies and notes
+  const me = team.find((m) => m.id === CURRENT_USER_ID);
+  const myName = me.name;
+
   // ---------- Team ----------
 
   // Is this email already on the team (signed up or invited)?
@@ -300,6 +333,9 @@ export default function DataProvider({ children }) {
       id: `m${Date.now()}`,
       name: name.trim(),
       email: email.trim().toLowerCase(),
+      phone: "",
+      photo: null,
+      availability: "available",
       role,
       departments,
       status: "invited",
@@ -318,6 +354,8 @@ export default function DataProvider({ children }) {
       id: `c${Date.now()}`,
       name: customer.name,
       email: customer.email,
+      phone: customer.phone,
+      photo: null,
       role: "customer",
       customerId: customer.id,
       departments: [],
@@ -334,6 +372,15 @@ export default function DataProvider({ children }) {
     setTeam((list) =>
       list.map((m) => (m.id === id ? { ...m, ...changes } : m)),
     );
+    // A customer's name, email and phone also live on their customer
+    // record, so keep the two the same
+    const member = team.find((m) => m.id === id);
+    if (member?.customerId) {
+      const shared = {};
+      for (const field of ["name", "email", "phone"])
+        if (field in changes) shared[field] = changes[field];
+      if (Object.keys(shared).length) updateCustomer(member.customerId, shared);
+    }
   }
 
   // Sends the invite again (for now, just restarts the "Invited ... ago" time)
@@ -364,7 +411,7 @@ export default function DataProvider({ children }) {
             {
               id: t.messages.length + 1,
               kind: "event",
-              author: CURRENT_USER,
+              author: myName,
               body: `unassigned the ticket (${member.name} was removed from the team)`,
               at: time,
             },
@@ -381,7 +428,7 @@ export default function DataProvider({ children }) {
     const answer = {
       ticketId: null,
       source: "manual",
-      author: CURRENT_USER,
+      author: myName,
       ...fields,
       id: Math.max(0, ...answers.map((a) => a.id)) + 1,
       createdAt: now,
@@ -485,7 +532,12 @@ export default function DataProvider({ children }) {
     setTeam((list) =>
       list.map((m) =>
         m.customerId === id
-          ? { ...m, name: updated.name, email: updated.email }
+          ? {
+              ...m,
+              name: updated.name,
+              email: updated.email,
+              phone: updated.phone,
+            }
           : m,
       ),
     );
@@ -557,7 +609,7 @@ export default function DataProvider({ children }) {
           .map(([field, value], i) => ({
             id: t.messages.length + i + 1,
             kind: "event",
-            author: CURRENT_USER,
+            author: myName,
             body: describeChange(field, value),
             at: now,
           }));
@@ -578,7 +630,7 @@ export default function DataProvider({ children }) {
           {
             id: t.messages.length + 1,
             kind,
-            author: CURRENT_USER,
+            author: myName,
             body,
             at: now,
           },
@@ -596,7 +648,7 @@ export default function DataProvider({ children }) {
             {
               id: messages.length + 1,
               kind: "event",
-              author: CURRENT_USER,
+              author: myName,
               body: describeChange("status", newStatus),
               at: now,
             },
@@ -632,6 +684,7 @@ export default function DataProvider({ children }) {
         deleteAnswer,
         recordAnswerUse,
         team,
+        me,
         findMemberByEmail,
         inviteMember,
         inviteCustomer,

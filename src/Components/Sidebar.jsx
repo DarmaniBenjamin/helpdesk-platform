@@ -1,7 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Link } from "react-router";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronsUpDown, X, User, Settings, LogOut } from "lucide-react";
+import Avatar from "./Avatar";
+import AvailabilityPicker from "./AvailabilityPicker";
+import useDismiss from "./useDismiss";
 import { mainLinks, moreLinks } from "./navLinks";
+import { AVAILABILITY, ROLES } from "./teamRoles";
+import useData from "../useData";
 
 function SidebarLink({ link, onClick, collapsed }) {
   const Icon = link.icon;
@@ -49,6 +54,107 @@ function SidebarLink({ link, onClick, collapsed }) {
   );
 }
 
+// The box at the bottom of the sidebar. Clicking it opens an account menu
+// above it: who you are, your availability, and links to your profile.
+function AccountMenu({ collapsed, onNavigate }) {
+  const { me, updateMember } = useData();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useDismiss(menuRef, () => setMenuOpen(false), menuOpen);
+
+  const status = AVAILABILITY[me.availability];
+
+  // Close the menu and (on phones) the sidebar after picking a link
+  function go() {
+    setMenuOpen(false);
+    onNavigate();
+  }
+
+  const links = [
+    { label: "My profile", icon: User, to: "/profile" },
+    { label: "Settings", icon: Settings, to: "/settings" },
+  ];
+
+  return (
+    <div ref={menuRef} className="relative border-t border-line p-3">
+      {menuOpen && (
+        <div className="absolute bottom-full left-3 z-50 mb-2 w-64 rounded-xl border border-line bg-white shadow-xl">
+          {/* Who you are */}
+          <Link
+            to="/profile"
+            onClick={go}
+            className="flex items-center gap-3 rounded-t-xl border-b border-line p-4 transition hover:bg-brand/5"
+          >
+            <Avatar name={me.name} photo={me.photo} status={status?.dot} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{me.name}</p>
+              <p className="truncate text-xs text-muted">{me.email}</p>
+              <p className="text-xs text-muted">{ROLES[me.role].label}</p>
+            </div>
+          </Link>
+
+          {/* Set your availability without leaving the page */}
+          <div className="border-b border-line p-2">
+            <p className="px-3 pb-1 pt-1 text-xs font-medium text-muted">
+              Set your status
+            </p>
+            <AvailabilityPicker
+              value={me.availability}
+              onChange={(availability) => updateMember(me.id, { availability })}
+            />
+          </div>
+
+          <div className="p-2">
+            {links.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.label}
+                  to={link.to}
+                  onClick={go}
+                  className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted transition hover:bg-brand/10 hover:text-brand"
+                >
+                  <Icon className="h-4 w-4" />
+                  {link.label}
+                </Link>
+              );
+            })}
+            <hr className="my-2 border-line" />
+            <Link
+              to="/login"
+              onClick={go}
+              className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-red-500 transition hover:bg-red-50"
+            >
+              <LogOut className="h-4 w-4" />
+              Log out
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        aria-expanded={menuOpen}
+        aria-label="Account menu"
+        onClick={() => setMenuOpen((o) => !o)}
+        title={collapsed ? me.name : undefined}
+        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition hover:bg-brand/10 active:scale-[0.98] ${
+          menuOpen ? "bg-brand/10" : ""
+        } ${collapsed ? "lg:justify-center" : ""}`}
+      >
+        <Avatar name={me.name} photo={me.photo} status={status?.dot} />
+        <div className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
+          <p className="truncate text-sm font-semibold">{me.name}</p>
+          <p className="truncate text-xs text-muted">{status?.label}</p>
+        </div>
+        <ChevronsUpDown
+          className={`h-4 w-4 shrink-0 text-muted ${collapsed ? "lg:hidden" : ""}`}
+        />
+      </button>
+    </div>
+  );
+}
+
 export default function Sidebar({ open, onClose, collapsed }) {
   // Close the menu when Escape is pressed
   useEffect(() => {
@@ -70,7 +176,7 @@ export default function Sidebar({ open, onClose, collapsed }) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-70 flex-col border-r border-line bg-white transition-all duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-70 flex-col border-r border-line bg-white transition-all duration-300 lg:relative lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? "lg:w-20" : "lg:w-70"}`}
       >
@@ -120,27 +226,7 @@ export default function Sidebar({ open, onClose, collapsed }) {
           </ul>
         </nav>
 
-        <div className="border-t border-line p-3">
-          <Link
-            to="/settings"
-            onClick={onClose}
-            title={collapsed ? "SM Ashik" : undefined}
-            className={`flex w-full items-center gap-3 rounded-lg p-2 transition hover:bg-brand/10 active:scale-[0.98] ${
-              collapsed ? "lg:justify-center" : ""
-            }`}
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-medium text-white">
-              SA
-            </div>
-            <div className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
-              <p className="text-xs text-muted">Welcome back 👋</p>
-              <p className="truncate text-sm font-semibold">SM Ashik</p>
-            </div>
-            <ChevronRight
-              className={`h-4 w-4 text-muted ${collapsed ? "lg:hidden" : ""}`}
-            />
-          </Link>
-        </div>
+        <AccountMenu collapsed={collapsed} onNavigate={onClose} />
       </aside>
     </>
   );
