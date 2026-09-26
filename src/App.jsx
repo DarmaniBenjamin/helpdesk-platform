@@ -12,6 +12,7 @@ import TicketAssignment from "./Components/Pages/TicketAssignment";
 import Automation from "./Components/Pages/Automation";
 import KnowledgeBase from "./Components/Pages/KnowledgeBase";
 import Reports from "./Components/Pages/Reports";
+import Performance from "./Components/Pages/Performance";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -45,10 +46,7 @@ export default function App() {
             <Route path="/customers/:id" element={<CustomerDetail />} />
             <Route path="/assignment" element={<TicketAssignment />} />
             <Route path="/topics" element={<TicketTopics />} />
-            <Route
-              path="/sla"
-              element={<ComingSoon title="SLA Management" />}
-            />
+            <Route path="/performance" element={<Performance />} />
             <Route
               path="/statuses"
               element={<ComingSoon title="Custom Ticket Status" />}

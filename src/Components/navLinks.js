@@ -4,7 +4,7 @@ import {
   BookUser,
   UserCheck,
   Tag,
-  Clock,
+  Gauge,
   Box,
   Zap,
   MessageSquareText,
@@ -23,7 +23,7 @@ export const mainLinks = [
   { label: "Customers", path: "/customers", icon: BookUser },
   { label: "Ticket Assignment", path: "/assignment", icon: UserCheck },
   { label: "Ticket Topics", path: "/topics", icon: Tag },
-  { label: "SLA Management", path: "/sla", icon: Clock },
+  { label: "Performance & Feedback", path: "/performance", icon: Gauge },
 ];
 
 export const moreLinks = [

@@ -417,4 +417,83 @@ function makeTickets() {
   return list.reverse();
 }
 
-export const tickets = makeTickets();
+// ---------- Fake customer feedback ----------
+
+// What customers say, by star rating (5 = great, 1 = terrible)
+const FEEDBACK_COMMENTS = {
+  5: [
+    "Fixed quickly and explained everything clearly. Thank you!",
+    "Excellent service, back up and running in no time.",
+    "Very professional and patient with us.",
+    "Great job, the problem hasn't come back since.",
+  ],
+  4: [
+    "Good service, just took a little longer than I hoped.",
+    "Sorted out well. Would have liked an update sooner.",
+    "Helpful and friendly.",
+  ],
+  3: [
+    "It's working now, but I had to follow up a couple of times.",
+    "Okay. The fix took longer than expected.",
+  ],
+  2: ["Took too long to get a reply.", "The issue came back the next day."],
+  1: [
+    "Nobody got back to me for hours and the problem affected the whole office.",
+    "Very slow. We lost most of a day's work.",
+  ],
+};
+
+// About half of the finished tickets get a rating from the customer.
+// Tickets fixed on time tend to get better ratings, like in real life.
+// This uses its own random numbers, so the tickets above stay exactly the same.
+function addFeedback(list) {
+  const now = Date.now();
+  let feedbackSeed = 777;
+  function feedbackRandom() {
+    feedbackSeed = (feedbackSeed * 16807) % 2147483647;
+    return (feedbackSeed - 1) / 2147483646;
+  }
+
+  for (const ticket of list) {
+    ticket.feedback = null;
+    if (!ticket.resolvedAt || feedbackRandom() > 0.5) continue;
+
+    const onTime = ticket.resolvedAt <= ticket.dueBy;
+    const r = feedbackRandom();
+    const rating = onTime
+      ? r < 0.6
+        ? 5
+        : r < 0.88
+          ? 4
+          : r < 0.96
+            ? 3
+            : 2
+      : r < 0.15
+        ? 5
+        : r < 0.4
+          ? 4
+          : r < 0.65
+            ? 3
+            : r < 0.85
+              ? 2
+              : 1;
+    const options = FEEDBACK_COMMENTS[rating];
+    const comment =
+      feedbackRandom() < 0.75
+        ? options[Math.floor(feedbackRandom() * options.length)]
+        : "";
+
+    ticket.feedback = {
+      rating,
+      comment,
+      // Customers rate a few hours after the ticket is resolved
+      at: Math.min(
+        ticket.resolvedAt + (1 + feedbackRandom() * 20) * HOUR,
+        now - 60000,
+      ),
+    };
+  }
+  return list;
+}
+
+export const tickets = addFeedback(makeTickets());
