@@ -13,6 +13,7 @@ import Automation from "./Components/Pages/Automation";
 import KnowledgeBase from "./Components/Pages/KnowledgeBase";
 import Reports from "./Components/Pages/Reports";
 import Performance from "./Components/Pages/Performance";
+import Team from "./Components/Pages/Team";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -53,7 +54,7 @@ export default function App() {
             />
             <Route path="/automation" element={<Automation />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
-            <Route path="/team" element={<ComingSoon title="Team work" />} />
+            <Route path="/team" element={<Team />} />
             <Route
               path="/joint-editing"
               element={<ComingSoon title="Joint Editing" />}

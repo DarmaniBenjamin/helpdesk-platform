@@ -1,0 +1,518 @@
+import { useState } from "react";
+import {
+  Search,
+  UserPlus,
+  Pencil,
+  Trash2,
+  RotateCw,
+  X,
+  Check,
+  Minus,
+  Users,
+  ShieldCheck,
+  Headset,
+  MailQuestion,
+} from "lucide-react";
+import Avatar from "../Avatar";
+import Card from "../Card";
+import Modal from "../Modal";
+import RoleBadge from "../RoleBadge";
+import MemberModal from "../MemberModal";
+import { inputClass, secondaryButton } from "../formStyles";
+import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
+import { findDepartment, isDone, timeAgo } from "../../data";
+import useData from "../../useData";
+import { CURRENT_USER } from "../../DataProvider";
+
+const FILTERS = [
+  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "invited", label: "Invited" },
+];
+
+// The owner comes first, then admins, supervisors, agents
+const ROLE_ORDER = Object.keys(ROLES);
+
+// A small square button with just an icon, e.g. the pencil or the trash can
+function IconAction({ label, onClick, danger, children }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition active:scale-[0.92] ${
+        danger
+          ? "hover:bg-red-50 hover:text-red-500"
+          : "hover:bg-brand/10 hover:text-brand"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatCard({ label, value, icon }) {
+  const Icon = icon;
+  return (
+    <div className="rounded-xl border border-line bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted">{label}</p>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand">
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+// The member's teams as small grey pills
+function TeamList({ departments }) {
+  if (departments.length === 0)
+    return <span className="text-sm text-muted">No teams</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {departments.map((id) => (
+        <span
+          key={id}
+          className="whitespace-nowrap rounded-md bg-page px-2 py-0.5 text-xs"
+        >
+          {findDepartment(id).name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// "Active 2 hours ago" or "Invited 3 days ago"
+function StatusText({ member }) {
+  if (member.status === "invited") {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm text-amber-600">
+        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+        Invited {timeAgo(member.invitedAt)}
+      </span>
+    );
+  }
+  return (
+    <span className="whitespace-nowrap text-sm text-muted">
+      Active {timeAgo(member.lastActiveAt)}
+    </span>
+  );
+}
+
+// The buttons at the end of each row. What shows depends on the member.
+function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
+  if (member.role === "owner") return null;
+
+  if (member.status === "invited") {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        {justResent ? (
+          <span className="flex h-9 items-center gap-1 px-2 text-xs font-medium text-brand">
+            <Check className="h-3.5 w-3.5" />
+            Sent
+          </span>
+        ) : (
+          <IconAction label="Resend invite" onClick={onResend}>
+            <RotateCw className="h-4 w-4" />
+          </IconAction>
+        )}
+        <IconAction label="Edit invite" onClick={onEdit}>
+          <Pencil className="h-4 w-4" />
+        </IconAction>
+        <IconAction label="Cancel invite" onClick={onRemove} danger>
+          <X className="h-4 w-4" />
+        </IconAction>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <IconAction label="Edit member" onClick={onEdit}>
+        <Pencil className="h-4 w-4" />
+      </IconAction>
+      <IconAction label="Remove from team" onClick={onRemove} danger>
+        <Trash2 className="h-4 w-4" />
+      </IconAction>
+    </div>
+  );
+}
+
+// "Are you sure?" before removing someone or cancelling their invite
+function RemoveModal({ member, openTickets, onConfirm, onClose }) {
+  const isInvite = member.status === "invited";
+  const name = displayName(member);
+
+  return (
+    <Modal
+      title={isInvite ? "Cancel invite?" : "Remove team member?"}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={secondaryButton}>
+            Keep
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] sm:flex-none"
+          >
+            {isInvite ? "Cancel invite" : "Remove"}
+          </button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-3">
+        <Avatar name={name} />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{name}</p>
+          <p className="truncate text-sm text-muted">{member.email}</p>
+        </div>
+      </div>
+      {isInvite ? (
+        <p className="text-sm text-muted">
+          Their invite link will stop working. You can invite them again later.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-muted">
+            They won't be able to sign in anymore. Their replies and notes stay
+            on the tickets.
+          </p>
+          {openTickets > 0 && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+              {openTickets} unfinished ticket
+              {openTickets === 1 ? " is" : "s are"} assigned to them.{" "}
+              {openTickets === 1 ? "It" : "They"} will become unassigned.
+            </p>
+          )}
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// Table showing which role can do what
+function PermissionsTable() {
+  return (
+    <Card title="What each role can do">
+      <div className="-mx-5 overflow-x-auto">
+        <table className="w-full min-w-140 text-left text-sm">
+          <thead>
+            <tr className="border-b border-line text-muted">
+              <th className="px-5 py-3 font-medium">Permission</th>
+              {ROLE_ORDER.map((id) => (
+                <th
+                  key={id}
+                  className="whitespace-nowrap px-3 py-3 text-center font-medium"
+                >
+                  {ROLES[id].label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PERMISSIONS.map((p) => (
+              <tr
+                key={p.label}
+                className="border-b border-line transition last:border-0 hover:bg-brand/5"
+              >
+                <td className="px-5 py-3">{p.label}</td>
+                {ROLE_ORDER.map((id) => (
+                  <td key={id} className="px-3 py-3">
+                    {p.roles.includes(id) ? (
+                      <Check
+                        aria-label="Yes"
+                        className="mx-auto h-4 w-4 text-brand"
+                      />
+                    ) : (
+                      <Minus
+                        aria-label="No"
+                        className="mx-auto h-4 w-4 text-line"
+                      />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+export default function Team() {
+  const { team, tickets, resendInvite, removeMember } = useData();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  // Which modal is open: { type: "invite" } / { type: "edit", member } / { type: "remove", member }
+  const [modal, setModal] = useState(null);
+  // Shows "Sent" for a moment after resending an invite
+  const [resentId, setResentId] = useState(null);
+
+  const active = team.filter((m) => m.status === "active");
+  const invited = team.filter((m) => m.status === "invited");
+  const counts = {
+    all: team.length,
+    active: active.length,
+    invited: invited.length,
+  };
+
+  // How many unfinished tickets each person has: { a1: 12, ... }
+  const openTickets = {};
+  for (const t of tickets) {
+    if (t.assignee && !isDone(t))
+      openTickets[t.assignee] = (openTickets[t.assignee] ?? 0) + 1;
+  }
+
+  const text = query.trim().toLowerCase();
+  const shown = team
+    .filter((m) => filter === "all" || m.status === filter)
+    .filter(
+      (m) =>
+        !text ||
+        [m.name, m.email, ROLES[m.role].label].some((f) =>
+          f.toLowerCase().includes(text),
+        ),
+    )
+    .sort(
+      (a, b) =>
+        ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) ||
+        displayName(a).localeCompare(displayName(b)),
+    );
+
+  function handleResend(member) {
+    resendInvite(member.id);
+    setResentId(member.id);
+    setTimeout(() => setResentId(null), 2000);
+  }
+
+  // The same buttons are used in the table and on the phone cards
+  function actionsFor(member) {
+    return (
+      <MemberActions
+        member={member}
+        justResent={resentId === member.id}
+        onEdit={() => setModal({ type: "edit", member })}
+        onResend={() => handleResend(member)}
+        onRemove={() => setModal({ type: "remove", member })}
+      />
+    );
+  }
+
+  // "SM Ashik" + a "You" tag if this is the logged-in user
+  function nameFor(member) {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{displayName(member)}</span>
+        {member.name === CURRENT_USER && (
+          <span className="shrink-0 rounded bg-page px-1.5 py-0.5 text-xs text-muted">
+            You
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4 sm:gap-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Team</h1>
+          <p className="mt-1 text-sm text-muted">
+            Invite people, choose what they can do, and remove access.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setModal({ type: "invite" })}
+          className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] sm:w-auto"
+        >
+          <UserPlus className="h-4 w-4" />
+          Invite member
+        </button>
+      </div>
+
+      {/* Numbers at a glance */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard label="Members" value={active.length} icon={Users} />
+        <StatCard
+          label="Admins"
+          value={
+            active.filter((m) => m.role === "admin" || m.role === "owner")
+              .length
+          }
+          icon={ShieldCheck}
+        />
+        <StatCard
+          label="Agents & supervisors"
+          value={
+            active.filter((m) => m.role === "agent" || m.role === "supervisor")
+              .length
+          }
+          icon={Headset}
+        />
+        <StatCard
+          label="Pending invites"
+          value={invited.length}
+          icon={MailQuestion}
+        />
+      </div>
+
+      {/* Search and filter */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, email or role"
+            className={`${inputClass} pl-9`}
+          />
+        </div>
+        <div className="flex rounded-lg border border-line bg-white p-1 text-sm">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              className={`flex-1 cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 transition active:scale-[0.97] sm:flex-none ${
+                filter === f.id
+                  ? "bg-brand/10 font-medium text-brand"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {f.label}
+              <span className="ml-1.5 text-xs opacity-70">{counts[f.id]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {shown.length === 0 ? (
+        <div className="rounded-xl border border-line bg-white px-6 py-12 text-center text-sm text-muted">
+          {text ? "Nobody matches your search." : "Nobody here yet."}
+        </div>
+      ) : (
+        <>
+          {/* Desktop and tablet: table */}
+          <div className="hidden overflow-x-auto rounded-xl border border-line bg-white md:block">
+            <table className="w-full min-w-200 text-left text-sm">
+              <thead>
+                <tr className="whitespace-nowrap border-b border-line text-muted">
+                  <th className="px-5 py-3 font-medium">Member</th>
+                  <th className="px-5 py-3 font-medium">Role</th>
+                  <th className="px-5 py-3 font-medium">Teams</th>
+                  <th className="px-5 py-3 font-medium">Open tickets</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((m) => (
+                  <tr
+                    key={m.id}
+                    className="border-b border-line transition last:border-0 hover:bg-brand/5"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={displayName(m)} />
+                        <div className="min-w-0">
+                          {nameFor(m)}
+                          {m.name && (
+                            <a
+                              href={`mailto:${m.email}`}
+                              className="block text-xs text-muted hover:text-brand"
+                            >
+                              {m.email}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <RoleBadge role={m.role} />
+                    </td>
+                    <td className="max-w-64 px-5 py-3">
+                      <TeamList departments={m.departments} />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3">
+                      {m.status === "active" ? (openTickets[m.id] ?? 0) : "–"}
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusText member={m} />
+                    </td>
+                    <td className="px-3 py-3">{actionsFor(m)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Phones: cards */}
+          <ul className="flex flex-col gap-3 md:hidden">
+            {shown.map((m) => (
+              <li
+                key={m.id}
+                className="rounded-xl border border-line bg-white p-4 transition duration-200 hover:border-brand/30 hover:shadow-md"
+              >
+                <div className="flex items-start gap-3">
+                  <Avatar name={displayName(m)} />
+                  <div className="min-w-0 flex-1">
+                    {nameFor(m)}
+                    {m.name && (
+                      <p className="truncate text-sm text-muted">{m.email}</p>
+                    )}
+                    <div className="mt-2">
+                      <RoleBadge role={m.role} />
+                    </div>
+                  </div>
+                  <div className="-mr-2 -mt-1">{actionsFor(m)}</div>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+                  <TeamList departments={m.departments} />
+                  <div className="flex items-center justify-between gap-2">
+                    <StatusText member={m} />
+                    {m.status === "active" && (
+                      <span className="text-xs text-muted">
+                        {openTickets[m.id] ?? 0} open tickets
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <PermissionsTable />
+
+      {modal?.type === "invite" && (
+        <MemberModal onClose={() => setModal(null)} />
+      )}
+      {modal?.type === "edit" && (
+        <MemberModal member={modal.member} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === "remove" && (
+        <RemoveModal
+          member={modal.member}
+          openTickets={openTickets[modal.member.id] ?? 0}
+          onConfirm={() => removeMember(modal.member.id)}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}

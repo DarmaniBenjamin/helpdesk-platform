@@ -8,6 +8,7 @@ import {
   STATUSES,
   PRIORITIES,
   HOUR,
+  DAY,
   isDone,
   findAgent,
   findDepartment,
@@ -164,6 +165,90 @@ const STARTING_AUTOMATIONS = [
   },
 ];
 
+// The people who can sign in. The first four have the same ids as the
+// agents in data.js, so tickets already assigned to them still match.
+// "invited" people haven't set their password yet.
+const now = Date.now();
+const STARTING_TEAM = [
+  {
+    id: "owner",
+    name: CURRENT_USER,
+    email: "ashik@example.com",
+    role: "owner",
+    departments: [],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 400 * DAY,
+    lastActiveAt: now - 5 * 60 * 1000,
+  },
+  {
+    id: "a1",
+    name: "Alex Charles",
+    email: "alex.charles@example.com",
+    role: "admin",
+    departments: ["it", "net", "srv"],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 320 * DAY,
+    lastActiveAt: now - 40 * 60 * 1000,
+  },
+  {
+    id: "a2",
+    name: "Kerry-Ann Joseph",
+    email: "kerryann.joseph@example.com",
+    role: "agent",
+    departments: ["m365", "it"],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 210 * DAY,
+    lastActiveAt: now - 2 * HOUR,
+  },
+  {
+    id: "a3",
+    name: "Marcus Pierre",
+    email: "marcus.pierre@example.com",
+    role: "agent",
+    departments: ["net", "cctv"],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 150 * DAY,
+    lastActiveAt: now - 26 * HOUR,
+  },
+  {
+    id: "a4",
+    name: "Shanice Thomas",
+    email: "shanice.thomas@example.com",
+    role: "supervisor",
+    departments: ["bill", "it", "srv"],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 280 * DAY,
+    lastActiveAt: now - 3 * HOUR,
+  },
+  {
+    id: "m1",
+    name: "Jordan Baptiste",
+    email: "jordan.baptiste@example.com",
+    role: "agent",
+    departments: ["it"],
+    status: "invited",
+    invitedAt: now - 2 * DAY,
+    joinedAt: null,
+    lastActiveAt: null,
+  },
+  {
+    id: "m2",
+    name: "",
+    email: "helpdesk.temp@example.com",
+    role: "agent",
+    departments: ["cctv"],
+    status: "invited",
+    invitedAt: now - 6 * HOUR,
+    joinedAt: null,
+    lastActiveAt: null,
+  },
+];
+
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
@@ -172,6 +257,75 @@ export default function DataProvider({ children }) {
   const [rules, setRules] = useState(STARTING_RULES);
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
+  const [team, setTeam] = useState(STARTING_TEAM);
+
+  // ---------- Team ----------
+
+  // Is this email already on the team (signed up or invited)?
+  function findMemberByEmail(email) {
+    const wanted = email.trim().toLowerCase();
+    return team.find((m) => m.email === wanted);
+  }
+
+  // Adds someone as "invited". Later, the backend sends them an email
+  // with a link to set their password, and they become "active".
+  function inviteMember({ email, name, role, departments }) {
+    const member = {
+      id: `m${Date.now()}`,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      role,
+      departments,
+      status: "invited",
+      invitedAt: Date.now(),
+      joinedAt: null,
+      lastActiveAt: null,
+    };
+    setTeam((list) => [...list, member]);
+    return member;
+  }
+
+  function updateMember(id, changes) {
+    setTeam((list) =>
+      list.map((m) => (m.id === id ? { ...m, ...changes } : m)),
+    );
+  }
+
+  // Sends the invite again (for now, just restarts the "Invited ... ago" time)
+  function resendInvite(id) {
+    updateMember(id, { invitedAt: Date.now() });
+  }
+
+  // Takes someone off the team. Their unfinished tickets become unassigned,
+  // with a line in each ticket's history saying why.
+  function removeMember(id) {
+    const member = team.find((m) => m.id === id);
+    if (!member || member.role === "owner") return;
+    setTeam((list) => list.filter((m) => m.id !== id));
+
+    if (member.status !== "active") return; // invites have no tickets
+    const time = Date.now();
+    setTickets((list) =>
+      list.map((t) => {
+        if (t.assignee !== id || isDone(t)) return t;
+        return {
+          ...t,
+          assignee: null,
+          updatedAt: time,
+          messages: [
+            ...t.messages,
+            {
+              id: t.messages.length + 1,
+              kind: "event",
+              author: CURRENT_USER,
+              body: `unassigned the ticket (${member.name} was removed from the team)`,
+              at: time,
+            },
+          ],
+        };
+      }),
+    );
+  }
 
   // ---------- Saved answers (knowledge base) ----------
 
@@ -422,6 +576,12 @@ export default function DataProvider({ children }) {
         updateAnswer,
         deleteAnswer,
         recordAnswerUse,
+        team,
+        findMemberByEmail,
+        inviteMember,
+        updateMember,
+        resendInvite,
+        removeMember,
       }}
     >
       {children}
