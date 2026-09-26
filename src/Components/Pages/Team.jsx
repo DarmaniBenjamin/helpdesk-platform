@@ -22,7 +22,7 @@ import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
 import CustomerInviteModal from "../CustomerInviteModal";
 import { inputClass, secondaryButton } from "../formStyles";
-import { ROLES, PERMISSIONS, AVAILABILITY, displayName } from "../teamRoles";
+import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
 import useData from "../../useData";
 import { CURRENT_USER_ID } from "../../DataProvider";
@@ -405,16 +405,9 @@ export default function Team() {
     );
   }
 
-  // Their photo, with a colored dot for active staff (available, busy, away)
+  // Their photo, or initials if they don't have one
   function avatarFor(member) {
-    const showStatus = member.status === "active" && member.role !== "customer";
-    return (
-      <Avatar
-        name={displayName(member)}
-        photo={member.photo}
-        status={showStatus ? AVAILABILITY[member.availability]?.dot : undefined}
-      />
-    );
+    return <Avatar name={displayName(member)} photo={member.photo} />;
   }
 
   // Their name + a "You" tag if this is the logged-in user

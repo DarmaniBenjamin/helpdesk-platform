@@ -70,26 +70,6 @@ export const PERMISSIONS = [
   { label: "Transfer ownership", roles: ["owner"] },
 ];
 
-// Whether a staff member is around to take tickets. Shown as a colored dot
-// on their photo. Later, assignment rules can skip people who are away.
-export const AVAILABILITY = {
-  available: {
-    label: "Available",
-    hint: "Ready to take tickets",
-    dot: "bg-emerald-500",
-  },
-  busy: {
-    label: "Busy",
-    hint: "Working, but don't send me more",
-    dot: "bg-red-500",
-  },
-  away: {
-    label: "Away",
-    hint: "Out of office or on a break",
-    dot: "bg-amber-400",
-  },
-};
-
 // A name to show for someone. Invited people might not have one yet.
 export function displayName(member) {
   return member.name || member.email;

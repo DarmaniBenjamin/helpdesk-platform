@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import Avatar from "./Avatar";
-import { AVAILABILITY, ROLES } from "./teamRoles";
+import PresenceMenu from "./PresenceMenu";
+import { ROLES } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
 import { isOverdue, timeAgo } from "../data";
@@ -276,6 +277,9 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
           <span className="hidden sm:inline">Add Ticket</span>
         </button>
 
+        {/* Who else is on this page */}
+        <PresenceMenu />
+
         {/* User menu */}
         <div ref={userRef} className="sm:relative">
           <button
@@ -286,13 +290,8 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
               userOpen ? "bg-brand/10" : ""
             }`}
           >
-            <span className="rounded-full ring-2 ring-transparent transition group-hover:ring-brand/40">
-              <Avatar
-                name={me.name}
-                photo={me.photo}
-                size="sm"
-                status={AVAILABILITY[me.availability]?.dot}
-              />
+            <span className="flex rounded-full ring-2 ring-transparent transition group-hover:ring-brand/40">
+              <Avatar name={me.name} photo={me.photo} size="sm" />
             </span>
             <span className="hidden max-w-40 truncate text-sm font-medium lg:block">
               {me.name}

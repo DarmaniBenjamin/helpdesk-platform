@@ -173,7 +173,6 @@ const STARTING_AUTOMATIONS = [
 // "invited" people haven't set their password yet.
 // Customers are linked to their customer record with customerId.
 // Everyone has the same profile fields: name, email, phone and photo.
-// Staff also have an availability (see AVAILABILITY in teamRoles.js).
 const now = Date.now();
 const STARTING_TEAM = [
   {
@@ -182,7 +181,6 @@ const STARTING_TEAM = [
     email: "ashik@example.com",
     phone: "+1 (473) 440-1200",
     photo: null,
-    availability: "available",
     role: "owner",
     departments: [],
     status: "active",
@@ -196,7 +194,6 @@ const STARTING_TEAM = [
     email: "alex.charles@example.com",
     phone: "+1 (473) 405-2231",
     photo: null,
-    availability: "available",
     role: "admin",
     departments: ["it", "net", "srv"],
     status: "active",
@@ -210,7 +207,6 @@ const STARTING_TEAM = [
     email: "kerryann.joseph@example.com",
     phone: "+1 (473) 418-7764",
     photo: null,
-    availability: "busy",
     role: "agent",
     departments: ["m365", "it"],
     status: "active",
@@ -224,7 +220,6 @@ const STARTING_TEAM = [
     email: "marcus.pierre@example.com",
     phone: "+1 (473) 409-3380",
     photo: null,
-    availability: "away",
     role: "agent",
     departments: ["net", "cctv"],
     status: "active",
@@ -238,7 +233,6 @@ const STARTING_TEAM = [
     email: "shanice.thomas@example.com",
     phone: "+1 (473) 421-5519",
     photo: null,
-    availability: "available",
     role: "supervisor",
     departments: ["bill", "it", "srv"],
     status: "active",
@@ -252,7 +246,6 @@ const STARTING_TEAM = [
     email: "jordan.baptiste@example.com",
     phone: "",
     photo: null,
-    availability: "available",
     role: "agent",
     departments: ["it"],
     status: "invited",
@@ -266,7 +259,6 @@ const STARTING_TEAM = [
     email: "helpdesk.temp@example.com",
     phone: "",
     photo: null,
-    availability: "available",
     role: "agent",
     departments: ["cctv"],
     status: "invited",
@@ -335,7 +327,6 @@ export default function DataProvider({ children }) {
       email: email.trim().toLowerCase(),
       phone: "",
       photo: null,
-      availability: "available",
       role,
       departments,
       status: "invited",

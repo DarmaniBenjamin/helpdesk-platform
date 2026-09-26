@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Link } from "react-router";
 import { ChevronsUpDown, X, User, Settings, LogOut } from "lucide-react";
 import Avatar from "./Avatar";
-import AvailabilityPicker from "./AvailabilityPicker";
 import useDismiss from "./useDismiss";
 import { mainLinks, moreLinks } from "./navLinks";
-import { AVAILABILITY, ROLES } from "./teamRoles";
+import { ROLES } from "./teamRoles";
 import useData from "../useData";
 
 function SidebarLink({ link, onClick, collapsed }) {
@@ -55,14 +54,12 @@ function SidebarLink({ link, onClick, collapsed }) {
 }
 
 // The box at the bottom of the sidebar. Clicking it opens an account menu
-// above it: who you are, your availability, and links to your profile.
+// above it: who you are, and links to your profile and settings.
 function AccountMenu({ collapsed, onNavigate }) {
-  const { me, updateMember } = useData();
+  const { me } = useData();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   useDismiss(menuRef, () => setMenuOpen(false), menuOpen);
-
-  const status = AVAILABILITY[me.availability];
 
   // Close the menu and (on phones) the sidebar after picking a link
   function go() {
@@ -85,24 +82,13 @@ function AccountMenu({ collapsed, onNavigate }) {
             onClick={go}
             className="flex items-center gap-3 rounded-t-xl border-b border-line p-4 transition hover:bg-brand/5"
           >
-            <Avatar name={me.name} photo={me.photo} status={status?.dot} />
+            <Avatar name={me.name} photo={me.photo} />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{me.name}</p>
               <p className="truncate text-xs text-muted">{me.email}</p>
               <p className="text-xs text-muted">{ROLES[me.role].label}</p>
             </div>
           </Link>
-
-          {/* Set your availability without leaving the page */}
-          <div className="border-b border-line p-2">
-            <p className="px-3 pb-1 pt-1 text-xs font-medium text-muted">
-              Set your status
-            </p>
-            <AvailabilityPicker
-              value={me.availability}
-              onChange={(availability) => updateMember(me.id, { availability })}
-            />
-          </div>
 
           <div className="p-2">
             {links.map((link) => {
@@ -142,10 +128,10 @@ function AccountMenu({ collapsed, onNavigate }) {
           menuOpen ? "bg-brand/10" : ""
         } ${collapsed ? "lg:justify-center" : ""}`}
       >
-        <Avatar name={me.name} photo={me.photo} status={status?.dot} />
+        <Avatar name={me.name} photo={me.photo} />
         <div className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
           <p className="truncate text-sm font-semibold">{me.name}</p>
-          <p className="truncate text-xs text-muted">{status?.label}</p>
+          <p className="truncate text-xs text-muted">{ROLES[me.role].label}</p>
         </div>
         <ChevronsUpDown
           className={`h-4 w-4 shrink-0 text-muted ${collapsed ? "lg:hidden" : ""}`}

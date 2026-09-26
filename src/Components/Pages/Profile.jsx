@@ -12,18 +12,16 @@ import {
 import Avatar from "../Avatar";
 import Card from "../Card";
 import RoleBadge from "../RoleBadge";
-import AvailabilityPicker from "../AvailabilityPicker";
 import {
   inputClass,
   labelClass,
   primaryButton,
   secondaryButton,
 } from "../formStyles";
-import { AVAILABILITY } from "../teamRoles";
 import { MAX_PHOTO_BYTES, resizeImage } from "../imageUtils";
 import useData from "../../useData";
 
-// Your own profile: photo, name, email, phone and availability.
+// Your own profile: photo, name, email and phone.
 // Every staff member and customer gets this same page for themselves
 // once login exists.
 export default function Profile() {
@@ -129,14 +127,7 @@ export default function Profile() {
             <div className="flex flex-col items-center text-center">
               {/* The photo, with a camera button on top to change it */}
               <div className="relative">
-                <Avatar
-                  name={me.name}
-                  photo={me.photo}
-                  size="lg"
-                  status={
-                    isStaff ? AVAILABILITY[me.availability]?.dot : undefined
-                  }
-                />
+                <Avatar name={me.name} photo={me.photo} size="lg" />
                 <button
                   type="button"
                   aria-label="Change photo"
@@ -159,7 +150,9 @@ export default function Profile() {
                 <RoleBadge role={me.role} />
               </div>
 
-              <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:justify-center lg:flex-col">
+              {/* Phones: stacked full-width buttons (a grid, so each keeps
+                  its full height). Tablets: side by side. Desktop: stacked. */}
+              <div className="mt-4 grid w-full gap-2 sm:flex sm:justify-center lg:grid">
                 <button
                   type="button"
                   onClick={() => fileInput.current.click()}
@@ -172,7 +165,7 @@ export default function Profile() {
                   <button
                     type="button"
                     onClick={removePhoto}
-                    className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97] sm:flex-none"
+                    className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
                   >
                     <Trash2 className="h-4 w-4" />
                     Remove photo
@@ -208,20 +201,6 @@ export default function Profile() {
               )}
             </dl>
           </div>
-
-          {isStaff && (
-            <Card title="Availability">
-              <p className="-mt-2 mb-3 text-sm text-muted">
-                Lets your team know if you can take new tickets.
-              </p>
-              <AvailabilityPicker
-                value={me.availability}
-                onChange={(availability) =>
-                  updateMember(me.id, { availability })
-                }
-              />
-            </Card>
-          )}
         </div>
 
         {/* Right: the details form, and password */}
@@ -284,9 +263,11 @@ export default function Profile() {
               </label>
             </div>
 
-            <div className="mt-6 flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-end">
+            {/* Phones: full-width buttons with Save on top. From 640px up:
+                a row on the right, with Save last. */}
+            <div className="mt-6 grid gap-2 border-t border-line pt-4 sm:flex sm:items-center sm:justify-end">
               {saved && (
-                <span className="flex items-center justify-center gap-1.5 text-sm font-medium text-brand sm:mr-auto">
+                <span className="order-last flex items-center justify-center gap-1.5 text-sm font-medium text-brand sm:order-first sm:mr-auto">
                   <CircleCheck className="h-4 w-4" />
                   Changes saved
                 </span>
@@ -302,7 +283,7 @@ export default function Profile() {
               <button
                 type="submit"
                 disabled={!changed}
-                className={`${primaryButton} disabled:cursor-default disabled:opacity-50 disabled:hover:bg-brand`}
+                className={`${primaryButton} order-first sm:order-last disabled:cursor-default disabled:opacity-50 disabled:hover:bg-brand`}
               >
                 Save changes
               </button>
@@ -310,11 +291,11 @@ export default function Profile() {
           </form>
 
           <Card title="Password">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="grid gap-4 sm:flex sm:items-center">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
                 <KeyRound className="h-5 w-5" />
               </span>
-              <p className="flex-1 text-sm text-muted">
+              <p className="text-sm text-muted sm:flex-1">
                 You'll be able to change your password here once sign-in is set
                 up.
               </p>
