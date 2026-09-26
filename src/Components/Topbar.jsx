@@ -5,7 +5,6 @@ import {
   PanelLeft,
   Search,
   Bell,
-  Sun,
   Plus,
   ChevronDown,
   X,
@@ -19,6 +18,7 @@ import {
 import useDismiss from "./useDismiss";
 import Avatar from "./Avatar";
 import PresenceMenu from "./PresenceMenu";
+import { ThemeToggleButton, ThemeSwitchRow } from "./ThemeToggle";
 import { ROLES } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
@@ -261,12 +261,8 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
           )}
         </div>
 
-        <IconButton
-          icon={Sun}
-          label="Toggle theme"
-          iconEffect="group-hover:rotate-90"
-          className="hidden sm:block"
-        />
+        {/* Phones: this lives in the menu under your picture instead */}
+        <ThemeToggleButton className="hidden sm:block" />
 
         <button
           type="button"
@@ -324,6 +320,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
                     {item.label}
                   </Link>
                 ))}
+                <ThemeSwitchRow />
                 <hr className="my-2 border-line" />
                 <Link
                   to="/login"

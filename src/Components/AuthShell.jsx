@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Inbox, ShieldCheck, Clock } from "lucide-react";
+import { ThemeToggleButton } from "./ThemeToggle";
 
 const POINTS = [
   { icon: Inbox, text: "Every request in one place" },
@@ -17,7 +18,12 @@ export default function AuthShell({ title, children }) {
   return (
     // grid-cols-1 (not just "grid") stops long text, like an email address,
     // from stretching the page wider than the phone screen
-    <div className="grid min-h-dvh grid-cols-1 bg-page lg:grid-cols-2">
+    <div className="relative grid min-h-dvh grid-cols-1 bg-page lg:grid-cols-2">
+      {/* Light / dark switch in the top corner */}
+      <div className="absolute right-3 top-3 z-10">
+        <ThemeToggleButton />
+      </div>
+
       {/* Welcome panel */}
       <div className="relative hidden overflow-hidden bg-brand p-12 text-white lg:flex lg:flex-col lg:justify-between">
         {/* Soft circles in the background */}
@@ -25,7 +31,8 @@ export default function AuthShell({ title, children }) {
         <div className="pointer-events-none absolute -bottom-32 -left-16 h-80 w-80 rounded-full bg-white/10" />
 
         <div className="relative flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-white" />
+          {/* bg-[#fff]: stays white in dark mode too */}
+          <div className="h-8 w-8 rounded-full bg-[#fff]" />
           <span className="text-lg font-semibold">Ticket Support</span>
         </div>
 

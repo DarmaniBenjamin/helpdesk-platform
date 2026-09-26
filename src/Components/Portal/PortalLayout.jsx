@@ -3,6 +3,7 @@ import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { ChevronDown, Inbox, LogOut, Plus, User } from "lucide-react";
 import Avatar from "../Avatar";
 import useDismiss from "../useDismiss";
+import { ThemeSwitchRow } from "../ThemeToggle";
 import useData from "../../useData";
 
 // The frame around every customer portal page: a simple top bar with the
@@ -91,6 +92,7 @@ export default function PortalLayout() {
                       <User className="h-4 w-4" />
                       My profile
                     </Link>
+                    <ThemeSwitchRow />
                     <hr className="my-2 border-line" />
                     <Link
                       to="/login"
