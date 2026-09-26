@@ -271,10 +271,17 @@ function Properties({ ticket, onChange }) {
       <label className={labelClass}>
         Department
         <select
-          value={ticket.department}
+          value={ticket.department ?? ""}
           onChange={(e) => onChange({ department: e.target.value })}
           className={`${inputClass} cursor-pointer`}
         >
+          {/* Only shown while the ticket has no team, e.g. a new request
+              from the customer portal. Once a team is picked, it goes away. */}
+          {!ticket.department && (
+            <option value="" disabled>
+              No team yet: pick one
+            </option>
+          )}
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}

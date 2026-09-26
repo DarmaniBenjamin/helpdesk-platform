@@ -22,8 +22,12 @@ import {
 const PAGE_SIZE = 20;
 
 // The tabs across the top. "active" means anything not resolved/closed.
+// "unassigned" is the queue of new work nobody has picked up yet, like
+// requests from the customer portal. The admin assigns them, or a tech
+// takes one themselves.
 const TABS = [
   { id: "active", label: "Active" },
+  { id: "unassigned", label: "Unassigned" },
   ...Object.entries(STATUSES).map(([id, { label }]) => ({ id, label })),
   { id: "all", label: "All" },
 ];
@@ -51,6 +55,7 @@ const SORTS = {
 function matchesTab(ticket, tab) {
   if (tab === "all") return true;
   if (tab === "active") return !isDone(ticket);
+  if (tab === "unassigned") return !isDone(ticket) && !ticket.assignee;
   return ticket.status === tab;
 }
 
@@ -122,7 +127,10 @@ export default function Inbox() {
     (t) =>
       matchesSearch(t, text) &&
       (priority === "any" || t.priority === Number(priority)) &&
-      (department === "any" || t.department === department) &&
+      (department === "any" ||
+        (department === "none"
+          ? !t.department
+          : t.department === department)) &&
       (assignee === "any" ||
         (assignee === "none" ? !t.assignee : t.assignee === assignee)),
   );
@@ -238,6 +246,7 @@ export default function Inbox() {
             className={`${inputClass} cursor-pointer`}
           >
             <option value="any">Any department</option>
+            <option value="none">No team yet</option>
             {DEPARTMENTS.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}

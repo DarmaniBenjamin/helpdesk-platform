@@ -1,27 +1,22 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, PhoneCall } from "lucide-react";
 import { inputClass, labelClass } from "../formStyles";
-import { DEPARTMENTS, HOUR, SLA_HOURS } from "../../data";
+import { HOUR, SLA_HOURS } from "../../data";
 import useData from "../../useData";
 
-// How urgent it is, in the customer's words. These set the ticket's priority.
-const URGENCY = [
-  { priority: 1, label: "Low", hint: "No rush, it can wait a few days" },
-  { priority: 2, label: "Medium", hint: "It's getting in the way of my work" },
-  { priority: 3, label: "High", hint: "I can't work until it's fixed" },
-  { priority: 4, label: "Urgent", hint: "The whole office is affected" },
-];
+// Every request comes in with no team and nobody assigned, and lands in the
+// Inbox's "Unassigned" tab. The admin picks the team, priority and person
+// (or a tech takes it), so the customer never has to choose.
+const DEFAULT_PRIORITY = 2; // Medium, until the admin changes it
 
-// The customer sends a new request. It becomes a ticket in the Inbox,
-// marked as coming from the customer portal.
+// The customer describes their problem in their own words. It becomes a
+// ticket in the Inbox, marked as coming from the customer portal.
 export default function PortalNewRequest() {
   const { me, customers, addTicket } = useData();
   const navigate = useNavigate();
 
   const [subject, setSubject] = useState("");
-  const [department, setDepartment] = useState(DEPARTMENTS[0].id);
-  const [priority, setPriority] = useState(2);
   const [description, setDescription] = useState("");
 
   function handleSubmit(e) {
@@ -30,9 +25,9 @@ export default function PortalNewRequest() {
     const ticket = addTicket({
       customer,
       subject: subject.trim(),
-      department,
-      priority,
-      dueBy: Date.now() + SLA_HOURS[priority].resolve * HOUR,
+      department: null,
+      priority: DEFAULT_PRIORITY,
+      dueBy: Date.now() + SLA_HOURS[DEFAULT_PRIORITY].resolve * HOUR,
       description: description.trim(),
       source: "portal",
     });
@@ -71,67 +66,22 @@ export default function PortalNewRequest() {
         </label>
 
         <label className={labelClass}>
-          What's it about?
-          <select
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            className={`${inputClass} cursor-pointer`}
-          >
-            {DEPARTMENTS.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-sm font-medium">
-            How urgent is it?
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {URGENCY.map((u) => {
-              const selected = priority === u.priority;
-              return (
-                <label
-                  key={u.priority}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition active:scale-[0.99] ${
-                    selected
-                      ? "border-brand bg-brand/5"
-                      : "border-line hover:border-brand/30 hover:bg-brand/5"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="urgency"
-                    checked={selected}
-                    onChange={() => setPriority(u.priority)}
-                    className="sr-only"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">{u.label}</span>
-                    <span className="block text-xs text-muted">{u.hint}</span>
-                  </span>
-                  {selected && (
-                    <Check className="h-4 w-4 shrink-0 text-brand" />
-                  )}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-
-        <label className={labelClass}>
           Tell us more
           <textarea
             required
-            rows={6}
+            rows={7}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What happened, when it started, and anything you've already tried."
             className={`${inputClass} h-auto resize-y py-2.5`}
           />
         </label>
+
+        <p className="flex items-start gap-3 rounded-lg bg-page p-3 text-sm text-muted">
+          <PhoneCall className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+          Our team will look at your request and pass it to the right person. If
+          someone needs to come by, we'll call you to set up a time.
+        </p>
 
         <div className="grid gap-2 border-t border-line pt-5 sm:flex sm:justify-end">
           <Link

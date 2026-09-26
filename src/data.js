@@ -72,8 +72,13 @@ export function isOverdue(ticket) {
   return !isDone(ticket) && Date.now() > ticket.dueBy;
 }
 
+// Tickets from the customer portal start without a team. The admin (or a
+// tech who picks it up) chooses one. Anywhere a team name is shown, these
+// tickets say "No team yet".
+export const NO_DEPARTMENT = { id: null, name: "No team yet" };
+
 export function findDepartment(id) {
-  return DEPARTMENTS.find((d) => d.id === id);
+  return DEPARTMENTS.find((d) => d.id === id) ?? NO_DEPARTMENT;
 }
 
 export function findAgent(id) {

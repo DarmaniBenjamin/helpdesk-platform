@@ -11,7 +11,7 @@ import {
 import Avatar from "../Avatar";
 import PortalStatusBadge from "./PortalStatusBadge";
 import { inputClass } from "../formStyles";
-import { PRIORITIES, findDepartment, isDone, timeAgo } from "../../data";
+import { isDone, timeAgo } from "../../data";
 import useData from "../../useData";
 
 function formatDate(time) {
@@ -173,10 +173,11 @@ export default function PortalTicket() {
     document.activeElement?.blur();
   }
 
+  // Priority, topic and who's assigned are for the team, so they
+  // aren't shown here
   const details = [
     ["Status", <PortalStatusBadge key="s" status={ticket.status} />],
-    ["Urgency", PRIORITIES[ticket.priority].label],
-    ["Topic", findDepartment(ticket.department).name],
+    ["Request", `#${ticket.id}`],
     ["Sent", formatDate(ticket.createdAt)],
     ["Last update", timeAgo(ticket.updatedAt)],
   ];
