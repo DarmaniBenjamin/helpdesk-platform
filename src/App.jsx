@@ -15,6 +15,7 @@ import Reports from "./Components/Pages/Reports";
 import Performance from "./Components/Pages/Performance";
 import Team from "./Components/Pages/Team";
 import Profile from "./Components/Pages/Profile";
+import Settings from "./Components/Pages/Settings";
 import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
@@ -49,24 +50,16 @@ export default function App() {
             <Route path="/assignment" element={<TicketAssignment />} />
             <Route path="/topics" element={<TicketTopics />} />
             <Route path="/performance" element={<Performance />} />
-            <Route
-              path="/statuses"
-              element={<ComingSoon title="Custom Ticket Status" />}
-            />
             <Route path="/automation" element={<Automation />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/team" element={<Team />} />
-            <Route
-              path="/joint-editing"
-              element={<ComingSoon title="Joint Editing" />}
-            />
             <Route
               path="/email"
               element={<ComingSoon title="Email Integration" />}
             />
             <Route path="/reports" element={<Reports />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<ComingSoon title="Settings" />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/login" element={<ComingSoon title="Login" />} />
             <Route path="*" element={<ComingSoon title="Page not found" />} />

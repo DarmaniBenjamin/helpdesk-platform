@@ -13,6 +13,7 @@ import {
   findAgent,
   findDepartment,
 } from "./data";
+import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
 // Which member of the team is logged in. Becomes the real user once
 // login exists. Their name, photo etc. live in the team list below, so
@@ -296,6 +297,20 @@ const STARTING_TEAM = [
   },
 ];
 
+// App settings. Backup destinations and the Freshdesk connection are saved
+// here now and switched on once the backend exists.
+const STARTING_SETTINGS = {
+  backup: {
+    destination: "download", // "download", "gdrive" or "b2"
+    schedule: "daily", // "off", "daily" or "weekly"
+    keep: 14, // how many old backups to keep
+    lastBackupAt: null,
+  },
+  freshdesk: {
+    domain: "", // e.g. "protonic" for protonic.freshdesk.com
+  },
+};
+
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
@@ -305,10 +320,73 @@ export default function DataProvider({ children }) {
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
   const [team, setTeam] = useState(STARTING_TEAM);
+  const [settings, setSettings] = useState(STARTING_SETTINGS);
 
   // The logged-in person, and the name written on their replies and notes
   const me = team.find((m) => m.id === CURRENT_USER_ID);
   const myName = me.name;
+
+  // ---------- Settings ----------
+
+  // e.g. updateSettings("backup", { schedule: "weekly" })
+  function updateSettings(section, changes) {
+    setSettings((all) => ({
+      ...all,
+      [section]: { ...all[section], ...changes },
+    }));
+  }
+
+  // ---------- Backup, restore and import ----------
+
+  // Everything in the app, in one object, ready to save as a file
+  function makeBackup() {
+    const time = Date.now();
+    const backupSettings = {
+      ...settings,
+      backup: { ...settings.backup, lastBackupAt: time },
+    };
+    setSettings(backupSettings);
+    return {
+      app: BACKUP_APP,
+      version: BACKUP_VERSION,
+      exportedAt: time,
+      data: {
+        tickets,
+        customers,
+        team,
+        rules,
+        automations,
+        answers,
+        settings: backupSettings,
+      },
+    };
+  }
+
+  // Replaces everything with what's in a backup. Anything the backup
+  // doesn't have is left as it is. The team is only replaced if the
+  // backup still has you in it, so you can't lock yourself out.
+  function restoreBackup(data) {
+    setTickets(data.tickets);
+    setCustomers(data.customers);
+    if (data.team?.some((m) => m.id === CURRENT_USER_ID)) setTeam(data.team);
+    if (data.rules) setRules(data.rules);
+    if (data.automations) setAutomations(data.automations);
+    if (data.answers) setAnswers(data.answers);
+    if (data.settings) setSettings({ ...STARTING_SETTINGS, ...data.settings });
+  }
+
+  // Saves the result of a Freshdesk import (see freshdeskMapping.js).
+  // Tickets keep a copy of their customer, so those are refreshed too.
+  function saveImport(newCustomers, newTickets) {
+    const byId = new Map(newCustomers.map((c) => [c.id, c]));
+    setCustomers(newCustomers);
+    setTickets(
+      newTickets.map((t) => ({
+        ...t,
+        requester: byId.get(t.customerId) ?? t.requester,
+      })),
+    );
+  }
 
   // ---------- Team ----------
 
@@ -682,6 +760,11 @@ export default function DataProvider({ children }) {
         updateMember,
         resendInvite,
         removeMember,
+        settings,
+        updateSettings,
+        makeBackup,
+        restoreBackup,
+        saveImport,
       }}
     >
       {children}
