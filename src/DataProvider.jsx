@@ -165,9 +165,11 @@ const STARTING_AUTOMATIONS = [
   },
 ];
 
-// The people who can sign in. The first four have the same ids as the
+// The people who can sign in: your staff, plus customers who have access
+// to the customer portal. The first four staff have the same ids as the
 // agents in data.js, so tickets already assigned to them still match.
 // "invited" people haven't set their password yet.
+// Customers are linked to their customer record with customerId.
 const now = Date.now();
 const STARTING_TEAM = [
   {
@@ -247,6 +249,30 @@ const STARTING_TEAM = [
     joinedAt: null,
     lastActiveAt: null,
   },
+  {
+    id: "c1",
+    name: startingCustomers[0].name,
+    email: startingCustomers[0].email,
+    role: "customer",
+    customerId: startingCustomers[0].id,
+    departments: [],
+    status: "active",
+    invitedAt: null,
+    joinedAt: now - 60 * DAY,
+    lastActiveAt: now - 5 * HOUR,
+  },
+  {
+    id: "c2",
+    name: startingCustomers[1].name,
+    email: startingCustomers[1].email,
+    role: "customer",
+    customerId: startingCustomers[1].id,
+    departments: [],
+    status: "invited",
+    invitedAt: now - 1 * DAY,
+    joinedAt: null,
+    lastActiveAt: null,
+  },
 ];
 
 // Wraps the whole app and keeps the tickets and customers in one place.
@@ -285,6 +311,25 @@ export default function DataProvider({ children }) {
     return member;
   }
 
+  // Gives a customer access to the customer portal, where they can
+  // only see their own tickets
+  function inviteCustomer(customer) {
+    const member = {
+      id: `c${Date.now()}`,
+      name: customer.name,
+      email: customer.email,
+      role: "customer",
+      customerId: customer.id,
+      departments: [],
+      status: "invited",
+      invitedAt: Date.now(),
+      joinedAt: null,
+      lastActiveAt: null,
+    };
+    setTeam((list) => [...list, member]);
+    return member;
+  }
+
   function updateMember(id, changes) {
     setTeam((list) =>
       list.map((m) => (m.id === id ? { ...m, ...changes } : m)),
@@ -296,14 +341,16 @@ export default function DataProvider({ children }) {
     updateMember(id, { invitedAt: Date.now() });
   }
 
-  // Takes someone off the team. Their unfinished tickets become unassigned,
-  // with a line in each ticket's history saying why.
+  // Takes someone off the team (or away from the customer portal).
+  // A staff member's unfinished tickets become unassigned, with a line in
+  // each ticket's history saying why. A customer's tickets are left alone.
   function removeMember(id) {
     const member = team.find((m) => m.id === id);
     if (!member || member.role === "owner") return;
     setTeam((list) => list.filter((m) => m.id !== id));
 
-    if (member.status !== "active") return; // invites have no tickets
+    // Invites and customers have no tickets assigned to them
+    if (member.status !== "active" || member.role === "customer") return;
     const time = Date.now();
     setTickets((list) =>
       list.map((t) => {
@@ -433,6 +480,14 @@ export default function DataProvider({ children }) {
     // Tickets keep a copy of their customer, so update those too
     setTickets((list) =>
       list.map((t) => (t.customerId === id ? { ...t, requester: updated } : t)),
+    );
+    // So does their portal login, if they have one
+    setTeam((list) =>
+      list.map((m) =>
+        m.customerId === id
+          ? { ...m, name: updated.name, email: updated.email }
+          : m,
+      ),
     );
   }
 
@@ -579,6 +634,7 @@ export default function DataProvider({ children }) {
         team,
         findMemberByEmail,
         inviteMember,
+        inviteCustomer,
         updateMember,
         resendInvite,
         removeMember,

@@ -1,8 +1,9 @@
-import { Crown, ShieldCheck, Eye, Headset } from "lucide-react";
+import { Crown, ShieldCheck, Eye, Headset, UserRound } from "lucide-react";
 
-// The roles someone on the team can have.
+// The roles someone who can sign in can have.
 // "owner" is the person who set up the helpdesk. There's only one,
-// and they can't be removed. The other three can be given out freely.
+// and they can't be removed. Admin, supervisor and agent are your staff.
+// "customer" is for your customers, who sign in to the customer portal.
 export const ROLES = {
   owner: {
     label: "Owner",
@@ -31,21 +32,35 @@ export const ROLES = {
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icon: Headset,
   },
+  customer: {
+    label: "Customer",
+    description:
+      "Signs in to the customer portal and can only see their own tickets.",
+    badge: "bg-slate-100 text-slate-600 ring-slate-200",
+    icon: UserRound,
+  },
 };
 
-// The roles you can pick when inviting or editing someone (not "owner")
+// Everyone except customers
+export const STAFF_ROLES = ["owner", "admin", "supervisor", "agent"];
+
+// The roles you can pick when inviting or editing a staff member
+// (not "owner", and customers are invited separately)
 export const PICKABLE_ROLES = ["admin", "supervisor", "agent"];
 
 // What each role is allowed to do. Shown as a table on the Team page.
 // Later, the backend will check these same rules before saving anything.
-const EVERYONE = ["owner", "admin", "supervisor", "agent"];
+const EVERYONE = [...STAFF_ROLES, "customer"];
 const SUPERVISORS_UP = ["owner", "admin", "supervisor"];
 const ADMINS_UP = ["owner", "admin"];
 
 export const PERMISSIONS = [
-  { label: "Answer and update tickets", roles: EVERYONE },
-  { label: "Add and edit customers", roles: EVERYONE },
-  { label: "Use and add Knowledge Base answers", roles: EVERYONE },
+  { label: "Open new tickets", roles: EVERYONE },
+  { label: "View only their own tickets", roles: ["customer"] },
+  { label: "See every ticket", roles: STAFF_ROLES },
+  { label: "Answer and update tickets", roles: STAFF_ROLES },
+  { label: "Add and edit customers", roles: STAFF_ROLES },
+  { label: "Use and add Knowledge Base answers", roles: STAFF_ROLES },
   { label: "Reassign tickets to anyone", roles: SUPERVISORS_UP },
   { label: "Edit and delete Knowledge Base answers", roles: SUPERVISORS_UP },
   { label: "See reports and performance", roles: SUPERVISORS_UP },

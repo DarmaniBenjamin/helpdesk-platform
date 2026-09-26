@@ -12,12 +12,15 @@ import {
   ShieldCheck,
   Headset,
   MailQuestion,
+  Building2,
+  Eye,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import Card from "../Card";
 import Modal from "../Modal";
 import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
+import CustomerInviteModal from "../CustomerInviteModal";
 import { inputClass, secondaryButton } from "../formStyles";
 import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
@@ -30,7 +33,7 @@ const FILTERS = [
   { id: "invited", label: "Invited" },
 ];
 
-// The owner comes first, then admins, supervisors, agents
+// The owner comes first, then admins, supervisors, agents, customers
 const ROLE_ORDER = Object.keys(ROLES);
 
 // A small square button with just an icon, e.g. the pencil or the trash can
@@ -105,6 +108,9 @@ function StatusText({ member }) {
 // The buttons at the end of each row. What shows depends on the member.
 function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
   if (member.role === "owner") return null;
+  // A customer's name and email come from their customer record,
+  // so there's nothing to edit here
+  const canEdit = member.role !== "customer";
 
   if (member.status === "invited") {
     return (
@@ -119,9 +125,11 @@ function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
             <RotateCw className="h-4 w-4" />
           </IconAction>
         )}
-        <IconAction label="Edit invite" onClick={onEdit}>
-          <Pencil className="h-4 w-4" />
-        </IconAction>
+        {canEdit && (
+          <IconAction label="Edit invite" onClick={onEdit}>
+            <Pencil className="h-4 w-4" />
+          </IconAction>
+        )}
         <IconAction label="Cancel invite" onClick={onRemove} danger>
           <X className="h-4 w-4" />
         </IconAction>
@@ -131,10 +139,16 @@ function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
 
   return (
     <div className="flex items-center justify-end gap-1">
-      <IconAction label="Edit member" onClick={onEdit}>
-        <Pencil className="h-4 w-4" />
-      </IconAction>
-      <IconAction label="Remove from team" onClick={onRemove} danger>
+      {canEdit && (
+        <IconAction label="Edit member" onClick={onEdit}>
+          <Pencil className="h-4 w-4" />
+        </IconAction>
+      )}
+      <IconAction
+        label={canEdit ? "Remove from team" : "Remove portal access"}
+        onClick={onRemove}
+        danger
+      >
         <Trash2 className="h-4 w-4" />
       </IconAction>
     </div>
@@ -144,11 +158,16 @@ function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
 // "Are you sure?" before removing someone or cancelling their invite
 function RemoveModal({ member, openTickets, onConfirm, onClose }) {
   const isInvite = member.status === "invited";
+  const isCustomer = member.role === "customer";
   const name = displayName(member);
+
+  let title = "Remove team member?";
+  if (isInvite) title = "Cancel invite?";
+  else if (isCustomer) title = "Remove portal access?";
 
   return (
     <Modal
-      title={isInvite ? "Cancel invite?" : "Remove team member?"}
+      title={title}
       onClose={onClose}
       footer={
         <>
@@ -179,6 +198,11 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
         <p className="text-sm text-muted">
           Their invite link will stop working. You can invite them again later.
         </p>
+      ) : isCustomer ? (
+        <p className="text-sm text-muted">
+          They won't be able to sign in to the customer portal anymore. They
+          stay in your customers, and their tickets aren't touched.
+        </p>
       ) : (
         <>
           <p className="text-sm text-muted">
@@ -203,7 +227,7 @@ function PermissionsTable() {
   return (
     <Card title="What each role can do">
       <div className="-mx-5 overflow-x-auto">
-        <table className="w-full min-w-140 text-left text-sm">
+        <table className="w-full min-w-160 text-left text-sm">
           <thead>
             <tr className="border-b border-line text-muted">
               <th className="px-5 py-3 font-medium">Permission</th>
@@ -248,32 +272,106 @@ function PermissionsTable() {
   );
 }
 
+// Customers who can sign in to the customer portal
+function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
+  return (
+    <Card
+      title="Customer portal access"
+      action={
+        <button
+          type="button"
+          onClick={onInvite}
+          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+        >
+          <UserPlus className="h-4 w-4" />
+          <span className="hidden sm:inline">Invite customer</span>
+          <span className="sm:hidden">Invite</span>
+        </button>
+      }
+    >
+      <p className="-mt-2 mb-4 flex items-start gap-2 text-sm text-muted">
+        <Eye className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+        Customers you invite can sign in and view only their own tickets.
+      </p>
+
+      {members.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-muted">
+          No customers have portal access yet.
+        </p>
+      ) : (
+        <ul className="-mx-5 divide-y divide-line border-t border-line">
+          {members.map((m) => (
+            <li
+              key={m.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition hover:bg-brand/5"
+            >
+              <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+                <Avatar name={displayName(m)} />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{displayName(m)}</p>
+                  <p className="truncate text-xs text-muted">{m.email}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span className="inline-flex items-center gap-1.5 text-muted">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  {m.company ?? "Individual"}
+                </span>
+                <span className="whitespace-nowrap text-muted">
+                  {ticketCounts[m.customerId] ?? 0} ticket
+                  {ticketCounts[m.customerId] === 1 ? "" : "s"}
+                </span>
+                <StatusText member={m} />
+              </div>
+              <div className="ml-auto">{actionsFor(m)}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export default function Team() {
-  const { team, tickets, resendInvite, removeMember } = useData();
+  const { team, tickets, customers, resendInvite, removeMember } = useData();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  // Which modal is open: { type: "invite" } / { type: "edit", member } / { type: "remove", member }
+  // Which modal is open: { type: "invite" } / { type: "inviteCustomer" } /
+  // { type: "edit", member } / { type: "remove", member }
   const [modal, setModal] = useState(null);
   // Shows "Sent" for a moment after resending an invite
   const [resentId, setResentId] = useState(null);
 
-  const active = team.filter((m) => m.status === "active");
-  const invited = team.filter((m) => m.status === "invited");
+  // Staff and customers are shown in separate sections
+  const staff = team.filter((m) => m.role !== "customer");
+  const portalCustomers = team
+    .filter((m) => m.role === "customer")
+    .map((m) => ({
+      ...m,
+      company: customers.find((c) => c.id === m.customerId)?.company ?? null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const active = staff.filter((m) => m.status === "active");
+  const invited = staff.filter((m) => m.status === "invited");
   const counts = {
-    all: team.length,
+    all: staff.length,
     active: active.length,
     invited: invited.length,
   };
 
   // How many unfinished tickets each person has: { a1: 12, ... }
   const openTickets = {};
+  // How many tickets each customer has: { 1001: 4, ... }
+  const customerTickets = {};
   for (const t of tickets) {
     if (t.assignee && !isDone(t))
       openTickets[t.assignee] = (openTickets[t.assignee] ?? 0) + 1;
+    customerTickets[t.customerId] = (customerTickets[t.customerId] ?? 0) + 1;
   }
 
   const text = query.trim().toLowerCase();
-  const shown = team
+  const shown = staff
     .filter((m) => filter === "all" || m.status === filter)
     .filter(
       (m) =>
@@ -328,7 +426,8 @@ export default function Team() {
         <div>
           <h1 className="text-2xl font-semibold sm:text-3xl">Team</h1>
           <p className="mt-1 text-sm text-muted">
-            Invite people, choose what they can do, and remove access.
+            Invite staff and customers, choose what they can do, and remove
+            access.
           </p>
         </div>
         <button
@@ -497,10 +596,20 @@ export default function Team() {
         </>
       )}
 
+      <CustomerAccess
+        members={portalCustomers}
+        ticketCounts={customerTickets}
+        actionsFor={actionsFor}
+        onInvite={() => setModal({ type: "inviteCustomer" })}
+      />
+
       <PermissionsTable />
 
       {modal?.type === "invite" && (
         <MemberModal onClose={() => setModal(null)} />
+      )}
+      {modal?.type === "inviteCustomer" && (
+        <CustomerInviteModal onClose={() => setModal(null)} />
       )}
       {modal?.type === "edit" && (
         <MemberModal member={modal.member} onClose={() => setModal(null)} />

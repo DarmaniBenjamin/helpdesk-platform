@@ -3,8 +3,14 @@ import { Search, Building2 } from "lucide-react";
 import Avatar from "./Avatar";
 import { inputClass } from "./formStyles";
 
-// Search your customers and pick one
-export default function CustomerPicker({ customers, selected, onSelect }) {
+// Search your customers and pick one.
+// emptyText (optional) is shown when nobody matches the search.
+export default function CustomerPicker({
+  customers,
+  selected,
+  onSelect,
+  emptyText,
+}) {
   const [query, setQuery] = useState("");
 
   // Once picked: show who it is, with a way to change it
@@ -91,8 +97,12 @@ export default function CustomerPicker({ customers, selected, onSelect }) {
         ))}
         {matches.length === 0 && (
           <li className="px-3 py-4 text-center text-sm text-muted">
-            No customers match. Switch to{" "}
-            <span className="font-medium">New customer</span> to add them.
+            {emptyText ?? (
+              <>
+                No customers match. Switch to{" "}
+                <span className="font-medium">New customer</span> to add them.
+              </>
+            )}
           </li>
         )}
       </ul>
