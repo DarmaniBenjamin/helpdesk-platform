@@ -618,17 +618,21 @@ export default function Team() {
                       <RoleBadge role={m.role} />
                     </div>
                   </div>
-                  <div className="-mr-2 -mt-1">{actionsFor(m)}</div>
                 </div>
                 <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
                   <TeamList departments={m.departments} />
+                  {/* The buttons sit down here on phones, so the name and
+                      email get the full width up top */}
                   <div className="flex items-center justify-between gap-2">
-                    <StatusText member={m} />
-                    {m.status === "active" && (
-                      <span className="text-xs text-muted">
-                        {openTickets[m.id] ?? 0} open tickets
-                      </span>
-                    )}
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <StatusText member={m} />
+                      {m.status === "active" && (
+                        <span className="text-xs text-muted">
+                          {openTickets[m.id] ?? 0} open tickets
+                        </span>
+                      )}
+                    </div>
+                    <div className="-mr-2 shrink-0">{actionsFor(m)}</div>
                   </div>
                 </div>
               </li>

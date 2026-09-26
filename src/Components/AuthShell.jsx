@@ -15,7 +15,9 @@ export default function AuthShell({ title, children }) {
   }, [title]);
 
   return (
-    <div className="grid min-h-dvh bg-page lg:grid-cols-2">
+    // grid-cols-1 (not just "grid") stops long text, like an email address,
+    // from stretching the page wider than the phone screen
+    <div className="grid min-h-dvh grid-cols-1 bg-page lg:grid-cols-2">
       {/* Welcome panel */}
       <div className="relative hidden overflow-hidden bg-brand p-12 text-white lg:flex lg:flex-col lg:justify-between">
         {/* Soft circles in the background */}
@@ -49,7 +51,8 @@ export default function AuthShell({ title, children }) {
       </div>
 
       {/* The form */}
-      <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-6">
+      {/* Phones: starts near the top. Bigger screens: centred. */}
+      <div className="flex min-w-0 flex-col items-center px-5 pb-10 pt-12 sm:justify-center sm:px-6 sm:py-10">
         <div className="mb-8 flex items-center gap-2 lg:hidden">
           <div className="h-8 w-8 rounded-full bg-brand" />
           <span className="text-lg font-semibold">Ticket Support</span>

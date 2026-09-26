@@ -196,7 +196,7 @@ export default function Login() {
         <p className="text-xs font-medium text-muted">
           Testing: any password works for now. Sign in as
         </p>
-        <div className="mt-2 grid gap-2">
+        <div className="mt-2 grid grid-cols-1 gap-2">
           {[
             demoStaff && { label: "Staff", member: demoStaff },
             demoCustomer && { label: "Customer", member: demoCustomer },
