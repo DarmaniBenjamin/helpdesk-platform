@@ -10,6 +10,7 @@ import useData from "../useData";
 
 // The eye button in the top bar. Hover it (or tap it on a phone) to see who
 // else is on the same page, e.g. two agents looking at the same ticket.
+// It only shows up when someone else is here. If it's just you, it's hidden.
 export default function PresenceMenu() {
   const { team, me } = useData();
   const { pathname } = useLocation();
@@ -38,6 +39,9 @@ export default function PresenceMenu() {
 
   const count = viewers.length;
 
+  // Just you on this page: no eye at all
+  if (count === 0) return null;
+
   return (
     <div
       ref={wrapRef}
@@ -56,11 +60,9 @@ export default function PresenceMenu() {
         }`}
       >
         <Eye className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
-        {count > 0 && (
-          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white ring-2 ring-white">
-            {count}
-          </span>
-        )}
+        <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white ring-2 ring-white">
+          {count}
+        </span>
       </button>
 
       {open && (
@@ -103,12 +105,6 @@ export default function PresenceMenu() {
                 </li>
               ))}
             </ul>
-
-            {count === 0 && (
-              <p className="border-t border-line px-4 py-3 text-xs text-muted">
-                Nobody else is on this page right now.
-              </p>
-            )}
           </div>
         </div>
       )}
