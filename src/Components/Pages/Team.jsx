@@ -14,6 +14,7 @@ import {
   MailQuestion,
   Building2,
   Eye,
+  Link2,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import Card from "../Card";
@@ -25,7 +26,6 @@ import { inputClass, secondaryButton } from "../formStyles";
 import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
 import useData from "../../useData";
-import { CURRENT_USER_ID } from "../../DataProvider";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -106,7 +106,15 @@ function StatusText({ member }) {
 }
 
 // The buttons at the end of each row. What shows depends on the member.
-function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
+function MemberActions({
+  member,
+  justResent,
+  justCopied,
+  onEdit,
+  onResend,
+  onCopyLink,
+  onRemove,
+}) {
   if (member.role === "owner") return null;
   // A customer's name and email come from their customer record,
   // so there's nothing to edit here
@@ -115,6 +123,18 @@ function MemberActions({ member, justResent, onEdit, onResend, onRemove }) {
   if (member.status === "invited") {
     return (
       <div className="flex items-center justify-end gap-1">
+        {/* The link the invite email will contain. Handy for testing,
+            or for sending it yourself another way. */}
+        {justCopied ? (
+          <span className="flex h-9 items-center gap-1 px-2 text-xs font-medium text-brand">
+            <Check className="h-3.5 w-3.5" />
+            Copied
+          </span>
+        ) : (
+          <IconAction label="Copy invite link" onClick={onCopyLink}>
+            <Link2 className="h-4 w-4" />
+          </IconAction>
+        )}
         {justResent ? (
           <span className="flex h-9 items-center gap-1 px-2 text-xs font-medium text-brand">
             <Check className="h-3.5 w-3.5" />
@@ -333,14 +353,16 @@ function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
 }
 
 export default function Team() {
-  const { team, tickets, customers, resendInvite, removeMember } = useData();
+  const { me, team, tickets, customers, resendInvite, removeMember } =
+    useData();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   // Which modal is open: { type: "invite" } / { type: "inviteCustomer" } /
   // { type: "edit", member } / { type: "remove", member }
   const [modal, setModal] = useState(null);
-  // Shows "Sent" for a moment after resending an invite
+  // Shows "Sent" / "Copied" for a moment after resending or copying
   const [resentId, setResentId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   // Staff and customers are shown in separate sections
   const staff = team.filter((m) => m.role !== "customer");
@@ -392,14 +414,28 @@ export default function Team() {
     setTimeout(() => setResentId(null), 2000);
   }
 
+  async function copyInviteLink(member) {
+    const link = `${window.location.origin}/welcome/${member.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(member.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // Phones on plain http block the clipboard: show the link instead
+      window.prompt("Copy this invite link:", link);
+    }
+  }
+
   // The same buttons are used in the table and on the phone cards
   function actionsFor(member) {
     return (
       <MemberActions
         member={member}
         justResent={resentId === member.id}
+        justCopied={copiedId === member.id}
         onEdit={() => setModal({ type: "edit", member })}
         onResend={() => handleResend(member)}
+        onCopyLink={() => copyInviteLink(member)}
         onRemove={() => setModal({ type: "remove", member })}
       />
     );
@@ -415,7 +451,7 @@ export default function Team() {
     return (
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-medium">{displayName(member)}</span>
-        {member.id === CURRENT_USER_ID && (
+        {member.id === me.id && (
           <span className="shrink-0 rounded bg-page px-1.5 py-0.5 text-xs text-muted">
             You
           </span>

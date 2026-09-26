@@ -15,10 +15,18 @@ import {
 } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
-// Which member of the team is logged in. Becomes the real user once
-// login exists. Their name, photo etc. live in the team list below, so
-// changing them on the My profile page updates the whole app.
-export const CURRENT_USER_ID = "owner";
+// Who's signed in is remembered in the browser under this name, so a
+// refresh doesn't sign you out. Only the member's ID is kept, never a
+// password. The backend will replace this with a proper login session.
+const SESSION_KEY = "helpdesk-session";
+
+function readSession() {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null; // private browsing can block storage
+  }
+}
 
 // Setting a status also sets/clears the resolved and closed times
 function applyStatus(ticket, status, now) {
@@ -321,10 +329,47 @@ export default function DataProvider({ children }) {
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
   const [team, setTeam] = useState(STARTING_TEAM);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
+  const [sessionId, setSessionId] = useState(readSession);
 
-  // The logged-in person, and the name written on their replies and notes
-  const me = team.find((m) => m.id === CURRENT_USER_ID);
-  const myName = me.name;
+  // The signed-in person (null when nobody is), and the name written on
+  // their replies and notes. Removed or not-yet-active people don't count.
+  const me =
+    team.find((m) => m.id === sessionId && m.status === "active") ?? null;
+  const myName = me?.name ?? "";
+
+  // ---------- Signing in and out ----------
+
+  // For now any password works. The backend will check it for real.
+  function login(memberId) {
+    setSessionId(memberId);
+    try {
+      localStorage.setItem(SESSION_KEY, memberId);
+    } catch {
+      // Storage blocked: you'll just be signed out on refresh
+    }
+  }
+
+  function logout() {
+    setSessionId(null);
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      // nothing to clean up
+    }
+  }
+
+  // An invited person sets their password: they become active and are
+  // signed straight in
+  function acceptInvite(id, name) {
+    const time = Date.now();
+    updateMember(id, {
+      name: name.trim(),
+      status: "active",
+      joinedAt: time,
+      lastActiveAt: time,
+    });
+    login(id);
+  }
 
   // ---------- Settings ----------
 
@@ -368,7 +413,7 @@ export default function DataProvider({ children }) {
   function restoreBackup(data) {
     setTickets(data.tickets);
     setCustomers(data.customers);
-    if (data.team?.some((m) => m.id === CURRENT_USER_ID)) setTeam(data.team);
+    if (data.team?.some((m) => m.id === me?.id)) setTeam(data.team);
     if (data.rules) setRules(data.rules);
     if (data.automations) setAutomations(data.automations);
     if (data.answers) setAnswers(data.answers);
@@ -622,6 +667,8 @@ export default function DataProvider({ children }) {
 
   // ---------- Tickets ----------
 
+  // `source` is where it came from: "agent" (made by staff) or "portal"
+  // (sent by the customer from the customer portal)
   function addTicket({
     customer,
     subject,
@@ -629,6 +676,7 @@ export default function DataProvider({ children }) {
     priority,
     dueBy,
     description,
+    source = "agent",
   }) {
     const now = Date.now();
     const ticket = {
@@ -641,7 +689,7 @@ export default function DataProvider({ children }) {
       customerId: customer.id,
       requester: customer,
       assignee: null,
-      source: "agent",
+      source,
       createdAt: now,
       firstResponseDue: now + SLA_HOURS[priority].firstResponse * HOUR,
       dueBy,
@@ -661,6 +709,21 @@ export default function DataProvider({ children }) {
     };
     setTickets((list) => [ticket, ...list]); // newest first
     return ticket;
+  }
+
+  // A customer's star rating (1-5) and comment on a finished ticket.
+  // Shows up on the Performance & Feedback page.
+  function rateTicket(id, rating, comment) {
+    setTickets((list) =>
+      list.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              feedback: { rating, comment: comment.trim(), at: Date.now() },
+            }
+          : t,
+      ),
+    );
   }
 
   // Change fields on a ticket, e.g. updateTicket(4819, { status: "resolved" }).
@@ -754,6 +817,10 @@ export default function DataProvider({ children }) {
         recordAnswerUse,
         team,
         me,
+        login,
+        logout,
+        acceptInvite,
+        rateTicket,
         findMemberByEmail,
         inviteMember,
         inviteCustomer,

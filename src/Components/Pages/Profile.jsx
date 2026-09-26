@@ -115,8 +115,9 @@ export default function Profile() {
       <div>
         <h1 className="text-2xl font-semibold sm:text-3xl">My profile</h1>
         <p className="mt-1 text-sm text-muted">
-          This is how you show up to your team
-          {isStaff ? " and customers" : ""}.
+          {isStaff
+            ? "This is how you show up to your team and customers."
+            : "This is how you show up to our support team."}
         </p>
       </div>
 
