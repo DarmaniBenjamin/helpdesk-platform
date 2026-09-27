@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DataContext } from "./useData";
+import { api } from "../server/src/api";
 import { STARTING_ANSWERS } from "./Components/Knowledge";
 import {
   tickets as startingTickets,
@@ -17,17 +18,48 @@ import {
 } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
-// Who's signed in is remembered in the browser under this name, so a
-// refresh doesn't sign you out. Only the member's ID is kept, never a
-// password. The backend will replace this with a proper login session.
-const SESSION_KEY = "helpdesk-session";
+// ---------- Signing in ----------
+// Real accounts sign in through the backend (see server/src/auth.js): the
+// server checks the password and keeps you signed in with a secure cookie.
+//
+// While the rest of the app still uses example data, the example people
+// (agents, admins, a customer) can be tried out with the "Demo accounts"
+// buttons on the sign-in page. Those only exist while running
+// "npm run dev", never on the real site, and don't touch the database.
+const DEMO_ALLOWED = import.meta.env.DEV;
+const DEMO_KEY = "helpdesk-demo-session";
 
-function readSession() {
+function readDemo() {
+  if (!DEMO_ALLOWED) return null;
   try {
-    return localStorage.getItem(SESSION_KEY);
+    return localStorage.getItem(DEMO_KEY);
   } catch {
     return null; // private browsing can block storage
   }
+}
+
+function saveDemo(id) {
+  try {
+    if (id) localStorage.setItem(DEMO_KEY, id);
+    else localStorage.removeItem(DEMO_KEY);
+  } catch {
+    // Storage blocked: the demo just won't survive a refresh
+  }
+}
+
+// Puts the real signed-in person into the team list, in place of the
+// example Super Admin, so every page that uses the team (Team, "Assigned
+// to", "You" tags...) shows them
+function withRealUser(list, user) {
+  return [
+    user,
+    ...list.filter(
+      (m) =>
+        m.id !== user.id &&
+        m.email !== user.email &&
+        !(user.role === "owner" && m.role === "owner"),
+    ),
+  ];
 }
 
 // Setting a status also sets/clears the resolved and closed times
@@ -342,12 +374,35 @@ export default function DataProvider({ children }) {
   const [team, setTeam] = useState(STARTING_TEAM);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
   const [departments, setDepartments] = useState(STARTING_DEPARTMENTS);
-  const [sessionId, setSessionId] = useState(readSession);
+  // checked = we've asked the server who's signed in (until then, pages
+  // wait instead of sending you to the sign-in page).
+  // userId = the real account that's signed in, or null.
+  const [auth, setAuth] = useState({ checked: false, userId: null });
+  const [demoId, setDemoId] = useState(readDemo);
+
+  // When the app opens: ask the server if you're already signed in
+  useEffect(() => {
+    let cancelled = false;
+    api("/auth/me")
+      .then(({ user }) => {
+        if (cancelled) return;
+        setTeam((list) => withRealUser(list, user));
+        setAuth({ checked: true, userId: user.id });
+      })
+      .catch(() => {
+        if (!cancelled) setAuth({ checked: true, userId: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // The signed-in person (null when nobody is), and the name written on
   // their replies and notes. Removed or not-yet-active people don't count.
-  const me =
-    team.find((m) => m.id === sessionId && m.status === "active") ?? null;
+  const meId = auth.userId ?? (DEMO_ALLOWED ? demoId : null);
+  const me = team.find((m) => m.id === meId && m.status === "active") ?? null;
+  // Signed in with a real account (not a demo one)?
+  const realSession = Boolean(auth.userId);
   const myName = me?.name ?? "";
 
   // Everyone on the staff who can be given tickets: active members who
@@ -412,27 +467,50 @@ export default function DataProvider({ children }) {
 
   // ---------- Signing in and out ----------
 
-  // For now any password works. The backend will check it for real.
-  function login(memberId) {
-    setSessionId(memberId);
-    try {
-      localStorage.setItem(SESSION_KEY, memberId);
-    } catch {
-      // Storage blocked: you'll just be signed out on refresh
-    }
+  // Sign in with a real account. Throws an error with the server's
+  // message (e.g. "That email and password don't match.") if it fails.
+  async function signIn(email, password) {
+    const { user } = await api("/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    setTeam((list) => withRealUser(list, user));
+    setAuth({ checked: true, userId: user.id });
+    setDemoId(null);
+    saveDemo(null);
+    return user;
+  }
+
+  // Try out an example person (only while running "npm run dev")
+  function signInDemo(memberId) {
+    if (!DEMO_ALLOWED) return;
+    setDemoId(memberId);
+    saveDemo(memberId);
   }
 
   function logout() {
-    setSessionId(null);
-    try {
-      localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // nothing to clean up
+    if (auth.userId) {
+      // Ends the session on the server too. If that fails (offline), the
+      // app still signs you out here.
+      api("/auth/logout", { method: "POST" }).catch(() => {});
     }
+    setAuth((a) => ({ ...a, userId: null }));
+    setDemoId(null);
+    saveDemo(null);
+  }
+
+  // Change your own password (real accounts). Throws with the server's
+  // message if the current password is wrong or the new one too short.
+  async function changePassword(currentPassword, newPassword) {
+    await api("/auth/password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    });
   }
 
   // An invited person sets their password: they become active and are
-  // signed straight in
+  // signed straight in. (Still the example version: real invites come
+  // with the next backend step.)
   function acceptInvite(id, name) {
     const time = Date.now();
     updateMember(id, {
@@ -441,7 +519,7 @@ export default function DataProvider({ children }) {
       joinedAt: time,
       lastActiveAt: time,
     });
-    login(id);
+    signInDemo(id);
   }
 
   // ---------- Settings ----------
@@ -926,8 +1004,13 @@ export default function DataProvider({ children }) {
         team,
         agents,
         me,
-        login,
+        authChecked: auth.checked,
+        realSession,
+        demoAllowed: DEMO_ALLOWED,
+        signIn,
+        signInDemo,
         logout,
+        changePassword,
         acceptInvite,
         rateTicket,
         markReviewed,

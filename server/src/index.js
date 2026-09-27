@@ -6,9 +6,13 @@ import express from "express";
 import { asc, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import { departments } from "./db/schema.js";
+import { authRouter, loadSession, requireAuth } from "./auth.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
+
+// Work out who is signed in (from their session cookie) on every request
+app.use(loadSession);
 
 // ---------- Health check ----------
 // Open http://localhost:5173/api/health in the browser to see if the
@@ -24,11 +28,13 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ---------- Departments ----------
-// The first real data coming from the database. The rest of the app
-// (tickets, customers, team...) moves over the same way, one step at a time.
+// ---------- Signing in and out ----------
+app.use("/api/auth", authRouter);
 
-app.get("/api/departments", async (req, res) => {
+// ---------- Departments ----------
+// Only for people who are signed in
+
+app.get("/api/departments", requireAuth, async (req, res) => {
   const list = await db
     .select({ id: departments.id, name: departments.name })
     .from(departments)

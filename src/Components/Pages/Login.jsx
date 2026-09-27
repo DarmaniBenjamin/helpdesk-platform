@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
-import { ArrowLeft, CircleCheck, TriangleAlert } from "lucide-react";
+import { useLocation, useNavigate } from "react-router";
+import {
+  ArrowLeft,
+  CircleCheck,
+  TriangleAlert,
+  FlaskConical,
+} from "lucide-react";
 import AuthShell from "../AuthShell";
 import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
@@ -8,67 +13,72 @@ import { ROLES } from "../teamRoles";
 import useData from "../../useData";
 
 const fullButton =
-  "h-11 w-full cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.98]";
+  "h-11 w-full cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70";
 
 // Sign in for everyone: staff go to the dashboard, customers to their portal.
-// Coming here while signed in (the "Log out" links) signs you out first.
+// The password is checked by the server. Coming here while signed in (the
+// "Log out" links) signs you out first.
 export default function Login() {
-  const { me, team, login, logout, findMemberByEmail } = useData();
+  const { me, team, authChecked, signIn, signInDemo, logout, demoAllowed } =
+    useData();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [view, setView] = useState("signin"); // "signin" or "reset"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(null); // { text, inviteId? }
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  // Sign out once, when the page first opens
-  const signedOut = useRef(false);
+  // Sign out once, as soon as we know who's signed in. After that, this
+  // page is just for signing in.
+  const handled = useRef(false);
   useEffect(() => {
-    if (signedOut.current) return;
-    signedOut.current = true;
+    if (!authChecked || handled.current) return;
+    handled.current = true;
     if (me) logout();
-  }, [me, logout]);
+  }, [authChecked, me, logout]);
 
-  function handleSignIn(e) {
-    e.preventDefault();
-    const member = findMemberByEmail(email);
-
-    if (!member) {
-      setError({ text: "We couldn't find an account with that email." });
-      return;
-    }
-    if (member.status === "invited") {
-      setError({
-        text: "This account isn't set up yet. Open the invite link in your email to choose a password.",
-        inviteId: member.id,
-      });
-      return;
-    }
-
-    // For now any password works. The backend will check it for real.
-    login(member.id);
-    const home = member.role === "customer" ? "/portal" : "/";
+  // Where to go after signing in: back to the page they were trying to
+  // open, if it's the right side of the app for them
+  function goHome(role) {
+    const home = role === "customer" ? "/portal" : "/";
     const from = location.state?.from;
     const fromFits =
-      from && (member.role === "customer") === from.startsWith("/portal");
+      from && (role === "customer") === from.startsWith("/portal");
     navigate(fromFits ? from : home, { replace: true });
+  }
+
+  async function handleSignIn(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const user = await signIn(email, password);
+      goHome(user.role);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
   }
 
   function handleReset(e) {
     e.preventDefault();
-    // Always the same answer, so nobody can use this to find out
-    // which emails have accounts
+    // Always the same answer, so nobody can use this to find out which
+    // emails have accounts. The email itself gets sent once email is
+    // connected to the backend.
     setResetSent(true);
   }
 
-  // Quick sign-in buttons for testing, until real passwords exist:
-  // the first active person with each access level
-  const demoAccounts = ["owner", "admin", "agent", "customer"]
+  // Example people to try out, one per access level (development only).
+  // The Super Admin is your real account, so it isn't in this list.
+  const demoAccounts = ["admin", "agent", "customer"]
     .map((role) => ({
-      label: ROLES[role].label,
-      member: team.find((m) => m.role === role && m.status === "active"),
+      role,
+      member: team.find(
+        (m) => m.role === role && m.status === "active" && m.id !== me?.id,
+      ),
     }))
     .filter((d) => d.member);
 
@@ -137,7 +147,7 @@ export default function Login() {
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
-              setError(null);
+              setError("");
             }}
             className={inputClass}
           />
@@ -154,7 +164,7 @@ export default function Login() {
               type="button"
               onClick={() => {
                 setView("reset");
-                setError(null);
+                setError("");
               }}
               className="cursor-pointer text-xs text-brand hover:underline"
             >
@@ -166,58 +176,56 @@ export default function Login() {
             required
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
           />
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+          >
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              {error.text}
-              {error.inviteId && (
-                <>
-                  {" "}
-                  <Link
-                    to={`/welcome/${error.inviteId}`}
-                    className="font-medium underline"
-                  >
-                    Open the invite now
-                  </Link>
-                </>
-              )}
-            </span>
+            <span>{error}</span>
           </div>
         )}
 
-        <button type="submit" className={fullButton}>
-          Sign in
+        <button type="submit" disabled={busy} className={fullButton}>
+          {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      {/* Testing helper, until the backend checks real passwords */}
-      <div className="mt-8 rounded-xl border border-dashed border-line p-4">
-        <p className="text-xs font-medium text-muted">
-          Testing: any password works for now. Sign in as
-        </p>
-        <div className="mt-2 grid grid-cols-1 gap-2">
-          {demoAccounts.map(({ label, member }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => {
-                setEmail(member.email);
-                setPassword("demo");
-                setError(null);
-              }}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-page px-3 py-2 text-left text-sm transition hover:bg-brand/10"
-            >
-              <span className="min-w-0 truncate">{member.email}</span>
-              <span className="shrink-0 text-xs text-muted">{label}</span>
-            </button>
-          ))}
+      {/* Development only: try the example people without a password.
+          This whole box disappears on the real site. */}
+      {demoAllowed && demoAccounts.length > 0 && (
+        <div className="mt-8 rounded-xl border border-dashed border-line p-4">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+            <FlaskConical className="h-3.5 w-3.5" />
+            Demo accounts (development only, not in the database)
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            {demoAccounts.map(({ role, member }) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => {
+                  signInDemo(member.id);
+                  goHome(member.role);
+                }}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-page px-3 py-2 text-left text-sm transition hover:bg-brand/10"
+              >
+                <span className="min-w-0 truncate">{member.name}</span>
+                <span className="shrink-0 text-xs text-muted">
+                  {ROLES[role].label}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </AuthShell>
   );
 }

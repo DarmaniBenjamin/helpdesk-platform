@@ -3,19 +3,22 @@ import { Navigate, Outlet, useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import NoAccess from "./Pages/NoAccess";
+import LoadingScreen from "./LoadingScreen";
 import { canOpen } from "./navLinks";
 import useData from "../useData";
 
 // The frame around every staff page: sidebar, top bar, and the page itself.
 // Nobody signed in: go to the login page. A customer: go to their portal.
 export default function StaffLayout() {
-  const { me } = useData();
+  const { me, authChecked } = useData();
   const location = useLocation();
   // Is the menu open on phones/tablets?
   const [menuOpen, setMenuOpen] = useState(false);
   // Is the sidebar shrunk to icons on desktop?
   const [collapsed, setCollapsed] = useState(false);
 
+  // Still checking with the server whether you're signed in
+  if (!authChecked) return <LoadingScreen />;
   if (!me) {
     // Remember where they were going, to send them back after signing in
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;

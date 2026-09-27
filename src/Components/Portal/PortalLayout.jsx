@@ -4,13 +4,14 @@ import { ChevronDown, Inbox, LogOut, Plus, User } from "lucide-react";
 import Avatar from "../Avatar";
 import useDismiss from "../useDismiss";
 import { ThemeSwitchRow } from "../ThemeToggle";
+import LoadingScreen from "../LoadingScreen";
 import useData from "../../useData";
 
 // The frame around every customer portal page: a simple top bar with the
 // customer's requests, a "New request" button and their account menu.
 // Nobody signed in: go to the login page. Staff: go to the dashboard.
 export default function PortalLayout() {
-  const { me } = useData();
+  const { me, authChecked } = useData();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -20,6 +21,8 @@ export default function PortalLayout() {
     document.title = "Help Center · Ticket Support";
   }, []);
 
+  // Still checking with the server whether you're signed in
+  if (!authChecked) return <LoadingScreen />;
   if (!me) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }

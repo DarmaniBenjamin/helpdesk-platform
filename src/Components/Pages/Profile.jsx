@@ -6,11 +6,10 @@ import {
   Phone,
   CalendarDays,
   CircleCheck,
-  KeyRound,
   Upload,
 } from "lucide-react";
 import Avatar from "../Avatar";
-import Card from "../Card";
+import PasswordCard from "../PasswordCard";
 import RoleBadge from "../RoleBadge";
 import {
   inputClass,
@@ -22,8 +21,7 @@ import { MAX_PHOTO_BYTES, resizeImage } from "../imageUtils";
 import useData from "../../useData";
 
 // Your own profile: photo, name, email and phone.
-// Every staff member and customer gets this same page for themselves
-// once login exists.
+// Every staff member and customer gets this same page for themselves.
 export default function Profile() {
   const { me, updateMember, findMemberByEmail } = useData();
   const fileInput = useRef(null);
@@ -291,24 +289,7 @@ export default function Profile() {
             </div>
           </form>
 
-          <Card title="Password">
-            <div className="grid gap-4 sm:flex sm:items-center">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
-                <KeyRound className="h-5 w-5" />
-              </span>
-              <p className="text-sm text-muted sm:flex-1">
-                You'll be able to change your password here once sign-in is set
-                up.
-              </p>
-              <button
-                type="button"
-                disabled
-                className={`${secondaryButton} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-ink`}
-              >
-                Change password
-              </button>
-            </div>
-          </Card>
+          <PasswordCard />
         </div>
       </div>
     </div>
