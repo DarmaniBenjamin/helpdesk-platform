@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import {
-  ArrowLeft,
-  CircleCheck,
-  TriangleAlert,
-  FlaskConical,
-} from "lucide-react";
+import { ArrowLeft, CircleCheck, TriangleAlert } from "lucide-react";
 import AuthShell from "../AuthShell";
 import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
-import { ROLES } from "../teamRoles";
 import useData from "../../useData";
 
 const fullButton =
@@ -19,8 +13,7 @@ const fullButton =
 // The password is checked by the server. Coming here while signed in (the
 // "Log out" links) signs you out first.
 export default function Login() {
-  const { me, team, authChecked, signIn, signInDemo, logout, demoAllowed } =
-    useData();
+  const { me, authChecked, signIn, logout } = useData();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -70,17 +63,6 @@ export default function Login() {
     // connected to the backend.
     setResetSent(true);
   }
-
-  // Example people to try out, one per access level (development only).
-  // The Super Admin is your real account, so it isn't in this list.
-  const demoAccounts = ["admin", "agent", "customer"]
-    .map((role) => ({
-      role,
-      member: team.find(
-        (m) => m.role === role && m.status === "active" && m.id !== me?.id,
-      ),
-    }))
-    .filter((d) => d.member);
 
   if (view === "reset") {
     return (
@@ -197,35 +179,6 @@ export default function Login() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-
-      {/* Development only: try the example people without a password.
-          This whole box disappears on the real site. */}
-      {demoAllowed && demoAccounts.length > 0 && (
-        <div className="mt-8 rounded-xl border border-dashed border-line p-4">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Demo accounts (development only, not in the database)
-          </p>
-          <div className="mt-2 grid grid-cols-1 gap-2">
-            {demoAccounts.map(({ role, member }) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => {
-                  signInDemo(member.id);
-                  goHome(member.role);
-                }}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-page px-3 py-2 text-left text-sm transition hover:bg-brand/10"
-              >
-                <span className="min-w-0 truncate">{member.name}</span>
-                <span className="shrink-0 text-xs text-muted">
-                  {ROLES[role].label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </AuthShell>
   );
 }

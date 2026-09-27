@@ -4,7 +4,6 @@ import {
   UserPlus,
   Pencil,
   Trash2,
-  RotateCw,
   X,
   Check,
   Minus,
@@ -21,11 +20,11 @@ import Card from "../Card";
 import Modal from "../Modal";
 import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
-import CustomerInviteModal from "../CustomerInviteModal";
 import DepartmentsCard from "../DepartmentsCard";
 import { inputClass, secondaryButton } from "../formStyles";
 import { ROLES, PERMISSIONS, canManage, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
+import { copyText, inviteLinkFor } from "../copyText";
 import useData from "../../useData";
 
 const FILTERS = [
@@ -111,10 +110,8 @@ function StatusText({ member }) {
 function MemberActions({
   member,
   allowed,
-  justResent,
   justCopied,
   onEdit,
-  onResend,
   onCopyLink,
   onRemove,
 }) {
@@ -126,26 +123,20 @@ function MemberActions({
   if (member.status === "invited") {
     return (
       <div className="flex items-center justify-end gap-1">
-        {/* The link the invite email will contain. Handy for testing,
-            or for sending it yourself another way. */}
+        {/* Makes a fresh invite link and copies it, to send them yourself
+            (the old link stops working). Replaces "Resend" until invite
+            emails are set up. */}
         {justCopied ? (
           <span className="flex h-9 items-center gap-1 px-2 text-xs font-medium text-brand">
             <Check className="h-3.5 w-3.5" />
             Copied
           </span>
         ) : (
-          <IconAction label="Copy invite link" onClick={onCopyLink}>
+          <IconAction
+            label="Copy a new invite link (the old one stops working)"
+            onClick={onCopyLink}
+          >
             <Link2 className="h-4 w-4" />
-          </IconAction>
-        )}
-        {justResent ? (
-          <span className="flex h-9 items-center gap-1 px-2 text-xs font-medium text-brand">
-            <Check className="h-3.5 w-3.5" />
-            Sent
-          </span>
-        ) : (
-          <IconAction label="Resend invite" onClick={onResend}>
-            <RotateCw className="h-4 w-4" />
           </IconAction>
         )}
         {canEdit && (
@@ -180,6 +171,8 @@ function MemberActions({
 
 // "Are you sure?" before removing someone or cancelling their invite
 function RemoveModal({ member, openTickets, onConfirm, onClose }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const isInvite = member.status === "invited";
   const isCustomer = member.role === "customer";
   const name = displayName(member);
@@ -199,13 +192,20 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
           </button>
           <button
             type="button"
-            onClick={() => {
-              onConfirm();
-              onClose();
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onConfirm(); // saves to the database
+                onClose();
+              } catch (err) {
+                setError(err.message);
+                setBusy(false);
+              }
             }}
-            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] sm:flex-none"
+            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
           >
-            {isInvite ? "Cancel invite" : "Remove"}
+            {busy ? "Saving…" : isInvite ? "Cancel invite" : "Remove"}
           </button>
         </>
       }
@@ -241,6 +241,7 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
           )}
         </>
       )}
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </Modal>
   );
 }
@@ -296,15 +297,17 @@ function PermissionsTable() {
 }
 
 // Customers who can sign in to the customer portal
-function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
+// (Inviting customers comes back when customers move to the database)
+function CustomerAccess({ members, ticketCounts, actionsFor }) {
   return (
     <Card
       title="Customer portal access"
       action={
         <button
           type="button"
-          onClick={onInvite}
-          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+          disabled
+          title="Coming soon, when customers move to the database"
+          className="flex h-9 shrink-0 cursor-not-allowed items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium opacity-50"
         >
           <UserPlus className="h-4 w-4" />
           <span className="hidden sm:inline">Invite customer</span>
@@ -315,6 +318,8 @@ function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
       <p className="-mt-2 mb-4 flex items-start gap-2 text-sm text-muted">
         <Eye className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
         Customers you invite can sign in and view only their own tickets.
+        Inviting customers switches on once customers are saved in the database
+        (the next step).
       </p>
 
       {members.length === 0 ? (
@@ -356,15 +361,14 @@ function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
 }
 
 export default function Team() {
-  const { me, team, tickets, customers, resendInvite, removeMember } =
+  const { me, team, tickets, customers, newInviteLink, removeMember } =
     useData();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  // Which modal is open: { type: "invite" } / { type: "inviteCustomer" } /
+  // Which modal is open: { type: "invite" } /
   // { type: "edit", member } / { type: "remove", member }
   const [modal, setModal] = useState(null);
-  // Shows "Sent" / "Copied" for a moment after resending or copying
-  const [resentId, setResentId] = useState(null);
+  // Shows "Copied" for a moment after copying an invite link
   const [copiedId, setCopiedId] = useState(null);
 
   // Staff and customers are shown in separate sections
@@ -411,21 +415,16 @@ export default function Team() {
         displayName(a).localeCompare(displayName(b)),
     );
 
-  function handleResend(member) {
-    resendInvite(member.id);
-    setResentId(member.id);
-    setTimeout(() => setResentId(null), 2000);
-  }
-
+  // A fresh invite link from the server, copied to send yourself
   async function copyInviteLink(member) {
-    const link = `${window.location.origin}/welcome/${member.id}`;
     try {
-      await navigator.clipboard.writeText(link);
-      setCopiedId(member.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      // Phones on plain http block the clipboard: show the link instead
-      window.prompt("Copy this invite link:", link);
+      const token = await newInviteLink(member.id);
+      if (await copyText(inviteLinkFor(token), "Copy this invite link:")) {
+        setCopiedId(member.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }
+    } catch (err) {
+      window.alert(err.message);
     }
   }
 
@@ -435,10 +434,8 @@ export default function Team() {
       <MemberActions
         member={member}
         allowed={canManage(me.role, member)}
-        justResent={resentId === member.id}
         justCopied={copiedId === member.id}
         onEdit={() => setModal({ type: "edit", member })}
-        onResend={() => handleResend(member)}
         onCopyLink={() => copyInviteLink(member)}
         onRemove={() => setModal({ type: "remove", member })}
       />
@@ -656,16 +653,12 @@ export default function Team() {
         members={portalCustomers}
         ticketCounts={customerTickets}
         actionsFor={actionsFor}
-        onInvite={() => setModal({ type: "inviteCustomer" })}
       />
 
       <PermissionsTable />
 
       {modal?.type === "invite" && (
         <MemberModal onClose={() => setModal(null)} />
-      )}
-      {modal?.type === "inviteCustomer" && (
-        <CustomerInviteModal onClose={() => setModal(null)} />
       )}
       {modal?.type === "edit" && (
         <MemberModal member={modal.member} onClose={() => setModal(null)} />

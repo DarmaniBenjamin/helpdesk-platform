@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { CircleCheck, Check, Mail, Plus, X } from "lucide-react";
+import {
+  CircleCheck,
+  Check,
+  Copy,
+  Mail,
+  Plus,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import Modal from "./Modal";
 import {
   inputClass,
@@ -8,6 +16,7 @@ import {
   secondaryButton,
 } from "./formStyles";
 import { ROLES, pickableRoles } from "./teamRoles";
+import { copyText, inviteLinkFor } from "./copyText";
 import useData from "../useData";
 
 // Invite someone new (no `member` passed) or change an existing member's
@@ -31,8 +40,11 @@ export default function MemberModal({ member, onClose }) {
   const [role, setRole] = useState(member?.role ?? "agent");
   const [departments, setDepartments] = useState(member?.departments ?? []);
   const [error, setError] = useState("");
-  // After inviting, show a "done" screen instead of the form
-  const [invited, setInvited] = useState(null);
+  // After inviting, show a "done" screen with their link instead of the form
+  const [invited, setInvited] = useState(null); // { member, link }
+  const [copied, setCopied] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [busy, setBusy] = useState(false);
   // Typing a new department right here: null = not typing one
   const [newDepartment, setNewDepartment] = useState(null);
   const [departmentError, setDepartmentError] = useState("");
@@ -42,17 +54,21 @@ export default function MemberModal({ member, onClose }) {
     ...new Set(team.map((m) => m.title).filter(Boolean)),
   ].sort();
 
-  function createDepartment() {
+  async function createDepartment() {
     const clean = (newDepartment ?? "").trim();
     if (!clean) return;
     if (departmentNameTaken(clean)) {
       setDepartmentError("There's already a department with that name.");
       return;
     }
-    const created = addDepartment(clean);
-    setDepartments((list) => [...list, created.id]); // and tick it
-    setNewDepartment(null);
-    setDepartmentError("");
+    try {
+      const created = await addDepartment(clean);
+      setDepartments((list) => [...list, created.id]); // and tick it
+      setNewDepartment(null);
+      setDepartmentError("");
+    } catch (err) {
+      setDepartmentError(err.message);
+    }
   }
 
   function toggleDepartment(id) {
@@ -61,34 +77,50 @@ export default function MemberModal({ member, onClose }) {
     );
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    setSaveError("");
 
-    if (editing) {
-      updateMember(member.id, {
-        name: name.trim(),
-        title: title.trim(),
+    // Nobody can be on the team twice (the server checks this too)
+    if (!editing) {
+      const existing = findMemberByEmail(email);
+      if (existing) {
+        setError(
+          existing.status === "invited"
+            ? "This person already has an invite waiting."
+            : "This person is already on the team.",
+        );
+        return;
+      }
+    }
+
+    setBusy(true);
+    try {
+      if (editing) {
+        await updateMember(member.id, {
+          name: name.trim(),
+          title: title.trim(),
+          role,
+          departments,
+        });
+        document.activeElement?.blur();
+        onClose();
+        return;
+      }
+      const result = await inviteMember({
+        email,
+        name,
+        title,
         role,
         departments,
       });
       document.activeElement?.blur();
-      onClose();
-      return;
+      setInvited({ member: result.member, link: inviteLinkFor(result.token) });
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setBusy(false);
     }
-
-    // Nobody can be on the team twice
-    const existing = findMemberByEmail(email);
-    if (existing) {
-      setError(
-        existing.status === "invited"
-          ? "This person already has an invite waiting."
-          : "This person is already on the team.",
-      );
-      return;
-    }
-
-    document.activeElement?.blur();
-    setInvited(inviteMember({ email, name, title, role, departments }));
   }
 
   // ----- The "invite sent" screen -----
@@ -103,21 +135,50 @@ export default function MemberModal({ member, onClose }) {
           </button>
         }
       >
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
           <CircleCheck className="h-12 w-12 text-brand" />
           <p className="text-sm">
-            <span className="font-semibold">{invited.email}</span> was invited
-            as {/^[AEIOU]/.test(ROLES[invited.role].label) ? "an" : "a"}{" "}
-            <span className="font-semibold">{ROLES[invited.role].label}</span>.
+            <span className="font-semibold">{invited.member.email}</span> was
+            invited as{" "}
+            {/^[AEIOU]/.test(ROLES[invited.member.role].label) ? "an" : "a"}{" "}
+            <span className="font-semibold">
+              {ROLES[invited.member.role].label}
+            </span>
+            .
           </p>
           <p className="text-sm text-muted">
-            Once email is connected, they'll get a link to set their password
-            and sign in.
-          </p>
-          <p className="text-xs text-muted">
-            They show as "Invited" on the Team page until then.
+            Invite emails aren't set up yet, so send them this link yourself
+            (WhatsApp, email, Teams...). It works once, for 7 days.
           </p>
         </div>
+
+        {/* The invite link, with a copy button */}
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-page p-2">
+          <span className="min-w-0 flex-1 truncate px-1 text-xs text-muted">
+            {invited.link}
+          </span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (await copyText(invited.link, "Copy this invite link:")) {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }
+            }}
+            className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 text-xs font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+            {copied ? "Copied" : "Copy link"}
+          </button>
+        </div>
+        <p className="text-center text-xs text-muted">
+          They show as "Invited" on the Team page until they set up their
+          account. You can get a new link there any time.
+        </p>
       </Modal>
     );
   }
@@ -133,8 +194,12 @@ export default function MemberModal({ member, onClose }) {
           <button type="button" onClick={onClose} className={secondaryButton}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton}>
-            {editing ? "Save" : "Send invite"}
+          <button
+            type="submit"
+            disabled={busy}
+            className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
+          >
+            {busy ? "Saving…" : editing ? "Save" : "Create invite"}
           </button>
         </>
       }
@@ -336,6 +401,16 @@ export default function MemberModal({ member, onClose }) {
           </span>
         )}
       </div>
+
+      {saveError && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+        >
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {saveError}
+        </p>
+      )}
     </Modal>
   );
 }

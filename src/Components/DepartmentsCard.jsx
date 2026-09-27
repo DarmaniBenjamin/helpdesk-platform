@@ -31,15 +31,22 @@ function NameEditor({ initial = "", exceptId, onSave, onCancel }) {
   const { departmentNameTaken } = useData();
   const [name, setName] = useState(initial);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function save() {
+  async function save() {
     const clean = name.trim();
-    if (!clean) return;
+    if (!clean || busy) return;
     if (departmentNameTaken(clean, exceptId)) {
       setError("There's already a department with that name.");
       return;
     }
-    onSave(clean);
+    setBusy(true);
+    try {
+      await onSave(clean); // saves to the database
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -59,7 +66,7 @@ function NameEditor({ initial = "", exceptId, onSave, onCancel }) {
           placeholder="Department name"
           className={`${inputClass} h-10 min-w-0 flex-1`}
         />
-        <IconAction label="Save" onClick={save} disabled={!name.trim()}>
+        <IconAction label="Save" onClick={save} disabled={!name.trim() || busy}>
           <Check className="h-4 w-4" />
         </IconAction>
         <IconAction label="Cancel" onClick={onCancel}>
@@ -73,6 +80,9 @@ function NameEditor({ initial = "", exceptId, onSave, onCancel }) {
 
 // "Are you sure?" before deleting, showing exactly what happens
 function DeleteModal({ department, counts, onConfirm, onClose }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   const lines = [
     counts.tickets > 0 &&
       `${counts.tickets} ticket${counts.tickets === 1 ? "" : "s"} will go back to "No team yet".`,
@@ -93,13 +103,20 @@ function DeleteModal({ department, counts, onConfirm, onClose }) {
           </button>
           <button
             type="button"
-            onClick={() => {
-              onConfirm();
-              onClose();
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onConfirm(); // deletes it from the database
+                onClose();
+              } catch (err) {
+                setError(err.message);
+                setBusy(false);
+              }
             }}
-            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] sm:flex-none"
+            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
           >
-            Delete
+            {busy ? "Deleting…" : "Delete"}
           </button>
         </>
       }
@@ -116,6 +133,7 @@ function DeleteModal({ department, counts, onConfirm, onClose }) {
       <p className="text-sm text-muted">
         Tickets and Knowledge Base answers aren't deleted.
       </p>
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </Modal>
   );
 }
@@ -175,8 +193,8 @@ export default function DepartmentsCard() {
         {adding && (
           <li className="px-5 py-3">
             <NameEditor
-              onSave={(name) => {
-                addDepartment(name);
+              onSave={async (name) => {
+                await addDepartment(name);
                 setAdding(false);
               }}
               onCancel={() => setAdding(false)}
@@ -192,8 +210,8 @@ export default function DepartmentsCard() {
                 <NameEditor
                   initial={d.name}
                   exceptId={d.id}
-                  onSave={(name) => {
-                    renameDepartment(d.id, name);
+                  onSave={async (name) => {
+                    await renameDepartment(d.id, name);
                     setEditingId(null);
                   }}
                   onCancel={() => setEditingId(null)}

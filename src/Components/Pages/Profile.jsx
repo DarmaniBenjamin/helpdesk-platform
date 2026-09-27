@@ -33,6 +33,8 @@ export default function Profile() {
   const [emailError, setEmailError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const isStaff = me.role !== "customer";
   const changed =
@@ -58,39 +60,53 @@ export default function Profile() {
 
     try {
       const photo = await resizeImage(file);
-      updateMember(me.id, { photo });
+      await updateMember(me.id, { photo }); // saves to the database
       setPhotoError("");
     } catch (err) {
       setPhotoError(err.message);
     }
   }
 
-  function removePhoto() {
-    updateMember(me.id, { photo: null });
-    setPhotoError("");
+  async function removePhoto() {
+    try {
+      await updateMember(me.id, { photo: null });
+      setPhotoError("");
+    } catch (err) {
+      setPhotoError(err.message);
+    }
   }
 
   // ----- Details form -----
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
+    setSaveError("");
 
-    // Nobody else can already sign in with this email
+    // Nobody else can already sign in with this email (the server
+    // checks this too, against everyone)
     const owner = findMemberByEmail(cleanEmail);
     if (owner && owner.id !== me.id) {
       setEmailError("Someone else already uses this email.");
       return;
     }
 
-    updateMember(me.id, {
-      name: name.trim(),
-      email: cleanEmail,
-      phone: phone.trim(),
-    });
-    document.activeElement?.blur();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    try {
+      await updateMember(me.id, {
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone.trim(),
+      });
+      document.activeElement?.blur();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      if (err.status === 409) setEmailError(err.message);
+      else setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function discardChanges() {
@@ -271,6 +287,11 @@ export default function Profile() {
                   Changes saved
                 </span>
               )}
+              {saveError && (
+                <span className="order-last text-center text-sm text-red-500 sm:order-first sm:mr-auto sm:text-left">
+                  {saveError}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={discardChanges}
@@ -281,10 +302,10 @@ export default function Profile() {
               </button>
               <button
                 type="submit"
-                disabled={!changed}
+                disabled={!changed || saving}
                 className={`${primaryButton} order-first sm:order-last disabled:cursor-default disabled:opacity-50 disabled:hover:bg-brand`}
               >
-                Save changes
+                {saving ? "Saving…" : "Save changes"}
               </button>
             </div>
           </form>

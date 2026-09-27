@@ -26,7 +26,7 @@ function Rule({ ok, children }) {
 // "Password" on the profile page: change your own password.
 // Changing it signs you out on every other device.
 export default function PasswordCard() {
-  const { realSession, changePassword } = useData();
+  const { changePassword } = useData();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -71,9 +71,7 @@ export default function PasswordCard() {
             <KeyRound className="h-5 w-5" />
           </span>
           <p className="text-sm text-muted sm:flex-1">
-            {!realSession ? (
-              "Demo accounts don't have a password."
-            ) : done ? (
+            {done ? (
               <span className="flex items-center gap-1.5 text-brand">
                 <CircleCheck className="h-4 w-4 shrink-0" />
                 Password changed. Other devices have been signed out.
@@ -84,12 +82,11 @@ export default function PasswordCard() {
           </p>
           <button
             type="button"
-            disabled={!realSession}
             onClick={() => {
               setOpen(true);
               setDone(false);
             }}
-            className={`${secondaryButton} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-ink`}
+            className={secondaryButton}
           >
             Change password
           </button>

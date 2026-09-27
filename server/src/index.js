@@ -3,10 +3,16 @@
 //
 // Run with: npm run dev   (restarts by itself when you save a file)
 import express from "express";
-import { asc, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "./db/index.js";
-import { departments } from "./db/schema.js";
-import { authRouter, loadSession, requireAuth } from "./auth.js";
+import { authRouter, loadSession } from "./auth.js";
+import {
+  teamRouter,
+  meRouter,
+  inviteRouter,
+  departmentsRouter,
+} from "./team.js";
+import { handleBadInput } from "./validate.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
@@ -28,26 +34,22 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ---------- Signing in and out ----------
-app.use("/api/auth", authRouter);
-
-// ---------- Departments ----------
-// Only for people who are signed in
-
-app.get("/api/departments", requireAuth, async (req, res) => {
-  const list = await db
-    .select({ id: departments.id, name: departments.name })
-    .from(departments)
-    .orderBy(asc(departments.name));
-  res.json(list);
-});
+// ---------- The API ----------
+app.use("/api/auth", authRouter); // signing in and out
+app.use("/api/me", meRouter); // your own profile
+app.use("/api/team", teamRouter); // the team, invites, access levels
+app.use("/api/invites", inviteRouter); // accepting an invite
+app.use("/api/departments", departmentsRouter);
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-// Errors: show a short message instead of crashing
+// Problems with what was sent (e.g. "Enter a valid email address.")
+app.use(handleBadInput);
+
+// Anything else: show a short message instead of crashing
 app.use((err, req, res, next) => {
   console.error(err);
   if (res.headersSent) return next(err);

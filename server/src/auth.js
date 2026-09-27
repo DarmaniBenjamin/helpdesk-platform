@@ -24,7 +24,7 @@ const secureCookies = process.env.NODE_ENV === "production";
 
 // ---------- Helpers ----------
 
-const hashToken = (token) =>
+export const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
 // Reads one cookie from the request
@@ -48,11 +48,16 @@ function setSessionCookie(res, token, expires) {
 
 // What the front end is allowed to see about a person (never the
 // password). Dates are sent as milliseconds, like the rest of the app.
-async function publicUser(user) {
-  const rows = await db
-    .select({ id: userDepartments.departmentId })
-    .from(userDepartments)
-    .where(eq(userDepartments.userId, user.id));
+// Pass `departmentIds` when you already have them, to save a lookup.
+export async function publicUser(user, departmentIds) {
+  const departments =
+    departmentIds ??
+    (
+      await db
+        .select({ id: userDepartments.departmentId })
+        .from(userDepartments)
+        .where(eq(userDepartments.userId, user.id))
+    ).map((r) => r.id);
   const ms = (date) => (date ? date.getTime() : null);
   return {
     id: user.id,
@@ -64,7 +69,7 @@ async function publicUser(user) {
     role: user.role,
     status: user.status,
     customerId: user.customerId,
-    departments: rows.map((r) => r.id),
+    departments,
     invitedAt: ms(user.invitedAt),
     joinedAt: ms(user.joinedAt),
     lastActiveAt: ms(user.lastActiveAt),
@@ -74,6 +79,21 @@ async function publicUser(user) {
 // Checking a wrong email should take as long as checking a wrong password,
 // so nobody can tell which emails have accounts by timing the answer
 const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 12);
+
+// Makes a random token for a link or a session. The token goes to the
+// person; only its scrambled copy (hash) is saved.
+export function newToken() {
+  const token = crypto.randomBytes(32).toString("base64url");
+  return { token, tokenHash: hashToken(token) };
+}
+
+// Signs someone in: saves a new session and sets the cookie
+export async function startSession(res, userId) {
+  const { token, tokenHash } = newToken();
+  const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  await db.insert(sessions).values({ tokenHash, userId, expiresAt: expires });
+  setSessionCookie(res, token, expires);
+}
 
 // ---------- Slowing down password guessing ----------
 // After 10 wrong passwords for the same email from the same place,
@@ -193,13 +213,7 @@ authRouter.post("/login", async (req, res) => {
     );
 
   // A new session
-  const token = crypto.randomBytes(32).toString("base64url");
-  const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  await db.insert(sessions).values({
-    tokenHash: hashToken(token),
-    userId: user.id,
-    expiresAt: expires,
-  });
+  await startSession(res, user.id);
 
   const now = new Date();
   await db
@@ -207,7 +221,6 @@ authRouter.post("/login", async (req, res) => {
     .set({ lastActiveAt: now })
     .where(eq(users.id, user.id));
 
-  setSessionCookie(res, token, expires);
   res.json({ user: await publicUser({ ...user, lastActiveAt: now }) });
 });
 
