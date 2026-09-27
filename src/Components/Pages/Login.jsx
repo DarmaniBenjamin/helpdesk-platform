@@ -138,10 +138,20 @@ export default function Login() {
         {/* Not one big <label>, so clicking "Password" doesn't press
             the "Forgot password?" button */}
         <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <PasswordInput
+            id="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+          />
           <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
             <button
               type="button"
               onClick={() => {
@@ -153,16 +163,6 @@ export default function Login() {
               Forgot password?
             </button>
           </div>
-          <PasswordInput
-            id="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError("");
-            }}
-          />
         </div>
 
         {error && (
