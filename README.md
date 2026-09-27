@@ -1,16 +1,80 @@
-# React + Vite
+# 🌌 DarkFlow — Modern Helpdesk Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![React](https://shields.io)](https://react.dev/)
+[![Vite](https://shields.io)](https://vite.dev)
+[![Drizzle](https://shields.io)](https://drizzle.team)
+[![PostgreSQL](https://shields.io)](https://postgresql.org)
 
-Currently, two official plugins are available:
+**DarkFlow** is a streamlined, full-stack customer support and helpdesk application. Built for speed and optimal user experience, it features a dynamic React frontend paired with a robust relational database backend to manage tickets, departments, and user workflows in real time.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Ticket Lifecycle Management:** Create, update, and resolve support requests dynamically.
+- **Department Routing:** Efficient distribution of customer messages to 4 core departments.
+- **Super Admin Panel:** Built-in administration configuration tool for deep control.
+- **Optimized for Speed:** Powered by React + Vite with Hot Module Replacement (HMR) for near-instant development loads.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Tech Stack
+
+### Frontend
+
+- **Framework:** React 19
+- **Build Tool:** Vite (with HMR support)
+- **Plugins:** `@vitejs/plugin-react` (utilizing [Oxc](https://oxc.rs) for lightning-fast parsing)
+
+### Backend & Database
+
+- **Runtime:** Node.js (utilizing native `--env-file` injection)
+- **Database Driver:** PostgreSQL (`pg`)
+- **ORM:** Drizzle ORM & `drizzle-kit` for schema migrations
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+
+Ensure you have **Node.js** and a running **PostgreSQL** instance.
+
+### 2. Database Setup (Server)
+
+Navigate to your server directory, configure your `.env` file, and prepare the database:
+
+```bash
+# Generate SQL schema files
+npm run db:generate
+
+# Apply migrations to PostgreSQL
+node --env-file=.env node_modules/.bin/drizzle-kit migrate
+
+# Seed initial data (Admin user, departments, settings)
+npm run db:seed
+```
+
+### 3. Run the Application
+
+Start your development environment:
+
+```bash
+npm run dev
+```
+
+---
+
+## ⚙️ Configuration Notes
+
+### Environment Variables
+
+Ensure you have a `.env` file in your server directory matching this format:
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/darkflow_db
+```
+
+### Expanding ESLint
+
+If scaling this into a production environment, we highly recommend switching to the [TypeScript variant template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to enable type-aware lint rules via `typescript-eslint`.
