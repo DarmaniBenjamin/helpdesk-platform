@@ -177,7 +177,7 @@ export default function Sidebar({ open, onClose, collapsed }) {
           <span
             className={`whitespace-nowrap text-lg font-semibold ${collapsed ? "lg:hidden" : ""}`}
           >
-            Ticket Support
+            DeskFlow
           </span>
           <button
             aria-label="Close menu"
