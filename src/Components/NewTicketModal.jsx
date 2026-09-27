@@ -46,6 +46,7 @@ export default function NewTicketModal({ onClose }) {
 
   // After submitting: the new ticket, and whether the customer was new
   const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const businesses = [
     ...new Set(customers.map((c) => c.company).filter(Boolean)),
@@ -67,10 +68,12 @@ export default function NewTicketModal({ onClose }) {
     switchMode("existing");
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setCustomerError("");
     setDuplicate(null);
+    // Read the form now: after waiting for the server it may be gone
+    const form = new FormData(e.currentTarget);
 
     let customer;
     let isNew = false;
@@ -87,12 +90,20 @@ export default function NewTicketModal({ onClose }) {
         setDuplicate(existing);
         return;
       }
-      customer = addCustomer(newCustomer);
+      // A new customer is saved to the database first
+      setBusy(true);
+      try {
+        customer = await addCustomer(newCustomer);
+      } catch (err) {
+        setCustomerError(err.message);
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
       isNew = true;
     }
 
-    // Read the ticket fields straight from the form, using their "name"s
-    const form = new FormData(e.currentTarget);
+    // The ticket fields, using the form fields' "name"s
     const ticket = addTicket({
       customer,
       subject: form.get("subject").trim(),
@@ -177,7 +188,11 @@ export default function NewTicketModal({ onClose }) {
           <button type="button" onClick={onClose} className={secondaryButton}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton}>
+          <button
+            type="submit"
+            disabled={busy}
+            className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
+          >
             Create ticket
           </button>
         </>

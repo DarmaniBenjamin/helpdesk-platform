@@ -13,21 +13,31 @@ export default function NewCustomerModal({ onClose }) {
     company: "",
   });
   const [emailError, setEmailError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const businesses = [
     ...new Set(customers.map((c) => c.company).filter(Boolean)),
   ].sort();
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    setSaveError("");
     const existing = findCustomerByEmail(fields.email);
     if (existing) {
       setEmailError(`${existing.name} already uses this email.`);
       return;
     }
-    addCustomer(fields);
-    document.activeElement?.blur();
-    onClose();
+    setBusy(true);
+    try {
+      await addCustomer(fields); // saves to the database
+      document.activeElement?.blur();
+      onClose();
+    } catch (err) {
+      if (err.status === 409) setEmailError(err.message);
+      else setSaveError(err.message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -40,8 +50,12 @@ export default function NewCustomerModal({ onClose }) {
           <button type="button" onClick={onClose} className={secondaryButton}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton}>
-            Add customer
+          <button
+            type="submit"
+            disabled={busy}
+            className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
+          >
+            {busy ? "Saving…" : "Add customer"}
           </button>
         </>
       }
@@ -55,6 +69,7 @@ export default function NewCustomerModal({ onClose }) {
         businesses={businesses}
         emailError={emailError}
       />
+      {saveError && <p className="text-sm text-red-500">{saveError}</p>}
     </Modal>
   );
 }

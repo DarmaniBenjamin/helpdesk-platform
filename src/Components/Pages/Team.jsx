@@ -21,6 +21,7 @@ import Modal from "../Modal";
 import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
 import DepartmentsCard from "../DepartmentsCard";
+import CustomerInviteModal from "../CustomerInviteModal";
 import { inputClass, secondaryButton } from "../formStyles";
 import { ROLES, PERMISSIONS, canManage, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
@@ -297,17 +298,15 @@ function PermissionsTable() {
 }
 
 // Customers who can sign in to the customer portal
-// (Inviting customers comes back when customers move to the database)
-function CustomerAccess({ members, ticketCounts, actionsFor }) {
+function CustomerAccess({ members, ticketCounts, actionsFor, onInvite }) {
   return (
     <Card
       title="Customer portal access"
       action={
         <button
           type="button"
-          disabled
-          title="Coming soon, when customers move to the database"
-          className="flex h-9 shrink-0 cursor-not-allowed items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium opacity-50"
+          onClick={onInvite}
+          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
         >
           <UserPlus className="h-4 w-4" />
           <span className="hidden sm:inline">Invite customer</span>
@@ -318,8 +317,6 @@ function CustomerAccess({ members, ticketCounts, actionsFor }) {
       <p className="-mt-2 mb-4 flex items-start gap-2 text-sm text-muted">
         <Eye className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
         Customers you invite can sign in and view only their own tickets.
-        Inviting customers switches on once customers are saved in the database
-        (the next step).
       </p>
 
       {members.length === 0 ? (
@@ -365,7 +362,7 @@ export default function Team() {
     useData();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  // Which modal is open: { type: "invite" } /
+  // Which modal is open: { type: "invite" } / { type: "inviteCustomer" } /
   // { type: "edit", member } / { type: "remove", member }
   const [modal, setModal] = useState(null);
   // Shows "Copied" for a moment after copying an invite link
@@ -653,12 +650,16 @@ export default function Team() {
         members={portalCustomers}
         ticketCounts={customerTickets}
         actionsFor={actionsFor}
+        onInvite={() => setModal({ type: "inviteCustomer" })}
       />
 
       <PermissionsTable />
 
       {modal?.type === "invite" && (
         <MemberModal onClose={() => setModal(null)} />
+      )}
+      {modal?.type === "inviteCustomer" && (
+        <CustomerInviteModal onClose={() => setModal(null)} />
       )}
       {modal?.type === "edit" && (
         <MemberModal member={modal.member} onClose={() => setModal(null)} />

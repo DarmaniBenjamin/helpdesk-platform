@@ -13,6 +13,7 @@ import {
   UserX,
   Check,
   X,
+  TriangleAlert,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -177,6 +178,8 @@ export default function CustomerDetail() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
+  // A message if saving to the database didn't work
+  const [saveError, setSaveError] = useState("");
 
   if (!customer) {
     return (
@@ -203,18 +206,32 @@ export default function CustomerDetail() {
   const openCount = theirTickets.filter((t) => !isDone(t)).length;
   const overdueCount = theirTickets.filter(isOverdue).length;
 
+  // Saves changes to the database. Returns true if it worked; if not,
+  // the server's message shows at the top of the page.
+  async function save(changes) {
+    setSaveError("");
+    try {
+      await updateCustomer(customer.id, changes);
+      return true;
+    } catch (err) {
+      setSaveError(err.message);
+      return false;
+    }
+  }
+
   function startEditing() {
     setName(customer.name);
     setCompany(customer.company ?? "");
     setEditing(true);
   }
 
-  function saveDetails(e) {
+  async function saveDetails(e) {
     e.preventDefault();
-    updateCustomer(customer.id, {
+    const ok = await save({
       name: name.trim(),
       company: company.trim() || null,
     });
+    if (!ok) return;
     document.activeElement?.blur();
     setEditing(false);
   }
@@ -236,17 +253,17 @@ export default function CustomerDetail() {
   }
   function addEmail(email) {
     const clean = email.toLowerCase();
-    if (!customer.email) updateCustomer(customer.id, { email: clean });
-    else updateCustomer(customer.id, { extraEmails: [...extraEmails, clean] });
+    if (!customer.email) save({ email: clean });
+    else save({ extraEmails: [...extraEmails, clean] });
   }
   function removeEmail(email) {
-    updateCustomer(customer.id, {
+    save({
       extraEmails: extraEmails.filter((e) => e !== email),
     });
   }
   function makeMainEmail(email) {
     // The old main email becomes an extra one
-    updateCustomer(customer.id, {
+    save({
       email,
       extraEmails: [customer.email, ...extraEmails.filter((e) => e !== email)],
     });
@@ -261,16 +278,16 @@ export default function CustomerDetail() {
     return "";
   }
   function addPhone(phone) {
-    if (!customer.phone) updateCustomer(customer.id, { phone });
-    else updateCustomer(customer.id, { extraPhones: [...extraPhones, phone] });
+    if (!customer.phone) save({ phone });
+    else save({ extraPhones: [...extraPhones, phone] });
   }
   function removePhone(phone) {
-    updateCustomer(customer.id, {
+    save({
       extraPhones: extraPhones.filter((p) => p !== phone),
     });
   }
   function makeMainPhone(phone) {
-    updateCustomer(customer.id, {
+    save({
       phone,
       extraPhones: [
         customer.phone,
@@ -289,6 +306,16 @@ export default function CustomerDetail() {
         <ArrowLeft className="h-4 w-4" />
         Back
       </button>
+
+      {saveError && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+        >
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {saveError}
+        </p>
+      )}
 
       {/* Name, business, and quick numbers */}
       <div className="rounded-xl border border-line bg-white p-4 sm:p-6">

@@ -4,7 +4,6 @@ import { api } from "./api";
 import { STARTING_ANSWERS } from "./Components/Knowledge";
 import {
   tickets as startingTickets,
-  customers as startingCustomers,
   SLA_HOURS,
   STATUSES,
   PRIORITIES,
@@ -16,11 +15,11 @@ import {
 } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
-// ---------- Signing in, the team and departments ----------
-// These come from the backend (see the server folder): the server checks
-// passwords, keeps you signed in with a secure cookie, and stores the
-// team and departments in the database. Tickets, customers and the rest
-// are still example data for now; they move to the database next.
+// ---------- What comes from the backend ----------
+// Signing in, the team, departments and customers come from the server
+// (see the server folder), which stores them in the database. Tickets,
+// rules, automations and the Knowledge Base are still example data for
+// now; they move to the database next.
 
 // Setting a status also sets/clears the resolved and closed times
 function applyStatus(ticket, status, now) {
@@ -188,11 +187,12 @@ const STARTING_SETTINGS = {
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
   const [tickets, setTickets] = useState(startingTickets);
-  const [customers, setCustomers] = useState(startingCustomers);
+  // Customers, the team and departments load from the server once
+  // you're signed in
+  const [customers, setCustomers] = useState([]);
   const [rules, setRules] = useState(STARTING_RULES);
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
-  // The team and departments load from the server once you're signed in
   const [team, setTeam] = useState([]);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
   const [departments, setDepartments] = useState([]);
@@ -201,15 +201,18 @@ export default function DataProvider({ children }) {
   // userId = the account that's signed in, or null.
   const [auth, setAuth] = useState({ checked: false, userId: null });
 
-  // Loads the team and departments for the person who just signed in.
-  // Customers only get themselves (they never see the staff list).
+  // Loads the team, departments and customers for the person who just
+  // signed in. Customers only get themselves (they never see the staff
+  // list or other customers).
   async function loadDirectory(user) {
-    const [teamList, departmentList] = await Promise.all([
+    const [teamList, departmentList, customerList] = await Promise.all([
       user.role === "customer" ? [user] : api("/team"),
       api("/departments"),
+      api("/customers"),
     ]);
     setTeam(teamList);
     setDepartments(departmentList);
+    setCustomers(customerList);
 
     // The example tickets and rules were assigned to example people who
     // don't exist any more, so those go back to "Unassigned"
@@ -346,6 +349,7 @@ export default function DataProvider({ children }) {
     }
     setAuth((a) => ({ ...a, userId: null }));
     setTeam([]);
+    setCustomers([]);
   }
 
   // Change your own password. Throws with the server's message if the
@@ -406,12 +410,11 @@ export default function DataProvider({ children }) {
   }
 
   // Replaces everything with what's in a backup. Anything the backup
-  // doesn't have is left as it is. The team and departments aren't
-  // replaced: they live in the database now (database backups are set
-  // up in a later step).
+  // doesn't have is left as it is. The team, departments and customers
+  // aren't replaced: they live in the database now (database backups are
+  // set up in a later step).
   function restoreBackup(data) {
     setTickets(data.tickets);
-    setCustomers(data.customers);
     if (data.rules) setRules(data.rules);
     if (data.automations) setAutomations(data.automations);
     if (data.answers) setAnswers(data.answers);
@@ -420,6 +423,8 @@ export default function DataProvider({ children }) {
 
   // Saves the result of a Freshdesk import (see freshdeskMapping.js).
   // Tickets keep a copy of their customer, so those are refreshed too.
+  // (For now this only changes what's on screen. Importing into the
+  // database comes with the tickets step.)
   function saveImport(newCustomers, newTickets) {
     const byId = new Map(newCustomers.map((c) => [c.id, c]));
     setCustomers(newCustomers);
@@ -471,6 +476,16 @@ export default function DataProvider({ children }) {
         ? await api("/me", { method: "PATCH", body: changes })
         : await api(`/team/${id}`, { method: "PATCH", body: changes });
     setTeam((list) => list.map((m) => (m.id === id ? updated : m)));
+    // A customer's name, email and phone also live on their customer
+    // record (the server keeps both the same)
+    if (updated.customerId) {
+      const { name, email, phone } = updated;
+      setCustomers((list) =>
+        list.map((c) =>
+          c.id === updated.customerId ? { ...c, name, email, phone } : c,
+        ),
+      );
+    }
     return updated;
   }
 
@@ -590,29 +605,57 @@ export default function DataProvider({ children }) {
 
   // ---------- Customers ----------
 
-  function addCustomer(fields) {
-    const customer = {
-      id: Math.max(...customers.map((c) => c.id)) + 1,
-      name: fields.name.trim(),
-      email: fields.email.trim().toLowerCase(),
-      phone: fields.phone.trim(),
-      company: fields.company.trim() || null, // empty means an individual
-      extraEmails: [],
-      extraPhones: [],
-      createdAt: Date.now(),
-    };
+  // Saves a new customer to the database. Throws with the server's
+  // message if their email is already used by another customer.
+  async function addCustomer(fields) {
+    const customer = await api("/customers", {
+      method: "POST",
+      body: {
+        name: fields.name,
+        email: fields.email,
+        phone: fields.phone,
+        company: fields.company, // empty means an individual
+      },
+    });
     setCustomers((list) => [customer, ...list]);
     return customer;
   }
 
-  function updateCustomer(id, changes) {
-    const current = customers.find((c) => c.id === id);
-    const updated = { ...current, ...changes };
+  // Saves changes to a customer (name, business, emails, phones)
+  async function updateCustomer(id, changes) {
+    const updated = await api(`/customers/${id}`, {
+      method: "PATCH",
+      body: changes,
+    });
     setCustomers((list) => list.map((c) => (c.id === id ? updated : c)));
     // Tickets keep a copy of their customer, so update those too
     setTickets((list) =>
       list.map((t) => (t.customerId === id ? { ...t, requester: updated } : t)),
     );
+    // So does their portal login, if they have one
+    setTeam((list) =>
+      list.map((m) =>
+        m.customerId === id
+          ? {
+              ...m,
+              name: updated.name,
+              email: updated.email,
+              phone: updated.phone,
+            }
+          : m,
+      ),
+    );
+    return updated;
+  }
+
+  // Gives a customer access to the customer portal. Returns
+  // { member, token }, like inviting staff.
+  async function inviteCustomer(customerId) {
+    const result = await api(`/customers/${customerId}/invite`, {
+      method: "POST",
+    });
+    setTeam((list) => [...list, result.member]);
+    return result;
   }
 
   // Which customer (if any) uses this email, as their main or an extra email?
@@ -817,6 +860,7 @@ export default function DataProvider({ children }) {
         markReviewed,
         findMemberByEmail,
         inviteMember,
+        inviteCustomer,
         newInviteLink,
         updateMember,
         removeMember,

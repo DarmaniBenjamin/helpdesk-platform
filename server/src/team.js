@@ -5,7 +5,13 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
-import { users, userDepartments, departments, tokens } from "./db/schema.js";
+import {
+  users,
+  userDepartments,
+  departments,
+  tokens,
+  customers,
+} from "./db/schema.js";
 import {
   hashToken,
   newToken,
@@ -77,8 +83,9 @@ async function emailTaken(email, exceptId) {
   return Boolean(row);
 }
 
-// A fresh invite link for someone (any older link stops working)
-async function makeInviteToken(userId) {
+// A fresh invite link for someone (any older link stops working).
+// Also used for customer portal invites (customers.js).
+export async function makeInviteToken(userId) {
   await db
     .delete(tokens)
     .where(and(eq(tokens.userId, userId), eq(tokens.purpose, "invite")));
@@ -251,6 +258,20 @@ meRouter.patch("/", requireAuth, async (req, res) => {
       throw new BadInput("Someone else already uses this email.", 409);
   }
 
+  // A customer's email also can't belong to a different customer
+  if (changes.email && req.user.customerId) {
+    const [other] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(
+        and(
+          sql`(${customers.email} = ${changes.email} or ${changes.email} = any(${customers.extraEmails}))`,
+          ne(customers.id, req.user.customerId),
+        ),
+      );
+    if (other) throw new BadInput("Someone else already uses this email.", 409);
+  }
+
   const [updated] = Object.keys(changes).length
     ? await db
         .update(users)
@@ -258,6 +279,15 @@ meRouter.patch("/", requireAuth, async (req, res) => {
         .where(eq(users.id, req.user.id))
         .returning()
     : [req.user];
+
+  // A customer's name, email and phone also live on their customer
+  // record, so keep the two the same
+  if (req.user.customerId) {
+    await db
+      .update(customers)
+      .set({ name: updated.name, email: updated.email, phone: updated.phone })
+      .where(eq(customers.id, req.user.customerId));
+  }
   res.json(await publicUser(updated));
 });
 
@@ -304,6 +334,13 @@ inviteRouter.post("/:token/accept", async (req, res) => {
   await db
     .delete(tokens)
     .where(and(eq(tokens.userId, user.id), eq(tokens.purpose, "invite")));
+  // A customer's name also lives on their customer record
+  if (user.customerId) {
+    await db
+      .update(customers)
+      .set({ name })
+      .where(eq(customers.id, user.customerId));
+  }
 
   await startSession(res, user.id);
   res.json({ user: await publicUser(updated) });
