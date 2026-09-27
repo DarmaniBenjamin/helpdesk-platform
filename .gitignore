@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Passwords and secrets: never upload these.
+# (.env.example files are fine, they only hold placeholders)
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,23 @@
+{
+    "name": "helpdesk-server",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "node --watch --env-file=.env src/index.js",
+        "start": "node --env-file=.env src/index.js",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "drizzle-kit migrate",
+        "db:seed": "node --env-file=.env src/db/seed.js",
+        "db:studio": "drizzle-kit studio"
+    },
+    "dependencies": {
+        "bcryptjs": "^3.0.3",
+        "drizzle-orm": "^0.45.3",
+        "express": "^5.2.1",
+        "pg": "^8.23.0"
+    },
+    "devDependencies": {
+        "drizzle-kit": "^0.31.11"
+    }
+}
