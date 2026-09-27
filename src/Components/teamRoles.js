@@ -74,6 +74,11 @@ export const PERMISSIONS = [
     label: "Create departments and set job titles",
     roles: ADMINS_UP,
   },
+  {
+    key: "review",
+    label: "Ticket Review: check up on open and closed tickets",
+    roles: ADMINS_UP,
+  },
   { key: "rules", label: "Assignment rules and automations", roles: ADMINS_UP },
   {
     key: "reports",

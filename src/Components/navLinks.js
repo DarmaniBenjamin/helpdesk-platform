@@ -3,7 +3,7 @@ import {
   Inbox,
   BookUser,
   UserCheck,
-  Tag,
+  ClipboardCheck,
   Gauge,
   Zap,
   MessageSquareText,
@@ -28,7 +28,12 @@ export const mainLinks = [
     icon: UserCheck,
     permission: "rules",
   },
-  { label: "Ticket Topics", path: "/topics", icon: Tag },
+  {
+    label: "Ticket Review",
+    path: "/review",
+    icon: ClipboardCheck,
+    permission: "review",
+  },
   {
     label: "Performance & Feedback",
     path: "/performance",

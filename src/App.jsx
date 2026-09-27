@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router";
+import { Routes, Route, Navigate } from "react-router";
 import StaffLayout from "./Components/StaffLayout";
 import PortalLayout from "./Components/Portal/PortalLayout";
 import Dashboard from "./Components/Pages/Dashboard";
@@ -6,7 +6,7 @@ import Inbox from "./Components/Pages/Inbox";
 import Customers from "./Components/Pages/Customers";
 import TicketDetail from "./Components/Pages/TicketDetail";
 import CustomerDetail from "./Components/Pages/CustomerDetail";
-import TicketTopics from "./Components/Pages/TicketTopics";
+import TicketReview from "./Components/Pages/TicketReview";
 import TicketAssignment from "./Components/Pages/TicketAssignment";
 import Automation from "./Components/Pages/Automation";
 import KnowledgeBase from "./Components/Pages/KnowledgeBase";
@@ -48,7 +48,9 @@ export default function App() {
           <Route path="/customers" element={<Customers />} />
           <Route path="/customers/:id" element={<CustomerDetail />} />
           <Route path="/assignment" element={<TicketAssignment />} />
-          <Route path="/topics" element={<TicketTopics />} />
+          <Route path="/review" element={<TicketReview />} />
+          {/* The old address of this page */}
+          <Route path="/topics" element={<Navigate to="/review" replace />} />
           <Route path="/performance" element={<Performance />} />
           <Route path="/automation" element={<Automation />} />
           <Route path="/knowledge-base" element={<KnowledgeBase />} />

@@ -19,7 +19,7 @@ import useDismiss from "./useDismiss";
 import Avatar from "./Avatar";
 import PresenceMenu from "./PresenceMenu";
 import { ThemeToggleButton, ThemeSwitchRow } from "./ThemeToggle";
-import { ROLES } from "./teamRoles";
+import { ROLES, can } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
 import { isOverdue, timeAgo } from "../data";
@@ -264,14 +264,17 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
         {/* Phones: this lives in the menu under your picture instead */}
         <ThemeToggleButton className="hidden sm:block" />
 
-        <button
-          type="button"
-          onClick={() => setNewTicketOpen(true)}
-          className="group flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-brand px-3 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand/30 active:translate-y-0 active:scale-[0.97] sm:px-4"
-        >
-          <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-          <span className="hidden sm:inline">Add Ticket</span>
-        </button>
+        {/* Only Admins and the Super Admin create tickets */}
+        {can(me.role, "createTickets") && (
+          <button
+            type="button"
+            onClick={() => setNewTicketOpen(true)}
+            className="group flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-brand px-3 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand/30 active:translate-y-0 active:scale-[0.97] sm:px-4"
+          >
+            <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+            <span className="hidden sm:inline">Add Ticket</span>
+          </button>
+        )}
 
         {/* Who else is on this page */}
         <PresenceMenu />
@@ -308,7 +311,10 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
               <div className="p-2">
                 {[
                   { label: "My profile", icon: User, to: "/profile" },
-                  { label: "Settings", icon: Settings, to: "/settings" },
+                  // Settings is for the Super Admin only
+                  ...(can(me.role, "settings")
+                    ? [{ label: "Settings", icon: Settings, to: "/settings" }]
+                    : []),
                 ].map((item) => (
                   <Link
                     key={item.label}

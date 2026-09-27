@@ -802,6 +802,34 @@ export default function DataProvider({ children }) {
     );
   }
 
+  // Ticket Review: an Admin ticks off a finished ticket once they've checked
+  // it (or unticks it). Recorded on the ticket and in its history.
+  function markReviewed(id, reviewed) {
+    const now = Date.now();
+    setTickets((list) =>
+      list.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              review: reviewed ? { by: myName, at: now } : null,
+              messages: [
+                ...t.messages,
+                {
+                  id: t.messages.length + 1,
+                  kind: "event",
+                  author: myName,
+                  body: reviewed
+                    ? "marked the ticket as reviewed"
+                    : "took the review tick off",
+                  at: now,
+                },
+              ],
+            }
+          : t,
+      ),
+    );
+  }
+
   // Change fields on a ticket, e.g. updateTicket(4819, { status: "resolved" }).
   // Each change is also written into the ticket's history.
   function updateTicket(id, changes) {
@@ -902,6 +930,7 @@ export default function DataProvider({ children }) {
         logout,
         acceptInvite,
         rateTicket,
+        markReviewed,
         findMemberByEmail,
         inviteMember,
         inviteCustomer,
