@@ -13,6 +13,7 @@ import {
   TicketX,
   BookOpen,
   CircleCheck,
+  Hand,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -230,7 +231,7 @@ function Composer({ ticket, onSend }) {
 }
 
 // The panel with status, priority, department, assignee and due date
-function Properties({ ticket, onChange }) {
+function Properties({ ticket, me, onChange }) {
   return (
     <div className="flex flex-col gap-4">
       <label className={labelClass}>
@@ -290,9 +291,23 @@ function Properties({ ticket, onChange }) {
         </select>
       </label>
 
-      <label className={labelClass}>
-        Assigned to
+      <div className={labelClass}>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="assignee">Assigned to</label>
+          {/* A tech picking up a ticket nobody (or someone else) has */}
+          {ticket.assignee !== me.id && (
+            <button
+              type="button"
+              onClick={() => onChange({ assignee: me.id })}
+              className="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand transition hover:bg-brand/10 active:scale-[0.97]"
+            >
+              <Hand className="h-3.5 w-3.5" />
+              Assign to me
+            </button>
+          )}
+        </div>
         <select
+          id="assignee"
           value={ticket.assignee ?? ""}
           onChange={(e) => onChange({ assignee: e.target.value || null })}
           className={`${inputClass} cursor-pointer`}
@@ -301,10 +316,11 @@ function Properties({ ticket, onChange }) {
           {AGENTS.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
+              {a.title ? ` · ${a.title}` : ""}
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
       <label className={labelClass}>
         Due by
@@ -326,7 +342,8 @@ function Properties({ ticket, onChange }) {
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tickets, updateTicket, addMessage, answers, addAnswer } = useData();
+  const { me, tickets, updateTicket, addMessage, answers, addAnswer } =
+    useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
   const [savedAnswer, setSavedAnswer] = useState(null); // the answer just saved from a note
 
@@ -446,6 +463,7 @@ export default function TicketDetail() {
             >
               <Properties
                 ticket={ticket}
+                me={me}
                 onChange={(changes) => updateTicket(ticket.id, changes)}
               />
             </div>

@@ -22,8 +22,9 @@ import Modal from "../Modal";
 import RoleBadge from "../RoleBadge";
 import MemberModal from "../MemberModal";
 import CustomerInviteModal from "../CustomerInviteModal";
+import DepartmentsCard from "../DepartmentsCard";
 import { inputClass, secondaryButton } from "../formStyles";
-import { ROLES, PERMISSIONS, displayName } from "../teamRoles";
+import { ROLES, PERMISSIONS, canManage, displayName } from "../teamRoles";
 import { findDepartment, isDone, timeAgo } from "../../data";
 import useData from "../../useData";
 
@@ -33,7 +34,7 @@ const FILTERS = [
   { id: "invited", label: "Invited" },
 ];
 
-// The owner comes first, then admins, supervisors, agents, customers
+// The Super Admin comes first, then admins, agents, customers
 const ROLE_ORDER = Object.keys(ROLES);
 
 // A small square button with just an icon, e.g. the pencil or the trash can
@@ -70,10 +71,10 @@ function StatCard({ label, value, icon }) {
   );
 }
 
-// The member's teams as small grey pills
+// The member's departments as small grey pills
 function TeamList({ departments }) {
   if (departments.length === 0)
-    return <span className="text-sm text-muted">No teams</span>;
+    return <span className="text-sm text-muted">No department</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {departments.map((id) => (
@@ -105,9 +106,11 @@ function StatusText({ member }) {
   );
 }
 
-// The buttons at the end of each row. What shows depends on the member.
+// The buttons at the end of each row. What shows depends on the member,
+// and on what you're allowed to do (Admins can't change other Admins).
 function MemberActions({
   member,
+  allowed,
   justResent,
   justCopied,
   onEdit,
@@ -115,7 +118,7 @@ function MemberActions({
   onCopyLink,
   onRemove,
 }) {
-  if (member.role === "owner") return null;
+  if (!allowed) return null;
   // A customer's name and email come from their customer record,
   // so there's nothing to edit here
   const canEdit = member.role !== "customer";
@@ -242,10 +245,10 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
   );
 }
 
-// Table showing which role can do what
+// Table showing which access level can do what
 function PermissionsTable() {
   return (
-    <Card title="What each role can do">
+    <Card title="What each access level can do">
       <div className="-mx-5 overflow-x-auto">
         <table className="w-full min-w-160 text-left text-sm">
           <thead>
@@ -431,6 +434,7 @@ export default function Team() {
     return (
       <MemberActions
         member={member}
+        allowed={canManage(me.role, member)}
         justResent={resentId === member.id}
         justCopied={copiedId === member.id}
         onEdit={() => setModal({ type: "edit", member })}
@@ -493,11 +497,8 @@ export default function Team() {
           icon={ShieldCheck}
         />
         <StatCard
-          label="Agents & supervisors"
-          value={
-            active.filter((m) => m.role === "agent" || m.role === "supervisor")
-              .length
-          }
+          label="Agents"
+          value={active.filter((m) => m.role === "agent").length}
           icon={Headset}
         />
         <StatCard
@@ -550,8 +551,8 @@ export default function Team() {
               <thead>
                 <tr className="whitespace-nowrap border-b border-line text-muted">
                   <th className="px-5 py-3 font-medium">Member</th>
-                  <th className="px-5 py-3 font-medium">Role</th>
-                  <th className="px-5 py-3 font-medium">Teams</th>
+                  <th className="px-5 py-3 font-medium">Access</th>
+                  <th className="px-5 py-3 font-medium">Departments</th>
                   <th className="px-5 py-3 font-medium">Open tickets</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3">
@@ -583,6 +584,11 @@ export default function Team() {
                     </td>
                     <td className="px-5 py-3">
                       <RoleBadge role={m.role} />
+                      {m.title && (
+                        <p className="mt-1 max-w-48 truncate text-xs text-muted">
+                          {m.title}
+                        </p>
+                      )}
                     </td>
                     <td className="max-w-64 px-5 py-3">
                       <TeamList departments={m.departments} />
@@ -614,8 +620,11 @@ export default function Team() {
                     {m.name && (
                       <p className="truncate text-sm text-muted">{m.email}</p>
                     )}
-                    <div className="mt-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <RoleBadge role={m.role} />
+                      {m.title && (
+                        <span className="text-xs text-muted">{m.title}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -640,6 +649,8 @@ export default function Team() {
           </ul>
         </>
       )}
+
+      <DepartmentsCard />
 
       <CustomerAccess
         members={portalCustomers}

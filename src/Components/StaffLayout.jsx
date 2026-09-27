@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import NoAccess from "./Pages/NoAccess";
+import { canOpen } from "./navLinks";
 import useData from "../useData";
 
 // The frame around every staff page: sidebar, top bar, and the page itself.
@@ -36,7 +38,8 @@ export default function StaffLayout() {
           onToggleSidebar={() => setCollapsed((c) => !c)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:overflow-y-auto">
-          <Outlet />
+          {/* Pages this person isn't allowed to open show a message instead */}
+          {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
         </main>
       </div>
     </div>

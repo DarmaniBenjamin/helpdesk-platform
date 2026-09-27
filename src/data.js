@@ -46,21 +46,35 @@ export const SLA_HOURS = {
   4: { firstResponse: 1, resolve: 4 },
 };
 
-export const DEPARTMENTS = [
-  { id: "it", name: "IT Support" },
-  { id: "net", name: "Networking" },
-  { id: "m365", name: "Microsoft 365" },
-  { id: "srv", name: "Server & Backups" },
-  { id: "cctv", name: "CCTV & Security" },
-  { id: "bill", name: "Billing" },
+// ---------- Departments and agents ----------
+// Admins create, rename and delete departments on the Team page, and the
+// agents are whoever is on the team. These are only the starting ones.
+export const STARTING_DEPARTMENTS = [
+  { id: "managed", name: "Managed Services" },
+  { id: "support", name: "Support" },
+  { id: "media", name: "Web + Media" },
+  { id: "security", name: "Security / Installation" },
 ];
 
-export const AGENTS = [
-  { id: "a1", name: "Alex Charles", departments: ["it", "net", "srv"] },
-  { id: "a2", name: "Kerry-Ann Joseph", departments: ["m365", "it"] },
-  { id: "a3", name: "Marcus Pierre", departments: ["net", "cctv"] },
-  { id: "a4", name: "Shanice Thomas", departments: ["bill", "it", "srv"] },
+const STARTING_AGENTS = [
+  { id: "a1", name: "Alex Charles", departments: ["managed", "support"] },
+  { id: "a2", name: "Kerry-Ann Joseph", departments: ["media", "support"] },
+  { id: "a3", name: "Marcus Pierre", departments: ["security", "managed"] },
+  { id: "a4", name: "Shanice Thomas", departments: ["support", "managed"] },
 ];
+
+// The current departments and agents. Every page reads these.
+// DataProvider keeps them up to date (see syncDirectory below), so when an
+// admin adds a department or invites someone, every list and dropdown
+// in the app shows them straight away.
+export let DEPARTMENTS = STARTING_DEPARTMENTS;
+export let AGENTS = STARTING_AGENTS;
+
+// Called by DataProvider every time the departments or team change
+export function syncDirectory(departments, agents) {
+  DEPARTMENTS = departments;
+  AGENTS = agents;
+}
 
 // ---------- Helpers ----------
 
@@ -152,8 +166,37 @@ const LAST_NAMES = [
   "Mitchell",
 ];
 
+// Example problems for the fake tickets, by department.
+// Managed Services: ongoing work for contract clients (backups, servers,
+// Microsoft 365, the office network). Support: everyday help requests.
 const ISSUES = {
-  it: [
+  managed: [
+    [
+      "Backup failed last night",
+      "We got an alert email saying last night's backup job failed.",
+    ],
+    [
+      "Server is running out of space",
+      "Getting a warning that the D: drive on the server is 95% full.",
+    ],
+    [
+      "Restore a folder from last week",
+      "Someone deleted the contracts folder. Can we get it back from Friday's backup?",
+    ],
+    [
+      "VPN to the branch office is down",
+      "Staff at the branch can't reach the server at head office since about 8am.",
+    ],
+    [
+      "Create a mailbox for a new staff member",
+      "Please set up an email account for our new front office assistant.",
+    ],
+    [
+      "OneDrive stopped syncing",
+      "OneDrive has a red X on it and my files aren't updating.",
+    ],
+  ],
+  support: [
     [
       "Outlook keeps asking for my password",
       "Since this morning Outlook pops up a password prompt every few minutes, even after I type it in correctly.",
@@ -171,61 +214,37 @@ const ISSUES = {
       "Someone starts Monday in accounts. They need a laptop with Office, email and the shared drive.",
     ],
     [
-      "Front desk computer is very slow",
-      "The reception PC takes about five minutes to open anything.",
+      "Reset my authenticator app",
+      "I got a new phone and can't approve sign-ins anymore.",
     ],
-  ],
-  net: [
     [
       "Wi-Fi keeps dropping in the conference room",
       "The Wi-Fi disconnects every few minutes in the main conference room.",
     ],
     [
-      "VPN to the branch office is down",
-      "Staff at the branch can't reach the server at head office since about 8am.",
-    ],
-    [
       "Change the guest Wi-Fi password",
       "Please change the guest Wi-Fi password, we think it's been shared outside the building.",
     ],
+  ],
+  media: [
     [
-      "Access point in the east wing is offline",
-      "The light on the access point outside room 12 is off and there's no signal in that corridor.",
+      "Update the prices on our website",
+      "Our new menu prices start Monday. Can the website be updated before then?",
+    ],
+    [
+      "Design a flyer for our weekend sale",
+      "We need a flyer for Facebook and Instagram for this weekend's sale.",
+    ],
+    [
+      "New email signature for all staff",
+      "We changed our logo. Can everyone's email signature be updated to the new one?",
+    ],
+    [
+      "Photos for the new rooms",
+      "The renovated rooms are ready. When can someone come by to take photos for the website?",
     ],
   ],
-  m365: [
-    [
-      "Create a mailbox for a new staff member",
-      "Please set up an email account for our new front office assistant.",
-    ],
-    [
-      "Give me access to the reservations mailbox",
-      "I need to send from the reservations@ shared mailbox while my colleague is on leave.",
-    ],
-    [
-      "Reset my authenticator app",
-      "I got a new phone and can't approve sign-ins anymore.",
-    ],
-    [
-      "OneDrive stopped syncing",
-      "OneDrive has a red X on it and my files aren't updating.",
-    ],
-  ],
-  srv: [
-    [
-      "Backup failed last night",
-      "We got an alert email saying last night's backup job failed.",
-    ],
-    [
-      "Server is running out of space",
-      "Getting a warning that the D: drive on the server is 95% full.",
-    ],
-    [
-      "Restore a folder from last week",
-      "Someone deleted the contracts folder. Can we get it back from Friday's backup?",
-    ],
-  ],
-  cctv: [
+  security: [
     [
       "Camera 4 shows no picture",
       "Camera 4 over the car park has been black since yesterday afternoon.",
@@ -238,19 +257,13 @@ const ISSUES = {
       "Need footage from Saturday night",
       "We had an incident at the gate around 11pm Saturday. Can you export the footage?",
     ],
-  ],
-  bill: [
     [
-      "Question about this month's invoice",
-      "There's a line on the invoice for 'onsite visit' that I don't recognise.",
+      "Access point in the east wing is offline",
+      "The light on the access point outside room 12 is off and there's no signal in that corridor.",
     ],
     [
-      "Update our billing contact",
-      "Please send invoices to our new accounts manager going forward.",
-    ],
-    [
-      "Quote for a new server",
-      "Our server is five years old. Can you send a quote for a replacement?",
+      "Run a network cable to the back office",
+      "We're moving two desks into the back office and need wired connections there.",
     ],
   ],
 };

@@ -12,6 +12,8 @@ import {
   isDone,
   findAgent,
   findDepartment,
+  STARTING_DEPARTMENTS,
+  syncDirectory,
 } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
@@ -74,20 +76,20 @@ function describeChange(field, value) {
 const STARTING_RULES = [
   {
     id: 1,
-    name: "Billing questions",
+    name: "Website and design",
     description:
-      "Invoices, payments and quotes go straight to the billing team.",
-    keywords: ["invoice", "billing", "payment", "quote"],
-    department: "bill",
-    agent: "a4",
+      "Website changes, flyers, logos and social media go to Web + Media.",
+    keywords: ["website", "flyer", "logo", "social media"],
+    department: "media",
+    agent: "a2",
     enabled: true,
   },
   {
     id: 2,
     name: "Network problems",
-    description: "Wi-Fi, VPN and internet issues go to the networking team.",
-    keywords: ["wi-fi", "vpn", "internet", "access point"],
-    department: "net",
+    description: "Wi-Fi and internet problems go to Support.",
+    keywords: ["wi-fi", "wifi", "internet", "access point"],
+    department: "support",
     agent: null,
     enabled: true,
   },
@@ -95,10 +97,10 @@ const STARTING_RULES = [
     id: 3,
     name: "Email and accounts",
     description:
-      "Outlook, mailboxes, OneDrive and sign-in problems go to Microsoft 365.",
-    keywords: ["outlook", "mailbox", "onedrive", "authenticator"],
-    department: "m365",
-    agent: "a2",
+      "Mailboxes, OneDrive and Microsoft 365 go to Managed Services.",
+    keywords: ["mailbox", "onedrive", "microsoft 365", "outlook"],
+    department: "managed",
+    agent: "a1",
     enabled: true,
   },
   {
@@ -106,7 +108,7 @@ const STARTING_RULES = [
     name: "Backups and servers",
     description: "Failed backups, restores and server space warnings.",
     keywords: ["backup", "restore", "server"],
-    department: "srv",
+    department: "managed",
     agent: null,
     enabled: false,
   },
@@ -182,6 +184,9 @@ const STARTING_AUTOMATIONS = [
 // "invited" people haven't set their password yet.
 // Customers are linked to their customer record with customerId.
 // Everyone has the same profile fields: name, email, phone and photo.
+// Staff also have a job title (what they do at work, typed in freely) and
+// an access level (role: what they can do in the app, see teamRoles.js).
+// "owner" is the Super Admin.
 const now = Date.now();
 const STARTING_TEAM = [
   {
@@ -191,6 +196,7 @@ const STARTING_TEAM = [
     phone: "+1 (473) 440-1200",
     photo: null,
     role: "owner",
+    title: "Managing Director",
     departments: [],
     status: "active",
     invitedAt: null,
@@ -204,7 +210,8 @@ const STARTING_TEAM = [
     phone: "+1 (473) 405-2231",
     photo: null,
     role: "admin",
-    departments: ["it", "net", "srv"],
+    title: "IT Manager",
+    departments: ["managed", "support"],
     status: "active",
     invitedAt: null,
     joinedAt: now - 320 * DAY,
@@ -217,7 +224,8 @@ const STARTING_TEAM = [
     phone: "+1 (473) 418-7764",
     photo: null,
     role: "agent",
-    departments: ["m365", "it"],
+    title: "Digital Media Designer",
+    departments: ["media", "support"],
     status: "active",
     invitedAt: null,
     joinedAt: now - 210 * DAY,
@@ -230,7 +238,8 @@ const STARTING_TEAM = [
     phone: "+1 (473) 409-3380",
     photo: null,
     role: "agent",
-    departments: ["net", "cctv"],
+    title: "Field Technician",
+    departments: ["security", "managed"],
     status: "active",
     invitedAt: null,
     joinedAt: now - 150 * DAY,
@@ -242,8 +251,9 @@ const STARTING_TEAM = [
     email: "shanice.thomas@example.com",
     phone: "+1 (473) 421-5519",
     photo: null,
-    role: "supervisor",
-    departments: ["bill", "it", "srv"],
+    role: "agent",
+    title: "IT Support Technician",
+    departments: ["support", "managed"],
     status: "active",
     invitedAt: null,
     joinedAt: now - 280 * DAY,
@@ -256,7 +266,8 @@ const STARTING_TEAM = [
     phone: "",
     photo: null,
     role: "agent",
-    departments: ["it"],
+    title: "IT Support Technician",
+    departments: ["support"],
     status: "invited",
     invitedAt: now - 2 * DAY,
     joinedAt: null,
@@ -269,7 +280,8 @@ const STARTING_TEAM = [
     phone: "",
     photo: null,
     role: "agent",
-    departments: ["cctv"],
+    title: "Field Technician",
+    departments: ["security"],
     status: "invited",
     invitedAt: now - 6 * HOUR,
     joinedAt: null,
@@ -329,6 +341,7 @@ export default function DataProvider({ children }) {
   const [answers, setAnswers] = useState(STARTING_ANSWERS);
   const [team, setTeam] = useState(STARTING_TEAM);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
+  const [departments, setDepartments] = useState(STARTING_DEPARTMENTS);
   const [sessionId, setSessionId] = useState(readSession);
 
   // The signed-in person (null when nobody is), and the name written on
@@ -336,6 +349,66 @@ export default function DataProvider({ children }) {
   const me =
     team.find((m) => m.id === sessionId && m.status === "active") ?? null;
   const myName = me?.name ?? "";
+
+  // Everyone on the staff who can be given tickets: active members who
+  // aren't customers. Every "Assigned to" list in the app uses these.
+  const agents = team
+    .filter((m) => m.role !== "customer" && m.status === "active")
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      title: m.title ?? "",
+      photo: m.photo,
+      departments: m.departments,
+    }));
+  // Let every page see the current departments and agents
+  syncDirectory(departments, agents);
+
+  // ---------- Departments ----------
+
+  // Is this name already taken? (not counting the department being renamed)
+  function departmentNameTaken(name, exceptId) {
+    const wanted = name.trim().toLowerCase();
+    return departments.some(
+      (d) => d.id !== exceptId && d.name.toLowerCase() === wanted,
+    );
+  }
+
+  function addDepartment(name) {
+    const department = { id: `d${Date.now().toString(36)}`, name: name.trim() };
+    setDepartments((list) => [...list, department]);
+    return department;
+  }
+
+  function renameDepartment(id, name) {
+    setDepartments((list) =>
+      list.map((d) => (d.id === id ? { ...d, name: name.trim() } : d)),
+    );
+  }
+
+  // Deleting a department: its tickets go back to "No team yet", people
+  // are taken off it, rules for it are switched off, and its Knowledge
+  // Base answers stay but without a team. The last one can't be deleted.
+  function deleteDepartment(id) {
+    if (departments.length <= 1) return;
+    setDepartments((list) => list.filter((d) => d.id !== id));
+    setTickets((list) =>
+      list.map((t) => (t.department === id ? { ...t, department: null } : t)),
+    );
+    setTeam((list) =>
+      list.map((m) =>
+        m.departments.includes(id)
+          ? { ...m, departments: m.departments.filter((d) => d !== id) }
+          : m,
+      ),
+    );
+    setRules((list) =>
+      list.map((r) => (r.department === id ? { ...r, enabled: false } : r)),
+    );
+    setAnswers((list) =>
+      list.map((a) => (a.department === id ? { ...a, department: null } : a)),
+    );
+  }
 
   // ---------- Signing in and out ----------
 
@@ -398,6 +471,7 @@ export default function DataProvider({ children }) {
       data: {
         tickets,
         customers,
+        departments,
         team,
         rules,
         automations,
@@ -413,6 +487,7 @@ export default function DataProvider({ children }) {
   function restoreBackup(data) {
     setTickets(data.tickets);
     setCustomers(data.customers);
+    if (data.departments?.length) setDepartments(data.departments);
     if (data.team?.some((m) => m.id === me?.id)) setTeam(data.team);
     if (data.rules) setRules(data.rules);
     if (data.automations) setAutomations(data.automations);
@@ -443,10 +518,11 @@ export default function DataProvider({ children }) {
 
   // Adds someone as "invited". Later, the backend sends them an email
   // with a link to set their password, and they become "active".
-  function inviteMember({ email, name, role, departments }) {
+  function inviteMember({ email, name, title, role, departments }) {
     const member = {
       id: `m${Date.now()}`,
       name: name.trim(),
+      title: title.trim(),
       email: email.trim().toLowerCase(),
       phone: "",
       photo: null,
@@ -742,7 +818,11 @@ export default function DataProvider({ children }) {
             id: t.messages.length + i + 1,
             kind: "event",
             author: myName,
-            body: describeChange(field, value),
+            // Picking up a ticket yourself reads "took the ticket"
+            body:
+              field === "assignee" && value === me?.id
+                ? "took the ticket"
+                : describeChange(field, value),
             at: now,
           }));
         next.messages = [...t.messages, ...events];
@@ -816,6 +896,7 @@ export default function DataProvider({ children }) {
         deleteAnswer,
         recordAnswerUse,
         team,
+        agents,
         me,
         login,
         logout,
@@ -829,6 +910,11 @@ export default function DataProvider({ children }) {
         removeMember,
         settings,
         updateSettings,
+        departments,
+        departmentNameTaken,
+        addDepartment,
+        renameDepartment,
+        deleteDepartment,
         makeBackup,
         restoreBackup,
         saveImport,

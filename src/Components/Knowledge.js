@@ -77,7 +77,7 @@ export const STARTING_ANSWERS = [
         "Outlook pops up a password prompt every few minutes, even after the correct password is entered.",
       solution:
         "Cached credentials were out of date. Closed Outlook, removed the Microsoft entries from Windows Credential Manager, reopened Outlook and signed in again. Prompt stopped.",
-      department: "m365",
+      department: "support",
       ticketId: null,
       author: "Kerry-Ann Joseph",
       source: "manual",
@@ -92,7 +92,7 @@ export const STARTING_ANSWERS = [
         "Nobody can print; the printer screen says ready but PCs show the printer as offline.",
       solution:
         "Printer had picked up a new IP from DHCP. Set a DHCP reservation for the printer on the router, updated the printer port IP on the PCs, and restarted the Print Spooler service.",
-      department: "it",
+      department: "support",
       ticketId: null,
       author: "Alex Charles",
       source: "manual",
@@ -107,7 +107,7 @@ export const STARTING_ANSWERS = [
         "Staff at the branch can't reach the head office server; site-to-site VPN shows disconnected.",
       solution:
         "ISP changed the branch's public IP. Updated the remote gateway IP in the VPN settings on both routers and reconnected. Suggested a static IP or DDNS to stop it happening again.",
-      department: "net",
+      department: "managed",
       ticketId: null,
       author: "Marcus Pierre",
       source: "manual",
@@ -121,7 +121,7 @@ export const STARTING_ANSWERS = [
       problem: "Alert email saying last night's backup job failed.",
       solution:
         "Backup target was nearly full and a VSS writer was stuck. Cleared old restore points on the target, restarted the stuck VSS writer's service, and re-ran the backup manually. Completed successfully.",
-      department: "srv",
+      department: "managed",
       ticketId: null,
       author: "Shanice Thomas",
       source: "manual",
@@ -135,7 +135,7 @@ export const STARTING_ANSWERS = [
       problem: "One camera on the NVR has been black since yesterday.",
       solution:
         "PoE port on the switch had stopped powering the camera. Moved the camera to another PoE port, then power-cycled the original port. Picture back; logged the faulty port.",
-      department: "cctv",
+      department: "security",
       ticketId: null,
       author: "Marcus Pierre",
       source: "manual",

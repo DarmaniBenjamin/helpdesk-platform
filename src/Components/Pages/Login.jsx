@@ -4,6 +4,7 @@ import { ArrowLeft, CircleCheck, TriangleAlert } from "lucide-react";
 import AuthShell from "../AuthShell";
 import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
+import { ROLES } from "../teamRoles";
 import useData from "../../useData";
 
 const fullButton =
@@ -62,11 +63,14 @@ export default function Login() {
     setResetSent(true);
   }
 
-  // Quick sign-in buttons for testing, until real passwords exist
-  const demoStaff = team.find((m) => m.role === "owner");
-  const demoCustomer = team.find(
-    (m) => m.role === "customer" && m.status === "active",
-  );
+  // Quick sign-in buttons for testing, until real passwords exist:
+  // the first active person with each access level
+  const demoAccounts = ["owner", "admin", "agent", "customer"]
+    .map((role) => ({
+      label: ROLES[role].label,
+      member: team.find((m) => m.role === role && m.status === "active"),
+    }))
+    .filter((d) => d.member);
 
   if (view === "reset") {
     return (
@@ -197,26 +201,21 @@ export default function Login() {
           Testing: any password works for now. Sign in as
         </p>
         <div className="mt-2 grid grid-cols-1 gap-2">
-          {[
-            demoStaff && { label: "Staff", member: demoStaff },
-            demoCustomer && { label: "Customer", member: demoCustomer },
-          ]
-            .filter(Boolean)
-            .map(({ label, member }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => {
-                  setEmail(member.email);
-                  setPassword("demo");
-                  setError(null);
-                }}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-page px-3 py-2 text-left text-sm transition hover:bg-brand/10"
-              >
-                <span className="min-w-0 truncate">{member.email}</span>
-                <span className="shrink-0 text-xs text-muted">{label}</span>
-              </button>
-            ))}
+          {demoAccounts.map(({ label, member }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => {
+                setEmail(member.email);
+                setPassword("demo");
+                setError(null);
+              }}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-page px-3 py-2 text-left text-sm transition hover:bg-brand/10"
+            >
+              <span className="min-w-0 truncate">{member.email}</span>
+              <span className="shrink-0 text-xs text-muted">{label}</span>
+            </button>
+          ))}
         </div>
       </div>
     </AuthShell>

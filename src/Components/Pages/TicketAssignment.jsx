@@ -6,12 +6,11 @@ import {
   ArrowRight,
   Info,
   Workflow,
-  Monitor,
-  Wifi,
-  Mail,
   Server,
+  Headset,
+  Palette,
   Cctv,
-  Receipt,
+  Layers,
 } from "lucide-react";
 import RuleModal from "../RuleModal";
 import useData from "../../useData";
@@ -23,15 +22,18 @@ import {
   findAgent,
 } from "../../data";
 
-// An icon for each team
+// Icons for the starting departments. Departments you create yourself
+// get the general "layers" icon.
 const TEAM_ICONS = {
-  it: Monitor,
-  net: Wifi,
-  m365: Mail,
-  srv: Server,
-  cctv: Cctv,
-  bill: Receipt,
+  managed: Server,
+  support: Headset,
+  media: Palette,
+  security: Cctv,
 };
+function TeamIcon({ id, className }) {
+  const Icon = TEAM_ICONS[id] ?? Layers;
+  return <Icon className={className} />;
+}
 
 // 95 minutes -> "1.6h", 40 -> "40m"
 function formatResponse(minutes) {
@@ -94,7 +96,6 @@ function Toggle({ on, onChange, label }) {
 }
 
 function TeamCard({ department, tickets }) {
-  const Icon = TEAM_ICONS[department.id];
   const members = AGENTS.filter((a) =>
     a.departments.includes(department.id),
   ).length;
@@ -112,7 +113,7 @@ function TeamCard({ department, tickets }) {
     <div className="rounded-xl border border-line bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand">
-          <Icon className="h-4 w-4" />
+          <TeamIcon id={department.id} className="h-4 w-4" />
         </span>
         <p className="truncate font-semibold">{department.name}</p>
       </div>
@@ -136,7 +137,6 @@ function TeamCard({ department, tickets }) {
 
 function RuleRow({ rule, tickets, onToggle, onEdit }) {
   const team = findDepartment(rule.department);
-  const Icon = TEAM_ICONS[rule.department];
   const agent = findAgent(rule.agent);
   const matches = countMatches(tickets, rule.keywords);
 
@@ -154,7 +154,7 @@ function RuleRow({ rule, tickets, onToggle, onEdit }) {
             rule.enabled ? "bg-brand/10 text-brand" : "bg-slate-200 text-muted"
           }`}
         >
-          <Icon className="h-5 w-5" />
+          <TeamIcon id={rule.department} className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p

@@ -1,34 +1,31 @@
-import { Crown, ShieldCheck, Eye, Headset, UserRound } from "lucide-react";
+import { Crown, ShieldCheck, Headset, UserRound } from "lucide-react";
 
-// The roles someone who can sign in can have.
-// "owner" is the person who set up the helpdesk. There's only one,
-// and they can't be removed. Admin, supervisor and agent are your staff.
-// "customer" is for your customers, who sign in to the customer portal.
+// Access levels: what someone is allowed to do in the app. This is
+// separate from their job title (what they do at work, typed in freely)
+// and their departments (which groups of work they're in).
+//   owner    = Super Admin: the boss. Only one. Full access.
+//   admin    = runs the day-to-day: tickets, people, departments, reports
+//   agent    = does the work on tickets
+//   customer = uses the customer portal
 export const ROLES = {
   owner: {
-    label: "Owner",
-    description: "Full access. Set up the helpdesk and can't be removed.",
+    label: "Super Admin",
+    description:
+      "Full access to everything, including backups, settings and who is an Admin. There's only one.",
     badge: "bg-amber-50 text-amber-700 ring-amber-200",
     icon: Crown,
   },
   admin: {
     label: "Admin",
     description:
-      "Everything a supervisor can do, plus managing the team, rules, automations and settings.",
+      "Creates tickets, invites and removes agents and customers, manages departments, rules, automations and reports.",
     badge: "bg-violet-50 text-violet-700 ring-violet-200",
     icon: ShieldCheck,
-  },
-  supervisor: {
-    label: "Supervisor",
-    description:
-      "Everything an agent can do, plus reassigning tickets, reports and editing the Knowledge Base.",
-    badge: "bg-sky-50 text-sky-700 ring-sky-200",
-    icon: Eye,
   },
   agent: {
     label: "Agent",
     description:
-      "Answers and updates tickets, adds customers and uses the Knowledge Base.",
+      "Works on tickets: replies, notes, status, and assigning tickets to themselves or anyone else.",
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icon: Headset,
   },
@@ -42,33 +39,79 @@ export const ROLES = {
 };
 
 // Everyone except customers
-export const STAFF_ROLES = ["owner", "admin", "supervisor", "agent"];
-
-// The roles you can pick when inviting or editing a staff member
-// (not "owner", and customers are invited separately)
-export const PICKABLE_ROLES = ["admin", "supervisor", "agent"];
-
-// What each role is allowed to do. Shown as a table on the Team page.
-// Later, the backend will check these same rules before saving anything.
-const EVERYONE = [...STAFF_ROLES, "customer"];
-const SUPERVISORS_UP = ["owner", "admin", "supervisor"];
+export const STAFF_ROLES = ["owner", "admin", "agent"];
 const ADMINS_UP = ["owner", "admin"];
+const SUPER_ADMIN = ["owner"];
 
+// What each access level can do. The key is used in the code with can()
+// below; the label is shown in the table on the Team page. Later the
+// backend checks exactly these same rules before saving anything.
 export const PERMISSIONS = [
-  { label: "Open new tickets", roles: EVERYONE },
-  { label: "View only their own tickets", roles: ["customer"] },
-  { label: "See every ticket", roles: STAFF_ROLES },
-  { label: "Answer and update tickets", roles: STAFF_ROLES },
-  { label: "Add and edit customers", roles: STAFF_ROLES },
-  { label: "Use and add Knowledge Base answers", roles: STAFF_ROLES },
-  { label: "Reassign tickets to anyone", roles: SUPERVISORS_UP },
-  { label: "Edit and delete Knowledge Base answers", roles: SUPERVISORS_UP },
-  { label: "See reports and performance", roles: SUPERVISORS_UP },
-  { label: "Manage assignment rules and automations", roles: ADMINS_UP },
-  { label: "Invite, change and remove team members", roles: ADMINS_UP },
-  { label: "Change settings and email integration", roles: ADMINS_UP },
-  { label: "Transfer ownership", roles: ["owner"] },
+  {
+    key: "workTickets",
+    label: "Reply, add notes, change status and priority",
+    roles: STAFF_ROLES,
+  },
+  {
+    key: "assignTickets",
+    label: "Assign tickets to themselves or anyone",
+    roles: STAFF_ROLES,
+  },
+  { key: "customers", label: "Add and edit customers", roles: STAFF_ROLES },
+  {
+    key: "knowledge",
+    label: "Use, add and edit Knowledge Base answers",
+    roles: STAFF_ROLES,
+  },
+  { key: "createTickets", label: "Create tickets", roles: ADMINS_UP },
+  {
+    key: "team",
+    label: "Invite and remove agents and customers",
+    roles: ADMINS_UP,
+  },
+  {
+    key: "departments",
+    label: "Create departments and set job titles",
+    roles: ADMINS_UP,
+  },
+  { key: "rules", label: "Assignment rules and automations", roles: ADMINS_UP },
+  {
+    key: "reports",
+    label: "Reports and Performance & Feedback",
+    roles: ADMINS_UP,
+  },
+  { key: "email", label: "Email Integration", roles: ADMINS_UP },
+  { key: "admins", label: "Make, change or remove Admins", roles: SUPER_ADMIN },
+  {
+    key: "settings",
+    label: "Backups, restore, Freshdesk import and settings",
+    roles: SUPER_ADMIN,
+  },
+  {
+    key: "ownTickets",
+    label: "Send requests and see only their own tickets",
+    roles: ["customer"],
+  },
 ];
+
+// Can someone with this access level do this? e.g. can(me.role, "reports")
+export function can(role, key) {
+  return PERMISSIONS.find((p) => p.key === key)?.roles.includes(role) ?? false;
+}
+
+// Which access levels you can give someone when inviting or editing.
+// Only the Super Admin can make Admins. Customers are invited separately.
+export function pickableRoles(myRole) {
+  return can(myRole, "admins") ? ["admin", "agent"] : ["agent"];
+}
+
+// Can I change or remove this person? The Super Admin can manage everyone
+// else; Admins can manage agents and customers, but not other Admins.
+export function canManage(myRole, member) {
+  if (member.role === "owner") return false;
+  if (member.role === "admin") return can(myRole, "admins");
+  return can(myRole, "team");
+}
 
 // A name to show for someone. Invited people might not have one yet.
 export function displayName(member) {

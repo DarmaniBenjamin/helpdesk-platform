@@ -3,8 +3,8 @@ import { NavLink, Link } from "react-router";
 import { ChevronsUpDown, X, User, Settings, LogOut } from "lucide-react";
 import Avatar from "./Avatar";
 import useDismiss from "./useDismiss";
-import { mainLinks, moreLinks } from "./navLinks";
-import { ROLES } from "./teamRoles";
+import { mainLinks, moreLinks, linksFor } from "./navLinks";
+import { ROLES, can } from "./teamRoles";
 import useData from "../useData";
 
 function SidebarLink({ link, onClick, collapsed }) {
@@ -69,7 +69,10 @@ function AccountMenu({ collapsed, onNavigate }) {
 
   const links = [
     { label: "My profile", icon: User, to: "/profile" },
-    { label: "Settings", icon: Settings, to: "/settings" },
+    // Settings is for the Super Admin only
+    ...(can(me.role, "settings")
+      ? [{ label: "Settings", icon: Settings, to: "/settings" }]
+      : []),
   ];
 
   return (
@@ -142,6 +145,7 @@ function AccountMenu({ collapsed, onNavigate }) {
 }
 
 export default function Sidebar({ open, onClose, collapsed }) {
+  const { me } = useData();
   // Close the menu when Escape is pressed
   useEffect(() => {
     function handleKey(e) {
@@ -188,7 +192,8 @@ export default function Sidebar({ open, onClose, collapsed }) {
           className={`flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 ${collapsed ? "lg:px-3" : ""}`}
         >
           <ul className="flex flex-col gap-1">
-            {mainLinks.map((link) => (
+            {/* Only the pages this person is allowed to open */}
+            {linksFor(mainLinks, me.role).map((link) => (
               <SidebarLink
                 key={link.path}
                 link={link}
@@ -201,7 +206,7 @@ export default function Sidebar({ open, onClose, collapsed }) {
           <hr className="my-4 border-line" />
 
           <ul className="flex flex-col gap-1">
-            {moreLinks.map((link) => (
+            {linksFor(moreLinks, me.role).map((link) => (
               <SidebarLink
                 key={link.path}
                 link={link}
