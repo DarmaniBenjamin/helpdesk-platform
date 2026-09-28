@@ -7,9 +7,13 @@ import {
   CircleCheck,
   TriangleAlert,
   X,
+  Users,
+  Layers,
 } from "lucide-react";
 import Card from "./Card";
 import FreshdeskConnect from "./FreshdeskConnect";
+import Pagination from "./Pagination";
+import { pageOf, pageCount } from "./paging";
 import {
   inputClass,
   labelClass,
@@ -26,6 +30,10 @@ import {
   sampleText,
   convertContacts,
   convertTickets,
+  listFreshdeskAgents,
+  guessPerson,
+  listFreshdeskGroups,
+  guessDepartment,
   mergeCustomers,
   mergeTickets,
 } from "./freshdeskMapping";
@@ -203,6 +211,169 @@ const SOURCE_NAMES = {
   agent: "Created by the team",
 };
 
+// "Who is who": each Freshdesk agent with tickets in this import, and a
+// list of your team to pick who that is. Worked out for you where it
+// can be (same email, name or job title); change anything that's wrong.
+function PeopleTable({ agents, choices, onChange, team }) {
+  const staff = team.filter((m) => m.role !== "customer");
+  return (
+    <>
+      <p className="-mt-2 mb-3 text-sm text-muted">
+        Who had each ticket in Freshdesk, and who that is here. It's matched by
+        email, then name, then job title. Check each one. People who haven't
+        accepted their invite yet can't be picked until they join.
+      </p>
+      <ul className="-mx-5 divide-y divide-line border-t border-line">
+        {agents.map((a) => (
+          <li
+            key={a.key}
+            className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">
+                {a.name || `Freshdesk agent ${a.key}`}
+              </span>
+              <span className="block truncate text-xs text-muted">
+                {a.email || "No email from Freshdesk"} · {a.tickets} ticket
+                {a.tickets === 1 ? "" : "s"}
+              </span>
+            </span>
+            <select
+              aria-label={`Who ${a.name || a.key} is on your team`}
+              value={choices[a.key] ?? ""}
+              onChange={(e) => onChange(a.key, e.target.value)}
+              className={`${inputClass} cursor-pointer ${
+                choices[a.key] ? "" : "text-muted"
+              }`}
+            >
+              <option value="">Nobody (comes in unassigned)</option>
+              {staff.map((m) => (
+                <option
+                  key={m.id}
+                  value={m.id}
+                  disabled={m.status !== "active"}
+                >
+                  {m.name}
+                  {m.title ? ` · ${m.title}` : ""}
+                  {m.status !== "active" ? " (hasn't joined yet)" : ""}
+                </option>
+              ))}
+            </select>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// Each Freshdesk group with tickets in this import, and which of your
+// departments it is
+function TeamsTable({ groups, choices, onChange, departments }) {
+  return (
+    <>
+      <p className="-mt-2 mb-3 text-sm text-muted">
+        Which of your teams each Freshdesk group is. It's matched by name; check
+        each one.
+      </p>
+      <ul className="-mx-5 divide-y divide-line border-t border-line">
+        {groups.map((g) => (
+          <li
+            key={g.key}
+            className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">
+                {g.name || `Freshdesk group ${g.key}`}
+              </span>
+              <span className="block text-xs text-muted">
+                {g.tickets} ticket{g.tickets === 1 ? "" : "s"}
+              </span>
+            </span>
+            <select
+              aria-label={`Which team ${g.name || g.key} is`}
+              value={choices[g.key] ?? ""}
+              onChange={(e) => onChange(g.key, e.target.value)}
+              className={`${inputClass} cursor-pointer ${
+                choices[g.key] ? "" : "text-muted"
+              }`}
+            >
+              <option value="">No team yet</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// Every ticket that's about to come in, a page at a time, so you can
+// check who and which team each one goes to before importing
+function TicketList({ tickets, team }) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(30);
+  // Fewer tickets than before (e.g. a setting changed): stay in range
+  const current = Math.min(page, pageCount(tickets.length, pageSize));
+  const rows = pageOf(tickets, current, pageSize);
+  const personName = (id) =>
+    id ? (team.find((m) => m.id === id)?.name ?? "Someone") : "Unassigned";
+
+  return (
+    <>
+      <div className="-mx-5 overflow-x-auto border-y border-line">
+        <table className="w-full min-w-[40rem] text-left text-sm">
+          <thead className="bg-page text-xs text-muted">
+            <tr>
+              <th className="px-5 py-2.5 font-medium">Ticket</th>
+              <th className="px-3 py-2.5 font-medium">Customer</th>
+              <th className="px-3 py-2.5 font-medium">Assigned to</th>
+              <th className="px-3 py-2.5 font-medium">Team</th>
+              <th className="px-5 py-2.5 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((t) => (
+              <tr key={t.id} className="transition hover:bg-brand/5">
+                <td className="max-w-72 px-5 py-2.5">
+                  <span className="text-muted">#{t.id}</span>{" "}
+                  <span className="font-medium">{t.subject}</span>
+                </td>
+                <td className="px-3 py-2.5">{t.requester.name}</td>
+                <td className={`px-3 py-2.5 ${t.assignee ? "" : "text-muted"}`}>
+                  {personName(t.assignee)}
+                </td>
+                <td
+                  className={`px-3 py-2.5 ${t.department ? "" : "text-muted"}`}
+                >
+                  {findDepartment(t.department).name}
+                </td>
+                <td className="px-5 py-2.5">{STATUSES[t.status].label}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4">
+        <Pagination
+          page={current}
+          pageSize={pageSize}
+          total={tickets.length}
+          onPage={setPage}
+          onPageSize={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          what="tickets"
+        />
+      </div>
+    </>
+  );
+}
+
 // ---------- The page section ----------
 
 export default function FreshdeskImport() {
@@ -224,6 +395,10 @@ export default function FreshdeskImport() {
   const [result, setResult] = useState(null);
   const [importing, setImporting] = useState(null); // progress message
   const [importError, setImportError] = useState("");
+  // Your changes to who is who / which team is which. Anything not
+  // changed uses the guess worked out below.
+  const [peopleChanges, setPeopleChanges] = useState({});
+  const [teamChanges, setTeamChanges] = useState({});
 
   // ----- Loading data (from Freshdesk or from files) -----
 
@@ -243,6 +418,8 @@ export default function FreshdeskImport() {
     setResult(null);
     setFileError("");
     setImportError("");
+    setPeopleChanges({});
+    setTeamChanges({});
   }
 
   // Saves exactly what Freshdesk sent as a JSON file, to keep or import later
@@ -254,6 +431,7 @@ export default function FreshdeskImport() {
         contacts: source.contacts,
         tickets: source.tickets,
         agents: source.agents,
+        groups: source.groups,
       },
       `freshdesk-export-${stamp}.json`,
     );
@@ -265,7 +443,13 @@ export default function FreshdeskImport() {
     setFileError("");
     setResult(null);
 
-    const found = { tickets: [], contacts: [], companies: [], agents: [] };
+    const found = {
+      tickets: [],
+      contacts: [],
+      companies: [],
+      agents: [],
+      groups: [],
+    };
     try {
       for (const file of files) {
         const part = readExport(await readJsonFile(file));
@@ -273,6 +457,7 @@ export default function FreshdeskImport() {
         found.contacts.push(...part.contacts);
         found.companies.push(...part.companies);
         found.agents.push(...part.agents);
+        found.groups.push(...part.groups);
       }
     } catch (err) {
       setFileError(err.message);
@@ -294,6 +479,37 @@ export default function FreshdeskImport() {
   // ----- Working out what the import will do -----
   // Recalculated only when something it depends on changes, because
   // thousands of tickets take a moment to convert.
+  // The Freshdesk agents and groups in this import, and who/which team
+  // each one is (your change, or the guess)
+  const matching = useMemo(() => {
+    if (!source || !includeTickets) return null;
+    const agents = listFreshdeskAgents(
+      source.tickets,
+      ticketMapping,
+      source.agents ?? [],
+    );
+    const groups = listFreshdeskGroups(
+      source.tickets,
+      ticketMapping,
+      source.groups ?? [],
+    );
+    const people = {};
+    for (const a of agents)
+      people[a.key] = peopleChanges[a.key] ?? guessPerson(a, team);
+    const teams = {};
+    for (const g of groups)
+      teams[g.key] = teamChanges[g.key] ?? guessDepartment(g, departments);
+    return { agents, groups, people, teams };
+  }, [
+    source,
+    includeTickets,
+    ticketMapping,
+    team,
+    departments,
+    peopleChanges,
+    teamChanges,
+  ]);
+
   const plan = useMemo(() => {
     if (!source) return null;
 
@@ -303,16 +519,13 @@ export default function FreshdeskImport() {
     const customerMerge = mergeCustomers(customers, contacts.contacts, replace);
 
     const converted = includeTickets
-      ? convertTickets(
-          source.tickets,
-          ticketMapping,
-          customerMerge.list,
+      ? convertTickets(source.tickets, ticketMapping, customerMerge.list, {
+          aliases: customerMerge.aliases,
+          people: matching?.people,
+          teams: matching?.teams,
           department,
-          customerMerge.aliases,
-          source.agents ?? [],
-          team,
-        )
-      : { tickets: [], skipped: [], unmatched: new Map() };
+        })
+      : { tickets: [], skipped: [] };
     const ticketMerge = mergeTickets(tickets, converted.tickets, replace);
 
     return {
@@ -330,7 +543,7 @@ export default function FreshdeskImport() {
     ticketMapping,
     customers,
     tickets,
-    team,
+    matching,
     department,
     replace,
   ]);
@@ -368,7 +581,9 @@ export default function FreshdeskImport() {
 
   const firstContact = plan?.contacts.contacts[0];
   const firstTicket = plan?.converted.tickets[0];
-  const unmatched = plan ? [...plan.converted.unmatched] : [];
+  // Tickets that will come in with nobody assigned
+  const unassignedCount =
+    plan?.converted.tickets.filter((t) => !t.assignee).length ?? 0;
   const assigneeName = (id) =>
     id ? (team.find((m) => m.id === id)?.name ?? "Someone") : "Nobody";
 
@@ -577,10 +792,42 @@ export default function FreshdeskImport() {
             )}
           </Card>
 
+          {/* Who is who, and which team is which */}
+          {matching && matching.agents.length > 0 && (
+            <Card
+              title="People"
+              action={<Users className="h-5 w-5 text-muted" />}
+            >
+              <PeopleTable
+                agents={matching.agents}
+                choices={matching.people}
+                onChange={(key, id) =>
+                  setPeopleChanges((c) => ({ ...c, [key]: id }))
+                }
+                team={team}
+              />
+            </Card>
+          )}
+          {matching && matching.groups.length > 0 && (
+            <Card
+              title="Teams"
+              action={<Layers className="h-5 w-5 text-muted" />}
+            >
+              <TeamsTable
+                groups={matching.groups}
+                choices={matching.teams}
+                onChange={(key, id) =>
+                  setTeamChanges((c) => ({ ...c, [key]: id }))
+                }
+                departments={departments}
+              />
+            </Card>
+          )}
+
           <Card title="Options">
             <div className="-mt-2 grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>
-                Put imported tickets in team
+                Tickets with no Freshdesk group go to
                 <select
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
@@ -594,8 +841,8 @@ export default function FreshdeskImport() {
                   <option value="">No team yet</option>
                 </select>
                 <span className="text-xs font-normal text-muted">
-                  You can move them afterwards. Each ticket goes to the same
-                  person as in Freshdesk, if they're on your team.
+                  Tickets with a group go to the team picked for it in Teams.
+                  You can move any ticket afterwards.
                 </span>
               </label>
 
@@ -696,6 +943,13 @@ export default function FreshdeskImport() {
             </div>
           )}
 
+          {/* Every ticket that's coming in, a page at a time */}
+          {plan.converted.tickets.length > 0 && (
+            <Card title="Tickets being imported">
+              <TicketList tickets={plan.converted.tickets} team={team} />
+            </Card>
+          )}
+
           {/* Summary and the big button */}
           <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5">
             <p className="text-sm font-semibold">Ready to import</p>
@@ -719,29 +973,13 @@ export default function FreshdeskImport() {
                 </ul>
               </details>
             )}
-            {unmatched.length > 0 && (
-              <details className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
-                <summary className="flex cursor-pointer items-start gap-2">
-                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {unmatched.reduce((n, [, count]) => n + count, 0)} tickets
-                    were assigned in Freshdesk to people who aren't on your team
-                    yet. They'll come in unassigned.
-                  </span>
-                </summary>
-                <ul className="mt-2 flex list-disc flex-col gap-1 pl-5">
-                  {unmatched.map(([name, count]) => (
-                    <li key={name}>
-                      {name}: {count} ticket{count === 1 ? "" : "s"}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2">
-                  Best fix: invite them on the Team page with the same email
-                  they use in Freshdesk, and import once they've joined. You can
-                  also assign these tickets by hand afterwards.
-                </p>
-              </details>
+            {unassignedCount > 0 && (
+              <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                {unassignedCount} ticket{unassignedCount === 1 ? "" : "s"} will
+                come in with nobody assigned. To change that, pick who each
+                Freshdesk agent is in People above.
+              </p>
             )}
             {importError && (
               <p

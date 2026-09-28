@@ -8,6 +8,7 @@ const PER_PAGE = 100; // the most Freshdesk sends per page
 function describe(path) {
   if (path.startsWith("/agents/me")) return "your own agent profile";
   if (path.startsWith("/agents")) return "the list of agents";
+  if (path.startsWith("/groups")) return "the list of groups";
   if (/^\/tickets\/\d+\/conversations/.test(path))
     return "a ticket's notes and replies";
   if (path.startsWith("/tickets")) return "tickets";
@@ -116,8 +117,8 @@ export async function testConnection(connection) {
   };
 }
 
-// Pulls companies, contacts, tickets, agents and (optionally) each
-// ticket's notes and replies. `maxTickets` = how many of the newest tickets to get.
+// Pulls companies, contacts, tickets, agents, groups and (optionally)
+// each ticket's notes and replies. `maxTickets` = how many of the newest tickets to get.
 // `onProgress` gets a short message to show while it works.
 export async function fetchEverything(
   connection,
@@ -159,6 +160,16 @@ export async function fetchEverything(
     });
   }
   const agentNames = new Map(agents.map((a) => [a.id, a.contact?.name]));
+
+  // Groups (Freshdesk's teams), so each ticket can go to the right
+  // department here. Same as agents: if it's not allowed, carry on.
+  onProgress({ message: "Getting groups…" });
+  let groups = [];
+  try {
+    groups = await getAll(connection, "/groups", options);
+  } catch (err) {
+    if (err.name === "AbortError" || err.status !== 403) throw err;
+  }
 
   // 3. Contacts and companies. For a small test, only the ones on those
   // tickets. For everything, the full lists.
@@ -228,5 +239,11 @@ export async function fetchEverything(
     email: a.contact?.email ?? "",
   }));
 
-  return { tickets, contacts, companies, agents: agentList };
+  return {
+    tickets,
+    contacts,
+    companies,
+    agents: agentList,
+    groups: groups.map((g) => ({ id: g.id, name: g.name ?? "" })),
+  };
 }

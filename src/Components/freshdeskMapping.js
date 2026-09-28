@@ -94,8 +94,14 @@ export const TICKET_FIELDS = [
   {
     key: "assignee",
     label: "Assigned to",
-    hint: "Matched to your team by email. No match = unassigned.",
+    hint: "Who had it in Freshdesk. Pick who that is below, in People.",
     guesses: ["responder_id", "assignee", "responder"],
+  },
+  {
+    key: "group",
+    label: "Team",
+    hint: "Freshdesk's group. Pick which of your teams it is below, in Teams.",
+    guesses: ["group_id", "group"],
   },
   {
     key: "source",
@@ -156,7 +162,13 @@ export const FRESHDESK_SOURCES = {
 // uploaded. Works with { tickets: [...], contacts: [...] }, or a plain
 // list of either.
 export function readExport(json) {
-  const found = { tickets: [], contacts: [], companies: [], agents: [] };
+  const found = {
+    tickets: [],
+    contacts: [],
+    companies: [],
+    agents: [],
+    groups: [],
+  };
   const lists = Array.isArray(json)
     ? [json]
     : Object.entries(json ?? {}).map(([name, value]) => {
@@ -164,6 +176,10 @@ export function readExport(json) {
         const key = name.toLowerCase();
         if (Array.isArray(value) && key.includes("compan")) {
           found.companies.push(...value);
+          return [];
+        }
+        if (Array.isArray(value) && key.includes("group")) {
+          found.groups.push(...value);
           return [];
         }
         if (Array.isArray(value) && key.includes("agent")) {
@@ -363,26 +379,129 @@ function findCustomer(value, byId, byEmail) {
   );
 }
 
-// Works out who on your team a ticket goes to. `value` is Freshdesk's
-// agent ID (responder_id), an email, or an object with an email.
-// `freshdeskAgents`: ID -> { name, email } from Freshdesk.
-// `staffByEmail`: email -> your team member.
-// Returns { member } when matched, { name } when Freshdesk had someone
-// who isn't on your team, or {} when it wasn't assigned.
-function findAssignee(value, freshdeskAgents, staffByEmail) {
-  if (value === undefined || value === null || value === "") return {};
-  // Freshdesk's agent ID: look up who that is
-  const agent =
-    typeof value === "object"
-      ? value
-      : String(value).includes("@")
-        ? { email: String(value) }
-        : freshdeskAgents.get(Number(value));
-  const email = agent?.email ?? "";
-  const name = agent?.name ?? "";
-  const member = staffByEmail.get(email.trim().toLowerCase());
-  if (member) return { member };
-  return { name: name || email || `Freshdesk agent ${value}` };
+// ---------- People: Freshdesk agents -> your team ----------
+// Freshdesk says who had a ticket with an agent ID (responder_id). The
+// page shows every Freshdesk agent next to a list of your team, so you
+// can say who is who. It's worked out for you where it can be:
+// same email first, then the same name, then their job title here.
+
+// Makes a key for one Freshdesk agent from whatever the ticket has: an
+// agent ID, an email, or an object with an id/email/name
+function agentKey(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "object") {
+    if (value.id !== undefined && value.id !== null) return String(value.id);
+    return value.email ? String(value.email).toLowerCase() : null;
+  }
+  return String(value).toLowerCase();
+}
+
+// Compare names and titles loosely: case, spaces and punctuation ignored
+const loose = (text) =>
+  String(text ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+// Every Freshdesk agent who has tickets in this import, with their name,
+// email and how many tickets they had. Agents missing from Freshdesk's
+// agent list (e.g. the list wasn't allowed) still show, by their ID.
+export function listFreshdeskAgents(tickets, mapping, agents) {
+  const known = new Map();
+  for (const a of agents) {
+    known.set(String(a.id), {
+      name: a.name ?? a.contact?.name ?? "",
+      email: String(a.email ?? a.contact?.email ?? "").toLowerCase(),
+    });
+  }
+
+  const counts = new Map();
+  for (const r of tickets) {
+    const value = pick(r, mapping, "assignee");
+    const key = agentKey(value);
+    if (!key) continue;
+    if (!counts.has(key)) {
+      const info =
+        known.get(key) ??
+        (typeof value === "object"
+          ? {
+              name: value.name ?? "",
+              email: String(value.email ?? "").toLowerCase(),
+            }
+          : key.includes("@")
+            ? { name: "", email: key }
+            : { name: "", email: "" });
+      counts.set(key, { key, ...info, tickets: 0 });
+    }
+    counts.get(key).tickets += 1;
+  }
+  return [...counts.values()].sort((a, b) => b.tickets - a.tickets);
+}
+
+// Best guess for who a Freshdesk agent is on your team. Only active
+// staff can be given tickets. Returns their ID, or "" for nobody.
+export function guessPerson(agent, team) {
+  const staff = team.filter(
+    (m) => m.role !== "customer" && m.status === "active",
+  );
+  const byEmail = staff.find(
+    (m) => agent.email && String(m.email).toLowerCase() === agent.email,
+  );
+  if (byEmail) return byEmail.id;
+  const name = loose(agent.name);
+  if (!name) return "";
+  const byName = staff.find((m) => loose(m.name) === name);
+  if (byName) return byName.id;
+  // e.g. "IT Support Tech" in Freshdesk, and your job title here
+  const byTitle = staff.filter((m) => loose(m.title) === name);
+  return byTitle.length === 1 ? byTitle[0].id : "";
+}
+
+// ---------- Teams: Freshdesk groups -> your departments ----------
+
+// Every Freshdesk group that has tickets in this import, with its name
+// and how many tickets it has
+export function listFreshdeskGroups(tickets, mapping, groups) {
+  const names = new Map(groups.map((g) => [String(g.id), g.name ?? ""]));
+  const counts = new Map();
+  for (const r of tickets) {
+    const value = pick(r, mapping, "group");
+    if (value === undefined || value === null || value === "") continue;
+    const key =
+      typeof value === "object"
+        ? String(value.id ?? value.name)
+        : String(value);
+    if (!counts.has(key)) {
+      counts.set(key, {
+        key,
+        name:
+          names.get(key) ??
+          (typeof value === "object"
+            ? (value.name ?? "")
+            : /^\d+$/.test(key)
+              ? ""
+              : key),
+        tickets: 0,
+      });
+    }
+    counts.get(key).tickets += 1;
+  }
+  return [...counts.values()].sort((a, b) => b.tickets - a.tickets);
+}
+
+// Best guess for which of your departments a Freshdesk group is: the
+// same name, or one name containing the other ("Support" and "IT
+// Support"). Returns its ID, or "" for no team.
+export function guessDepartment(group, departments) {
+  const name = loose(group.name);
+  if (!name) return "";
+  const same = departments.find((d) => loose(d.name) === name);
+  if (same) return same.id;
+  const close = departments.filter((d) => {
+    const other = loose(d.name);
+    return other.includes(name) || name.includes(other);
+  });
+  return close.length === 1 ? close[0].id : "";
 }
 
 // Freshdesk conversations -> this app's messages
@@ -403,21 +522,17 @@ function convertMessages(list, customerName) {
 }
 
 // `customers` must already include the contacts being imported.
-// `aliases` (from mergeCustomers) points Freshdesk contact IDs at the
-// customer they were matched to.
-// `freshdeskAgents`: Freshdesk's agents ({ id, name, email }), and
-// `team`: your team, so each ticket goes to the same person as in
-// Freshdesk (matched by email). Only active staff can be given tickets.
-// Returns the tickets, the ones skipped, and `unmatched`: Freshdesk
-// agents who aren't on your team -> how many tickets they had.
+// Options:
+//   aliases     (from mergeCustomers) Freshdesk contact ID -> the
+//               customer they were matched to
+//   people      Freshdesk agent key -> your team member's ID ("" = nobody)
+//   teams       Freshdesk group key -> your department's ID ("" = no team)
+//   department  the team for tickets that have no Freshdesk group
 export function convertTickets(
   records,
   mapping,
   customers,
-  department,
-  aliases = new Map(),
-  freshdeskAgents = [],
-  team = [],
+  { aliases = new Map(), people = {}, teams = {}, department = "" } = {},
 ) {
   const byId = new Map(customers.map((c) => [c.id, c]));
   for (const [id, customer] of aliases) byId.set(id, customer);
@@ -426,22 +541,6 @@ export function convertTickets(
     if (c.email) byEmail.set(c.email, c);
     for (const e of c.extraEmails ?? []) byEmail.set(e, c);
   }
-
-  const agentsById = new Map(
-    freshdeskAgents.map((a) => [
-      Number(a.id),
-      {
-        name: a.name ?? a.contact?.name ?? "",
-        email: a.email ?? a.contact?.email ?? "",
-      },
-    ]),
-  );
-  const staffByEmail = new Map(
-    team
-      .filter((m) => m.role !== "customer" && m.status === "active")
-      .map((m) => [String(m.email).toLowerCase(), m]),
-  );
-  const unmatched = new Map();
 
   const result = [];
   const skipped = [];
@@ -494,15 +593,15 @@ export function convertTickets(
 
     const firstReply = conversation.find((m) => m.kind === "agent");
 
-    // Who it goes to. Someone who isn't on your team: unassigned, and
-    // counted so the page can tell you who to invite.
-    const assigned = findAssignee(
-      pick(r, mapping, "assignee"),
-      agentsById,
-      staffByEmail,
-    );
-    if (assigned.name)
-      unmatched.set(assigned.name, (unmatched.get(assigned.name) ?? 0) + 1);
+    // Who it goes to, and which team: from the People and Teams choices
+    const agent = agentKey(pick(r, mapping, "assignee"));
+    const groupValue = pick(r, mapping, "group");
+    const group =
+      groupValue === undefined || groupValue === null || groupValue === ""
+        ? null
+        : typeof groupValue === "object"
+          ? String(groupValue.id ?? groupValue.name)
+          : String(groupValue);
 
     const ticket = {
       id,
@@ -510,10 +609,10 @@ export function convertTickets(
       description,
       status,
       priority,
-      department: department || null,
+      department: (group !== null ? teams[group] : department) || null,
       customerId: customer.id,
       requester: customer,
-      assignee: assigned.member?.id ?? null,
+      assignee: (agent && people[agent]) || null,
       source: mapping.source.on
         ? toSource(pick(r, mapping, "source"))
         : "email",
@@ -537,7 +636,7 @@ export function convertTickets(
     }
     result.push(ticket);
   }
-  return { tickets: result, skipped, unmatched };
+  return { tickets: result, skipped };
 }
 
 // ---------- A small example file, to test with ----------
@@ -545,6 +644,7 @@ export function convertTickets(
 export const EXAMPLE_EXPORT = {
   companies: [{ id: 501, name: "Spice Isle Traders" }],
   agents: [{ id: 7001, name: "Alex Charles", email: "alex@example.com" }],
+  groups: [{ id: 301, name: "Support" }],
   contacts: [
     {
       id: 90001,
@@ -573,6 +673,7 @@ export const EXAMPLE_EXPORT = {
         "The front desk printer shows offline since this morning.",
       requester_id: 90001,
       responder_id: 7001,
+      group_id: 301,
       source: 1,
       tags: ["printer"],
       status: 4,
