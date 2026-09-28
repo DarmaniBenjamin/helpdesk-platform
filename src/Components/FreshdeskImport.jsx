@@ -325,7 +325,7 @@ function TicketList({ tickets, team }) {
   return (
     <>
       <div className="-mx-5 overflow-x-auto border-y border-line">
-        <table className="w-full min-w-[40rem] text-left text-sm">
+        <table className="w-full min-w-160 text-left text-sm">
           <thead className="bg-page text-xs text-muted">
             <tr>
               <th className="px-5 py-2.5 font-medium">Ticket</th>
