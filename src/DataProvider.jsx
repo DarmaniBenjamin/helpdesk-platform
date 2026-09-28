@@ -2,65 +2,14 @@ import { useEffect, useState } from "react";
 import { DataContext } from "./useData";
 import { api } from "./api";
 import { STARTING_ANSWERS } from "./Components/Knowledge";
-import {
-  tickets as startingTickets,
-  SLA_HOURS,
-  STATUSES,
-  PRIORITIES,
-  HOUR,
-  isDone,
-  findAgent,
-  findDepartment,
-  syncDirectory,
-} from "./data";
+import { syncDirectory } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
 // ---------- What comes from the backend ----------
-// Signing in, the team, departments and customers come from the server
-// (see the server folder), which stores them in the database. Tickets,
-// rules, automations and the Knowledge Base are still example data for
-// now; they move to the database next.
-
-// Setting a status also sets/clears the resolved and closed times
-function applyStatus(ticket, status, now) {
-  const next = { ...ticket, status };
-  if (isDone(next)) {
-    next.resolvedAt ??= now;
-    if (status === "closed") next.closedAt ??= now;
-  } else {
-    next.resolvedAt = null; // reopened
-    next.closedAt = null;
-  }
-  return next;
-}
-
-// Turns a change into a line for the ticket's history, e.g. "changed status to Resolved"
-function describeChange(field, value) {
-  switch (field) {
-    case "status":
-      return `changed status to ${STATUSES[value].label}`;
-    case "priority":
-      return `changed priority to ${PRIORITIES[value].label}`;
-    case "department":
-      return `moved the ticket to ${findDepartment(value).name}`;
-    case "assignee":
-      return value
-        ? `assigned the ticket to ${findAgent(value).name}`
-        : "unassigned the ticket";
-    case "dueBy":
-      return `changed the due date to ${new Date(value).toLocaleString(
-        "en-US",
-        {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        },
-      )}`;
-    default:
-      return `updated ${field}`;
-  }
-}
+// Signing in, the team, departments, customers and tickets come from the
+// server (see the server folder), which stores them in the database.
+// Rules, automations, the Knowledge Base and settings are still example
+// data for now; they move to the database next.
 
 // Assignment rules to start with. They're saved and shown, but don't
 // run automatically yet: that gets decided later.
@@ -186,9 +135,9 @@ const STARTING_SETTINGS = {
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
-  const [tickets, setTickets] = useState(startingTickets);
-  // Customers, the team and departments load from the server once
-  // you're signed in
+  // Tickets, customers, the team and departments load from the server
+  // once you're signed in
+  const [tickets, setTickets] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [rules, setRules] = useState(STARTING_RULES);
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
@@ -201,27 +150,25 @@ export default function DataProvider({ children }) {
   // userId = the account that's signed in, or null.
   const [auth, setAuth] = useState({ checked: false, userId: null });
 
-  // Loads the team, departments and customers for the person who just
-  // signed in. Customers only get themselves (they never see the staff
-  // list or other customers).
+  // Loads everything for the person who just signed in. Customers only
+  // get themselves and their own tickets (they never see the staff list,
+  // other customers, internal notes or history lines).
   async function loadDirectory(user) {
-    const [teamList, departmentList, customerList] = await Promise.all([
-      user.role === "customer" ? [user] : api("/team"),
-      api("/departments"),
-      api("/customers"),
-    ]);
+    const [teamList, departmentList, customerList, ticketList] =
+      await Promise.all([
+        user.role === "customer" ? [user] : api("/team"),
+        api("/departments"),
+        api("/customers"),
+        api("/tickets"),
+      ]);
     setTeam(teamList);
     setDepartments(departmentList);
     setCustomers(customerList);
+    setTickets(ticketList);
 
-    // The example tickets and rules were assigned to example people who
-    // don't exist any more, so those go back to "Unassigned"
+    // The example rules were assigned to example people who don't exist
+    // any more, so those go back to "anyone on the team"
     const ids = new Set(teamList.map((m) => m.id));
-    setTickets((list) =>
-      list.map((t) =>
-        t.assignee && !ids.has(t.assignee) ? { ...t, assignee: null } : t,
-      ),
-    );
     setRules((list) =>
       list.map((r) =>
         r.agent && !ids.has(r.agent) ? { ...r, agent: null } : r,
@@ -350,6 +297,7 @@ export default function DataProvider({ children }) {
     setAuth((a) => ({ ...a, userId: null }));
     setTeam([]);
     setCustomers([]);
+    setTickets([]);
   }
 
   // Change your own password. Throws with the server's message if the
@@ -410,11 +358,10 @@ export default function DataProvider({ children }) {
   }
 
   // Replaces everything with what's in a backup. Anything the backup
-  // doesn't have is left as it is. The team, departments and customers
-  // aren't replaced: they live in the database now (database backups are
-  // set up in a later step).
+  // doesn't have is left as it is. Tickets, customers, the team and
+  // departments aren't replaced: they live in the database now (database
+  // backups are set up in a later step).
   function restoreBackup(data) {
-    setTickets(data.tickets);
     if (data.rules) setRules(data.rules);
     if (data.automations) setAutomations(data.automations);
     if (data.answers) setAnswers(data.answers);
@@ -424,7 +371,7 @@ export default function DataProvider({ children }) {
   // Saves the result of a Freshdesk import (see freshdeskMapping.js).
   // Tickets keep a copy of their customer, so those are refreshed too.
   // (For now this only changes what's on screen. Importing into the
-  // database comes with the tickets step.)
+  // database is the next step.)
   function saveImport(newCustomers, newTickets) {
     const byId = new Map(newCustomers.map((c) => [c.id, c]));
     setCustomers(newCustomers);
@@ -490,35 +437,16 @@ export default function DataProvider({ children }) {
   }
 
   // Takes someone off the team (or cancels their invite). Their sign-in
-  // stops working straight away. Their unfinished tickets become
-  // unassigned, with a line in each ticket's history saying why.
+  // stops working straight away. The server makes their unfinished
+  // tickets unassigned (with a line in each ticket's history saying
+  // why), so the tickets are loaded again afterwards.
   async function removeMember(id) {
     const member = team.find((m) => m.id === id);
     await api(`/team/${id}`, { method: "DELETE" });
     setTeam((list) => list.filter((m) => m.id !== id));
-
-    if (!member || member.status !== "active") return;
-    const time = Date.now();
-    setTickets((list) =>
-      list.map((t) => {
-        if (t.assignee !== id || isDone(t)) return t;
-        return {
-          ...t,
-          assignee: null,
-          updatedAt: time,
-          messages: [
-            ...t.messages,
-            {
-              id: t.messages.length + 1,
-              kind: "event",
-              author: myName,
-              body: `unassigned the ticket (${member.name} was removed from the team)`,
-              at: time,
-            },
-          ],
-        };
-      }),
-    );
+    if (member?.status === "active" && member.role !== "customer") {
+      setTickets(await api("/tickets"));
+    }
   }
 
   // ---------- Saved answers (knowledge base) ----------
@@ -667,159 +595,84 @@ export default function DataProvider({ children }) {
   }
 
   // ---------- Tickets ----------
+  // Every change goes to the server, which saves it, writes the ticket's
+  // history, and sends back the whole updated ticket to show. If the
+  // server says no, these throw an error with its message.
 
-  // `source` is where it came from: "agent" (made by staff) or "portal"
-  // (sent by the customer from the customer portal)
-  function addTicket({
+  // Puts the server's copy of a ticket on screen
+  function showTicket(ticket) {
+    setTickets(
+      (list) =>
+        list.some((t) => t.id === ticket.id)
+          ? list.map((t) => (t.id === ticket.id ? ticket : t))
+          : [ticket, ...list], // new tickets go first
+    );
+    return ticket;
+  }
+
+  // A new ticket. Admins pick the customer, department, priority and due
+  // time; a customer sending a request from the portal only gives the
+  // subject and description (the server fills in the rest).
+  async function addTicket({
     customer,
     subject,
     department,
     priority,
     dueBy,
     description,
-    source = "agent",
   }) {
-    const now = Date.now();
-    const ticket = {
-      id: Math.max(...tickets.map((t) => t.id)) + 1,
-      subject,
-      description,
-      status: "open",
-      priority,
-      department,
-      customerId: customer.id,
-      requester: customer,
-      assignee: null,
-      source,
-      createdAt: now,
-      firstResponseDue: now + SLA_HOURS[priority].firstResponse * HOUR,
-      dueBy,
-      firstRespondedAt: null,
-      resolvedAt: null,
-      closedAt: null,
-      messages: [
-        {
-          id: 1,
-          kind: "customer",
-          author: customer.name,
-          body: description,
-          at: now,
+    return showTicket(
+      await api("/tickets", {
+        method: "POST",
+        body: {
+          customerId: customer?.id,
+          subject,
+          department,
+          priority,
+          dueBy,
+          description,
         },
-      ],
-      updatedAt: now,
-    };
-    setTickets((list) => [ticket, ...list]); // newest first
-    return ticket;
-  }
-
-  // A customer's star rating (1-5) and comment on a finished ticket.
-  // Shows up on the Performance & Feedback page.
-  function rateTicket(id, rating, comment) {
-    setTickets((list) =>
-      list.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              feedback: { rating, comment: comment.trim(), at: Date.now() },
-            }
-          : t,
-      ),
-    );
-  }
-
-  // Ticket Review: an Admin ticks off a finished ticket once they've checked
-  // it (or unticks it). Recorded on the ticket and in its history.
-  function markReviewed(id, reviewed) {
-    const now = Date.now();
-    setTickets((list) =>
-      list.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              review: reviewed ? { by: myName, at: now } : null,
-              messages: [
-                ...t.messages,
-                {
-                  id: t.messages.length + 1,
-                  kind: "event",
-                  author: myName,
-                  body: reviewed
-                    ? "marked the ticket as reviewed"
-                    : "took the review tick off",
-                  at: now,
-                },
-              ],
-            }
-          : t,
-      ),
-    );
-  }
-
-  // Change fields on a ticket, e.g. updateTicket(4819, { status: "resolved" }).
-  // Each change is also written into the ticket's history.
-  function updateTicket(id, changes) {
-    const now = Date.now();
-    setTickets((list) =>
-      list.map((t) => {
-        if (t.id !== id) return t;
-        let next = { ...t, ...changes, updatedAt: now };
-        if (changes.status) next = applyStatus(next, changes.status, now);
-
-        const events = Object.entries(changes)
-          .filter(([field, value]) => t[field] !== value)
-          .map(([field, value], i) => ({
-            id: t.messages.length + i + 1,
-            kind: "event",
-            author: myName,
-            // Picking up a ticket yourself reads "took the ticket"
-            body:
-              field === "assignee" && value === me?.id
-                ? "took the ticket"
-                : describeChange(field, value),
-            at: now,
-          }));
-        next.messages = [...t.messages, ...events];
-        return next;
       }),
     );
   }
 
-  // Add a reply ("agent") or internal note ("note"), and optionally change the status
-  function addMessage(id, kind, body, newStatus) {
-    const now = Date.now();
-    setTickets((list) =>
-      list.map((t) => {
-        if (t.id !== id) return t;
-        const messages = [
-          ...t.messages,
-          {
-            id: t.messages.length + 1,
-            kind,
-            author: myName,
-            body,
-            at: now,
-          },
-        ];
-        let next = { ...t, messages, updatedAt: now };
+  // Change fields on a ticket, e.g. updateTicket(4819, { status: "resolved" }).
+  // Fields: status, priority, department, assignee, dueBy
+  async function updateTicket(id, changes) {
+    return showTicket(
+      await api(`/tickets/${id}`, { method: "PATCH", body: changes }),
+    );
+  }
 
-        // The first reply to the customer counts as the "first response"
-        if (kind === "agent" && !t.firstRespondedAt)
-          next.firstRespondedAt = now;
+  // Add a reply ("agent") or internal note ("note"), and optionally change
+  // the status at the same time. Customers' replies are always "customer".
+  async function addMessage(id, kind, body, newStatus) {
+    return showTicket(
+      await api(`/tickets/${id}/messages`, {
+        method: "POST",
+        body: { kind, body, status: newStatus || undefined },
+      }),
+    );
+  }
 
-        if (newStatus && newStatus !== t.status) {
-          next = applyStatus(next, newStatus, now);
-          next.messages = [
-            ...messages,
-            {
-              id: messages.length + 1,
-              kind: "event",
-              author: myName,
-              body: describeChange("status", newStatus),
-              at: now,
-            },
-          ];
-        }
-        return next;
+  // A customer's star rating (1-5) and comment on a finished ticket.
+  // Shows up on the Performance & Feedback page.
+  async function rateTicket(id, rating, comment) {
+    return showTicket(
+      await api(`/tickets/${id}/feedback`, {
+        method: "POST",
+        body: { rating, comment },
+      }),
+    );
+  }
+
+  // Ticket Review: an Admin ticks off a finished ticket once they've
+  // checked it (or unticks it). Recorded on the ticket and in its history.
+  async function markReviewed(id, reviewed) {
+    return showTicket(
+      await api(`/tickets/${id}/review`, {
+        method: "POST",
+        body: { reviewed },
       }),
     );
   }

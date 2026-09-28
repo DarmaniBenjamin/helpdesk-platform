@@ -51,6 +51,8 @@ function Rating({ ticket }) {
   const [stars, setStars] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (ticket.feedback) {
     return (
@@ -80,9 +82,17 @@ function Rating({ ticket }) {
 
   return (
     <form
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        if (stars) rateTicket(ticket.id, stars, comment);
+        if (!stars || busy) return;
+        setBusy(true);
+        setError("");
+        try {
+          await rateTicket(ticket.id, stars, comment); // saves it
+        } catch (err) {
+          setError(err.message);
+          setBusy(false);
+        }
       }}
       className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5"
     >
@@ -116,12 +126,14 @@ function Rating({ ticket }) {
             placeholder="Anything you'd like to add? (optional)"
             className={`${inputClass} h-auto resize-y py-2.5`}
           />
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <div className="grid sm:flex sm:justify-end">
             <button
               type="submit"
-              className="h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+              disabled={busy}
+              className="h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
             >
-              Send feedback
+              {busy ? "Sending…" : "Send feedback"}
             </button>
           </div>
         </>
@@ -137,6 +149,8 @@ export default function PortalTicket() {
   const { state } = useLocation();
   const { me, tickets, addMessage, updateTicket } = useData();
   const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(""); // if something didn't save
 
   const ticket = tickets.find((t) => String(t.id) === id);
 
@@ -159,18 +173,33 @@ export default function PortalTicket() {
     (m) => m.kind === "customer" || m.kind === "agent",
   );
 
-  function sendReply(e) {
+  // A reply on a request we're waiting on, or one marked resolved, puts
+  // it back in the team's queue (the server does that). What was written
+  // is only cleared once it's saved.
+  async function sendReply(e) {
     e.preventDefault();
     const body = reply.trim();
-    if (!body) return;
-    // A reply on a request we're waiting on, or one marked resolved,
-    // puts it back in the team's queue
-    const reopen = ["waiting", "resolved"].includes(ticket.status)
-      ? "open"
-      : undefined;
-    addMessage(ticket.id, "customer", body, reopen);
-    setReply("");
-    document.activeElement?.blur();
+    if (!body || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await addMessage(ticket.id, "customer", body);
+      setReply("");
+      document.activeElement?.blur();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markFixed() {
+    setError("");
+    try {
+      await updateTicket(ticket.id, { status: "resolved" });
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   // Priority, topic and who's assigned are for the team, so they
@@ -204,6 +233,14 @@ export default function PortalTicket() {
           Thanks, we've got your request. You'll see our replies here.
         </p>
       )}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"
+        >
+          {error}
+        </p>
+      )}
       {ticket.status === "waiting" && (
         <p className="flex items-start gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <MessageCircleReply className="mt-0.5 h-4 w-4 shrink-0" />
@@ -225,7 +262,7 @@ export default function PortalTicket() {
           {!done && (
             <button
               type="button"
-              onClick={() => updateTicket(ticket.id, { status: "resolved" })}
+              onClick={markFixed}
               className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
             >
               <CircleCheck className="h-4 w-4" />
@@ -276,11 +313,11 @@ export default function PortalTicket() {
               <div className="grid sm:flex sm:justify-end">
                 <button
                   type="submit"
-                  disabled={!reply.trim()}
+                  disabled={!reply.trim() || busy}
                   className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" />
-                  Send reply
+                  {busy ? "Sending…" : "Send reply"}
                 </button>
               </div>
             </form>

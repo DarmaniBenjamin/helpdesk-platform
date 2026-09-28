@@ -21,6 +21,7 @@ import {
   startSession,
 } from "./auth.js";
 import { ADMINS, STAFF, canManage, pickableRoles } from "./permissions.js";
+import { unassignTicketsOf } from "./tickets.js";
 import {
   BadInput,
   cleanEmail,
@@ -230,11 +231,14 @@ teamRouter.patch("/:id", requireRole(...ADMINS), async (req, res) => {
 });
 
 // Remove someone from the team (or cancel their invite). Their sign-ins
-// and links stop working straight away.
+// and links stop working straight away, and their unfinished tickets
+// become unassigned.
 teamRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
   const user = await findUser(req.params.id);
   if (!canManage(req.user, user))
     throw new BadInput("You can't remove this person.", 403);
+  if (user.status === "active" && user.role !== "customer")
+    await unassignTicketsOf(user, req.user);
   await db.delete(users).where(eq(users.id, user.id));
   res.json({ ok: true });
 });

@@ -23,6 +23,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // "Forgot password?" only shows once a sign-in hasn't worked
+  const [showForgot, setShowForgot] = useState(false);
 
   // Sign out once, as soon as we know who's signed in. After that, this
   // page is just for signing in.
@@ -53,6 +55,8 @@ export default function Login() {
     } catch (err) {
       setError(err.message);
       setBusy(false);
+      // A wrong email or password (not "can't reach the server")
+      if (err.status === 401) setShowForgot(true);
     }
   }
 
@@ -136,7 +140,7 @@ export default function Login() {
         </label>
 
         {/* Not one big <label>, so clicking "Password" doesn't press
-            the "Forgot password?" button */}
+            the "Forgot password?" button under it */}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="password" className="text-sm font-medium">
             Password
@@ -151,18 +155,21 @@ export default function Login() {
               setError("");
             }}
           />
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setView("reset");
-                setError("");
-              }}
-              className="cursor-pointer text-xs text-brand hover:underline"
-            >
-              Forgot password?
-            </button>
-          </div>
+          {/* Only after a sign-in hasn't worked */}
+          {showForgot && (
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setView("reset");
+                  setError("");
+                }}
+                className="cursor-pointer text-xs text-brand hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
         </div>
 
         {error && (

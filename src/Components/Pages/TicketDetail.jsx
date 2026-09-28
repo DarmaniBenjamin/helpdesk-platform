@@ -13,6 +13,7 @@ import {
   TicketX,
   BookOpen,
   CircleCheck,
+  TriangleAlert,
   Hand,
 } from "lucide-react";
 import Avatar from "../Avatar";
@@ -122,17 +123,30 @@ function Composer({ ticket, onSend }) {
   const resolving = thenStatus === "resolved" || thenStatus === "closed";
   const saveToAnswers = saveChoice ?? resolving;
 
-  function send() {
-    if (!body.trim()) return;
-    onSend(
-      kind,
-      body.trim(),
-      thenStatus || null,
-      kind === "note" && saveToAnswers,
-    );
-    setBody("");
-    setThenStatus("");
-    setSaveChoice(null);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+
+  // Saves to the database. What you wrote is only cleared once it's
+  // saved, so nothing is lost if it doesn't go through.
+  async function send() {
+    if (!body.trim() || sending) return;
+    setSending(true);
+    setSendError("");
+    try {
+      await onSend(
+        kind,
+        body.trim(),
+        thenStatus || null,
+        kind === "note" && saveToAnswers,
+      );
+      setBody("");
+      setThenStatus("");
+      setSaveChoice(null);
+    } catch (err) {
+      setSendError(err.message);
+    } finally {
+      setSending(false);
+    }
   }
 
   const isNote = kind === "note";
@@ -215,7 +229,7 @@ function Composer({ ticket, onSend }) {
         <button
           type="button"
           onClick={send}
-          disabled={!body.trim()}
+          disabled={!body.trim() || sending}
           className={`flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 text-sm font-medium text-white transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 ${
             isNote
               ? "bg-amber-500 hover:bg-amber-500/90"
@@ -223,9 +237,14 @@ function Composer({ ticket, onSend }) {
           }`}
         >
           <Send className="h-4 w-4" />
-          {isNote ? "Add note" : "Send reply"}
+          {sending ? "Sending…" : isNote ? "Add note" : "Send reply"}
         </button>
       </div>
+      {sendError && (
+        <p className="border-t border-line px-4 py-2.5 text-sm text-red-500">
+          {sendError}
+        </p>
+      )}
     </div>
   );
 }
@@ -345,6 +364,8 @@ export default function TicketDetail() {
   const { me, tickets, updateTicket, addMessage, answers, addAnswer } =
     useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
+  // A message if a change (status, assignee...) didn't save
+  const [changeError, setChangeError] = useState("");
   const [savedAnswer, setSavedAnswer] = useState(null); // the answer just saved from a note
 
   const ticket = tickets.find((t) => t.id === Number(id));
@@ -390,8 +411,10 @@ export default function TicketDetail() {
     .slice(0, 3)
     .map((s) => s.answer);
 
-  function handleSend(kind, body, status, saveToAnswers) {
-    addMessage(ticket.id, kind, body, status);
+  // Sends a reply or note to the server (throws if it doesn't save, so
+  // the reply box can keep what was written)
+  async function handleSend(kind, body, status, saveToAnswers) {
+    await addMessage(ticket.id, kind, body, status);
     if (saveToAnswers) {
       // The ticket's subject becomes the title, the ticket's description the problem,
       // and the note the fix. Keywords are picked from all three.
@@ -440,7 +463,15 @@ export default function TicketDetail() {
           </div>
         </div>
       </div>
-
+      {changeError && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+        >
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {changeError}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[1fr_20rem]">
         {/* Right side on desktop: ticket details and customer.
             Desktop: stays pinned in view while the conversation scrolls,
@@ -464,7 +495,14 @@ export default function TicketDetail() {
               <Properties
                 ticket={ticket}
                 me={me}
-                onChange={(changes) => updateTicket(ticket.id, changes)}
+                onChange={async (changes) => {
+                  setChangeError("");
+                  try {
+                    await updateTicket(ticket.id, changes);
+                  } catch (err) {
+                    setChangeError(err.message);
+                  }
+                }}
               />
             </div>
           </div>

@@ -99,22 +99,26 @@ export default function NewTicketModal({ onClose }) {
         setBusy(false);
         return;
       }
-      setBusy(false);
       isNew = true;
     }
 
-    // The ticket fields, using the form fields' "name"s
-    const ticket = addTicket({
-      customer,
-      subject: form.get("subject").trim(),
-      department: form.get("department"),
-      description: form.get("description").trim(),
-      priority,
-      dueBy: new Date(dueBy).getTime(),
-    });
-
-    document.activeElement?.blur();
-    setResult({ ticket, isNew });
+    // Then the ticket, using the form fields' "name"s
+    setBusy(true);
+    try {
+      const ticket = await addTicket({
+        customer,
+        subject: form.get("subject").trim(),
+        department: form.get("department"),
+        description: form.get("description").trim(),
+        priority,
+        dueBy: new Date(dueBy).getTime(),
+      });
+      document.activeElement?.blur();
+      setResult({ ticket, isNew });
+    } catch (err) {
+      setCustomerError(err.message);
+      setBusy(false);
+    }
   }
 
   function viewInInbox() {
@@ -193,7 +197,7 @@ export default function NewTicketModal({ onClose }) {
             disabled={busy}
             className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
           >
-            Create ticket
+            {busy ? "Saving…" : "Create ticket"}
           </button>
         </>
       }

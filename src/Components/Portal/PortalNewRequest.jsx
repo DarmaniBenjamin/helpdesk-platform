@@ -2,36 +2,38 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowLeft, PhoneCall } from "lucide-react";
 import { inputClass, labelClass } from "../formStyles";
-import { HOUR, SLA_HOURS } from "../../data";
 import useData from "../../useData";
 
-// Every request comes in with no team and nobody assigned, and lands in the
-// Inbox's "Unassigned" tab. The admin picks the team, priority and person
-// (or a tech takes it), so the customer never has to choose.
-const DEFAULT_PRIORITY = 2; // Medium, until the admin changes it
+// Every request comes in with no team and nobody assigned (the server
+// sets that, with Medium priority), and lands in the Inbox's
+// "Unassigned" tab. The admin picks the team, priority and person (or a
+// tech takes it), so the customer never has to choose.
 
 // The customer describes their problem in their own words. It becomes a
 // ticket in the Inbox, marked as coming from the customer portal.
 export default function PortalNewRequest() {
-  const { me, customers, addTicket } = useData();
+  const { addTicket } = useData();
   const navigate = useNavigate();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const customer = customers.find((c) => c.id === me.customerId);
-    const ticket = addTicket({
-      customer,
-      subject: subject.trim(),
-      department: null,
-      priority: DEFAULT_PRIORITY,
-      dueBy: Date.now() + SLA_HOURS[DEFAULT_PRIORITY].resolve * HOUR,
-      description: description.trim(),
-      source: "portal",
-    });
-    navigate(`/portal/tickets/${ticket.id}`, { state: { created: true } });
+    setBusy(true);
+    setError("");
+    try {
+      const ticket = await addTicket({
+        subject: subject.trim(),
+        description: description.trim(),
+      });
+      navigate(`/portal/tickets/${ticket.id}`, { state: { created: true } });
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -83,6 +85,8 @@ export default function PortalNewRequest() {
           someone needs to come by, we'll call you to set up a time.
         </p>
 
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
         <div className="grid gap-2 border-t border-line pt-5 sm:flex sm:justify-end">
           <Link
             to="/portal"
@@ -92,9 +96,10 @@ export default function PortalNewRequest() {
           </Link>
           <button
             type="submit"
-            className="order-first h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] sm:order-last"
+            disabled={busy}
+            className="order-first h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last"
           >
-            Send request
+            {busy ? "Sending…" : "Send request"}
           </button>
         </div>
       </form>

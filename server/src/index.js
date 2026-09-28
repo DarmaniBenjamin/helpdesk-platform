@@ -13,6 +13,7 @@ import {
   departmentsRouter,
 } from "./team.js";
 import { customersRouter } from "./customers.js";
+import { ticketsRouter } from "./tickets.js";
 import { handleBadInput } from "./validate.js";
 
 const app = express();
@@ -42,6 +43,7 @@ app.use("/api/team", teamRouter); // the team, invites, access levels
 app.use("/api/invites", inviteRouter); // accepting an invite
 app.use("/api/departments", departmentsRouter);
 app.use("/api/customers", customersRouter);
+app.use("/api/tickets", ticketsRouter);
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {

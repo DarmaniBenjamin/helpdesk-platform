@@ -515,7 +515,11 @@ export default function TicketReview() {
           key={`${period}-${show}-${person}-${department}`}
           tickets={closed}
           onOpen={openTicket}
-          onReview={(t, reviewed) => markReviewed(t.id, reviewed)}
+          onReview={(t, reviewed) =>
+            markReviewed(t.id, reviewed).catch((err) =>
+              window.alert(err.message),
+            )
+          }
         />
       )}
     </div>
