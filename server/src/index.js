@@ -17,6 +17,12 @@ import { ticketsRouter } from "./tickets.js";
 import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
+import { liveRouter } from "./live.js";
+import {
+  notificationsRouter,
+  pushRouter,
+  startDueTimeChecks,
+} from "./notify.js";
 import { handleBadInput } from "./validate.js";
 
 const app = express();
@@ -56,6 +62,9 @@ app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
 app.use("/api/import", importRouter); // Freshdesk import (Admins)
+app.use("/api/live", liveRouter); // who's on which page, live notifications
+app.use("/api/notifications", notificationsRouter); // the bell
+app.use("/api/push", pushRouter); // desktop/phone notifications on and off
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {
@@ -77,4 +86,6 @@ const port = Number(process.env.PORT) || 4000;
 // works, because it goes through the Vite dev server (see vite.config.js).
 app.listen(port, "127.0.0.1", () => {
   console.log(`API running on http://localhost:${port}`);
+  // Every 5 minutes: warn about tickets that are due soon or overdue
+  startDueTimeChecks();
 });

@@ -19,6 +19,11 @@ import {
 import { requireAuth, requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
 import { BadInput, cleanText } from "./validate.js";
+import {
+  onTicketCreated,
+  onTicketAssigned,
+  onCustomerReply,
+} from "./notify.js";
 
 export const ticketsRouter = Router();
 
@@ -257,6 +262,12 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
   );
 });
 
+// One ticket, e.g. when a notification says it's new or changed
+ticketsRouter.get("/:id", requireAuth, async (req, res) => {
+  const ticket = await findTicket(req.params.id, req.user);
+  res.json(await loadTicket(ticket.id, req.user));
+});
+
 // A new ticket. Admins create them for any customer (Add Ticket); a
 // customer sends one from the customer portal (it arrives with no
 // department and nobody assigned, for the team to sort).
@@ -330,6 +341,7 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
       createdAt: now,
     },
   ]);
+  onTicketCreated(created, authorName, req.user);
   res.status(201).json(await loadTicket(created.id, req.user));
 });
 
@@ -387,10 +399,17 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
       .set({
         ...changes,
         ...(changes.status ? statusTimes(ticket, changes.status, now) : {}),
+        // A new due date: the "due soon" and "overdue" warnings can go
+        // out again for it
+        ...(changes.dueBy
+          ? { dueSoonNotifiedAt: null, overdueNotifiedAt: null }
+          : {}),
         updatedAt: now,
       })
       .where(eq(tickets.id, ticket.id));
     await addMessages(ticket.id, history);
+    if (changes.assigneeId)
+      onTicketAssigned(ticket, changes.assigneeId, req.user);
   }
   res.json(await loadTicket(ticket.id, req.user));
 });
@@ -454,6 +473,7 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   }
   await addMessages(ticket.id, lines);
   await db.update(tickets).set(update).where(eq(tickets.id, ticket.id));
+  if (kind === "customer") onCustomerReply(ticket, req.user.name, body);
   res.status(201).json(await loadTicket(ticket.id, req.user));
 });
 

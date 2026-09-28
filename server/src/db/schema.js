@@ -153,6 +153,10 @@ export const tickets = pgTable(
       onDelete: "set null",
     }),
     reviewedAt: time("reviewed_at"),
+    // When the "due soon" and "overdue" notifications went out, so each
+    // is only sent once. Cleared when the due date changes.
+    dueSoonNotifiedAt: time("due_soon_notified_at"),
+    overdueNotifiedAt: time("overdue_notified_at"),
   },
   (t) => [
     index("tickets_status_idx").on(t.status),
@@ -230,6 +234,43 @@ export const automations = pgTable("automations", {
   actions: jsonb("actions").notNull().default([]),
   enabled: boolean("enabled").notNull().default(true),
   runs: integer("runs").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+// ---------- Notifications ----------
+
+// Each notification someone gets (shown in the bell). Also sent as a
+// desktop/phone notification to every browser they turned them on in.
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // newTicket, assigned, customerReply, dueSoon or overdue
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    ticketId: integer("ticket_id").references(() => tickets.id, {
+      onDelete: "cascade",
+    }),
+    readAt: time("read_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
+);
+
+// Browsers that said yes to notifications. Each one gets its own address
+// ("endpoint") from the browser maker (Google, Mozilla, Apple, Microsoft)
+// that the server sends push messages to.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  endpoint: text("endpoint").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  p256dh: text("p256dh").notNull(), // the browser's key, to encrypt messages
+  auth: text("auth").notNull(),
   createdAt: createdAt(),
 });
 
