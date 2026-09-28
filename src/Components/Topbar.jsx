@@ -11,6 +11,8 @@ import {
   Ticket,
   Clock,
   MessageSquare,
+  UserCheck,
+  TriangleAlert,
   User,
   Settings,
   LogOut,
@@ -18,59 +20,22 @@ import {
 import useDismiss from "./useDismiss";
 import Avatar from "./Avatar";
 import PresenceMenu from "./PresenceMenu";
+import PushToggle from "./PushToggle";
 import { ThemeToggleButton, ThemeSwitchRow } from "./ThemeToggle";
 import { ROLES, can } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
-import { isOverdue, timeAgo } from "../data";
+import { timeAgo } from "../data";
 import useData from "../useData";
 
-// Notifications built from the real ticket data. With no tickets yet
-// (a brand new database) there's nothing to show, so the list is empty.
-function buildNotifications(tickets) {
-  const list = [];
-
-  const newest = tickets[0];
-  if (newest) {
-    list.push({
-      id: 1,
-      icon: Ticket,
-      unread: true,
-      ticketId: newest.id,
-      title: `New ticket #${newest.id}`,
-      text: `${newest.requester.name}: ${newest.subject}`,
-      time: timeAgo(newest.createdAt),
-    });
-  }
-
-  const overdue = tickets.find(isOverdue);
-  if (overdue) {
-    list.push({
-      id: 2,
-      icon: Clock,
-      unread: true,
-      ticketId: overdue.id,
-      title: "SLA warning",
-      text: `Ticket #${overdue.id} is overdue`,
-      time: timeAgo(overdue.dueBy),
-    });
-  }
-
-  const waiting = tickets.find((t) => t.status === "waiting");
-  if (waiting) {
-    list.push({
-      id: 3,
-      icon: MessageSquare,
-      unread: false,
-      ticketId: waiting.id,
-      title: "Waiting on customer",
-      text: `${waiting.requester.name} hasn't replied on #${waiting.id}`,
-      time: timeAgo(waiting.updatedAt),
-    });
-  }
-
-  return list;
-}
+// The icon for each kind of notification (see server/src/notify.js)
+const NOTIFICATION_ICONS = {
+  newTicket: Ticket,
+  assigned: UserCheck,
+  customerReply: MessageSquare,
+  dueSoon: Clock,
+  overdue: TriangleAlert,
+};
 
 function IconButton({
   icon,
@@ -109,7 +74,8 @@ const panelClass =
 
 export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const navigate = useNavigate();
-  const { tickets, me } = useData();
+  const { me, notifications, markNotificationRead, markAllNotificationsRead } =
+    useData();
 
   // The current page's name, from the URL
   const location = useLocation();
@@ -128,16 +94,13 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
-  const [notifications, setNotifications] = useState(() =>
-    buildNotifications(tickets),
-  );
 
   const notifRef = useRef(null);
   const userRef = useRef(null);
   useDismiss(notifRef, () => setNotifOpen(false), notifOpen);
   useDismiss(userRef, () => setUserOpen(false), userOpen);
 
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   function handleSearch(e) {
     e.preventDefault();
@@ -148,19 +111,9 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   }
 
   function openNotification(n) {
-    setNotifications((list) =>
-      list.map((item) =>
-        item.id === n.id ? { ...item, unread: false } : item,
-      ),
-    );
+    if (!n.read) markNotificationRead(n.id);
     setNotifOpen(false);
-    navigate(`/tickets/${n.ticketId}`);
-  }
-
-  function markAllRead() {
-    setNotifications((list) =>
-      list.map((item) => ({ ...item, unread: false })),
-    );
+    if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
   }
 
   return (
@@ -224,7 +177,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
                 <p className="text-sm font-semibold">Notifications</p>
                 <button
                   type="button"
-                  onClick={markAllRead}
+                  onClick={markAllNotificationsRead}
                   disabled={unreadCount === 0}
                   className="cursor-pointer text-xs font-medium text-brand hover:underline disabled:cursor-default disabled:text-muted disabled:no-underline"
                 >
@@ -237,34 +190,38 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
                     No notifications yet
                   </li>
                 )}
-                {notifications.map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => openNotification(n)}
-                      className="flex w-full cursor-pointer items-start gap-3 rounded-lg p-2.5 text-left transition hover:bg-brand/5 active:scale-[0.99]"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-                        <n.icon className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium">
-                          {n.title}
+                {notifications.map((n) => {
+                  const Icon = NOTIFICATION_ICONS[n.kind] ?? Bell;
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => openNotification(n)}
+                        className="flex w-full cursor-pointer items-start gap-3 rounded-lg p-2.5 text-left transition hover:bg-brand/5 active:scale-[0.99]"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                          <Icon className="h-4 w-4" />
                         </span>
-                        <span className="block truncate text-xs text-muted">
-                          {n.text}
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium">
+                            {n.title}
+                          </span>
+                          <span className="block truncate text-xs text-muted">
+                            {n.body}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted/70">
+                            {timeAgo(n.at)}
+                          </span>
                         </span>
-                        <span className="mt-0.5 block text-xs text-muted/70">
-                          {n.time}
-                        </span>
-                      </span>
-                      {n.unread && (
-                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
-                      )}
-                    </button>
-                  </li>
-                ))}
+                        {!n.read && (
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
+              <PushToggle />
             </div>
           )}
         </div>

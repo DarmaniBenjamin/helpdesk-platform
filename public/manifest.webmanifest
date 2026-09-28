@@ -1,0 +1,18 @@
+{
+    "name": "DeskFlow",
+    "short_name": "DeskFlow",
+    "description": "Protonic Solutions helpdesk",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#f5f6f8",
+    "theme_color": "#00b67a",
+    "icons": [
+        {
+            "src": "/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ]
+}

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { Eye } from "lucide-react";
 import Avatar from "./Avatar";
@@ -12,9 +12,17 @@ import useData from "../useData";
 // else is on the same page, e.g. two agents looking at the same ticket.
 // It only shows up when someone else is here. If it's just you, it's hidden.
 export default function PresenceMenu() {
-  const { team, me } = useData();
+  const { team, me, presence } = useData();
   const { pathname } = useLocation();
-  const viewers = getViewers(team, pathname, me.id);
+
+  // The time, updated every 30 seconds, so "here for 3 min" keeps counting
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const viewers = getViewers(presence, team, pathname, me.id, now);
 
   // Remember which page it was opened on, so it closes by itself
   // when you move to another page

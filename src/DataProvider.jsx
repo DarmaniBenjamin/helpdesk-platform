@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { DataContext } from "./useData";
 import { api } from "./api";
+import { pausePush, resumePush } from "./push";
 import { syncDirectory } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
@@ -35,6 +37,10 @@ export default function DataProvider({ children }) {
   const [team, setTeam] = useState([]);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
   const [departments, setDepartments] = useState([]);
+  // The bell: your latest notifications, newest first (staff only)
+  const [notifications, setNotifications] = useState([]);
+  // Who's on which page right now: [{ userId, path, since }]
+  const [presence, setPresence] = useState([]);
   // checked = we've asked the server who's signed in (until then, pages
   // wait instead of sending you to the sign-in page).
   // userId = the account that's signed in, or null.
@@ -55,6 +61,7 @@ export default function DataProvider({ children }) {
       ruleList,
       automationList,
       settingsData,
+      notificationList,
     ] = await Promise.all([
       isCustomer ? [user] : api("/team"),
       api("/departments"),
@@ -64,6 +71,7 @@ export default function DataProvider({ children }) {
       isAdmin ? api("/rules") : [],
       isAdmin ? api("/automations") : [],
       user.role === "owner" ? api("/settings") : STARTING_SETTINGS,
+      isCustomer ? [] : api("/notifications"),
     ]);
     setTeam(teamList);
     setDepartments(departmentList);
@@ -73,6 +81,7 @@ export default function DataProvider({ children }) {
     setRules(ruleList);
     setAutomations(automationList);
     setSettings(settingsData);
+    setNotifications(notificationList);
   }
 
   // Signed in: load everything they need, then show the app
@@ -83,6 +92,8 @@ export default function DataProvider({ children }) {
       setTeam([user]); // at least let them in
     }
     setAuth({ checked: true, userId: user.id });
+    // This browser already allowed notifications: send yours here
+    if (user.role !== "customer") resumePush();
   }
 
   // When the app opens: ask the server if you're already signed in
@@ -118,6 +129,98 @@ export default function DataProvider({ children }) {
     }));
   // Let every page see the current departments and agents
   syncDirectory(departments, agents);
+
+  // ---------- The live connection (staff only) ----------
+  // One connection per open tab (see server/src/live.js). The server
+  // uses it to say who's on which page, and to deliver new notifications
+  // straight away. If it drops (e.g. the server restarts), the browser
+  // reconnects by itself.
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const connectionId = useRef(null);
+  const isStaff = Boolean(me && me.role !== "customer");
+
+  // Tell the server which page this tab is on
+  function reportPage(path) {
+    if (!connectionId.current) return;
+    api("/live/presence", {
+      method: "POST",
+      body: { connectionId: connectionId.current, path },
+    }).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!isStaff) return;
+    const source = new EventSource("/api/live");
+    let connectedBefore = false;
+
+    source.addEventListener("hello", (e) => {
+      connectionId.current = JSON.parse(e.data).connectionId;
+      reportPage(window.location.pathname);
+      // Reconnected after a drop: catch up on anything missed
+      if (connectedBefore) {
+        api("/notifications")
+          .then(setNotifications)
+          .catch(() => {});
+      }
+      connectedBefore = true;
+    });
+
+    source.addEventListener("presence", (e) => {
+      setPresence(JSON.parse(e.data));
+    });
+
+    source.addEventListener("notification", (e) => {
+      const n = JSON.parse(e.data);
+      setNotifications((list) => [n, ...list.filter((x) => x.id !== n.id)]);
+      // Load the ticket it's about, so the Inbox shows the change too
+      if (n.ticketId) {
+        api(`/tickets/${n.ticketId}`)
+          .then(showTicket)
+          .catch(() => {});
+      }
+    });
+
+    return () => {
+      source.close();
+      connectionId.current = null;
+      setPresence([]);
+    };
+    // Only when someone signs in or out
+  }, [isStaff, me?.id]);
+
+  // Moving to another page: tell the server
+  useEffect(() => {
+    if (isStaff) reportPage(pathname);
+  }, [pathname, isStaff]);
+
+  // Clicking a desktop notification while the app is open: public/sw.js
+  // asks the app to go to that ticket
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function handleMessage(e) {
+      if (e.data?.type === "open" && typeof e.data.path === "string") {
+        navigate(e.data.path);
+      }
+    }
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, [navigate]);
+
+  // ---------- Notifications (the bell) ----------
+
+  function markNotificationRead(id) {
+    setNotifications((list) =>
+      list.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    api(`/notifications/${id}/read`, { method: "POST" }).catch(() => {});
+  }
+
+  function markAllNotificationsRead() {
+    setNotifications((list) => list.map((n) => ({ ...n, read: true })));
+    api("/notifications/read-all", { method: "POST" }).catch(() => {});
+  }
 
   // ---------- Departments ----------
 
@@ -197,9 +300,12 @@ export default function DataProvider({ children }) {
 
   function logout() {
     if (auth.userId) {
-      // Ends the session on the server. If that fails (offline), the app
+      // Stop sending this account's notifications to this browser, then
+      // end the session on the server. If that fails (offline), the app
       // still signs you out here.
-      api("/auth/logout", { method: "POST" }).catch(() => {});
+      pausePush().finally(() =>
+        api("/auth/logout", { method: "POST" }).catch(() => {}),
+      );
     }
     setAuth((a) => ({ ...a, userId: null }));
     setTeam([]);
@@ -209,6 +315,7 @@ export default function DataProvider({ children }) {
     setRules([]);
     setAutomations([]);
     setSettings(STARTING_SETTINGS);
+    setNotifications([]);
   }
 
   // Change your own password. Throws with the server's message if the
@@ -695,6 +802,10 @@ export default function DataProvider({ children }) {
         deleteDepartment,
         makeBackup,
         saveImport,
+        notifications,
+        markNotificationRead,
+        markAllNotificationsRead,
+        presence,
       }}
     >
       {children}
