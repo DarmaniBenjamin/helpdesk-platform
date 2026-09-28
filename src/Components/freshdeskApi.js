@@ -4,6 +4,25 @@
 
 const PER_PAGE = 100; // the most Freshdesk sends per page
 
+// Plain names for what each request reads, so errors say what was blocked
+function describe(path) {
+  if (path.startsWith("/agents/me")) return "your own agent profile";
+  if (path.startsWith("/agents")) return "the list of agents";
+  if (/^\/tickets\/\d+\/conversations/.test(path))
+    return "a ticket's notes and replies";
+  if (path.startsWith("/tickets")) return "tickets";
+  if (path.startsWith("/contacts")) return "contacts";
+  if (path.startsWith("/companies")) return "companies";
+  return path;
+}
+
+// An error that also remembers Freshdesk's status number (403, 404…)
+function freshdeskError(message, status) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
 // Waits a number of milliseconds, unless the fetch is cancelled
 function wait(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -43,22 +62,30 @@ async function get(connection, path, { signal, onWait } = {}) {
       );
     }
     if (!type.includes("json")) {
-      throw new Error(
+      throw freshdeskError(
         `Freshdesk sent an unexpected answer (error ${response.status}). Try again in a minute.`,
+        response.status,
       );
     }
 
     const body = await response.json();
     if (response.ok) return body;
     if (response.status === 401)
-      throw new Error("Freshdesk didn't accept that API key.");
+      throw freshdeskError("Freshdesk didn't accept that API key.", 401);
     if (response.status === 403)
-      throw new Error("That API key isn't allowed to read this.");
-    if (response.status === 404)
-      throw new Error(
-        `Nothing found at ${connection.domain}.freshdesk.com. Check the address.`,
+      throw freshdeskError(
+        `That API key isn't allowed to read ${describe(path)}. In Freshdesk, make the key's agent an Administrator with Global ticket access, or use an admin's API key.`,
+        403,
       );
-    throw new Error(body.error ?? body.description ?? "Freshdesk said no.");
+    if (response.status === 404)
+      throw freshdeskError(
+        `Nothing found at ${connection.domain}.freshdesk.com. Check the address.`,
+        404,
+      );
+    throw freshdeskError(
+      body.error ?? body.description ?? "Freshdesk said no.",
+      response.status,
+    );
   }
 }
 
@@ -116,9 +143,20 @@ export async function fetchEverything(
     },
   );
 
-  // 2. Agents, so replies and notes show who wrote them
+  // 2. Agents, so replies and notes show who wrote them. Non-admin keys
+  // often aren't allowed this list, so if Freshdesk says no, carry on
+  // without names instead of stopping the whole import.
   onProgress({ message: "Getting agents…" });
-  const agents = await getAll(connection, "/agents", options);
+  let agents = [];
+  try {
+    agents = await getAll(connection, "/agents", options);
+  } catch (err) {
+    if (err.name === "AbortError" || err.status !== 403) throw err;
+    onProgress({
+      message:
+        "Not allowed to read the agent list, carrying on without agent names…",
+    });
+  }
   const agentNames = new Map(agents.map((a) => [a.id, a.contact?.name]));
 
   // 3. Contacts and companies. For a small test, only the ones on those
@@ -144,7 +182,7 @@ export async function fetchEverything(
         contacts.push(await get(connection, `/contacts/${id}`, options));
       } catch (err) {
         if (err.name === "AbortError") throw err;
-        // A deleted contact: fall back to the details on the ticket
+        // A deleted or blocked contact: fall back to the details on the ticket
         const t = tickets.find((x) => x.requester_id === id);
         if (t?.requester) contacts.push(t.requester);
       }
