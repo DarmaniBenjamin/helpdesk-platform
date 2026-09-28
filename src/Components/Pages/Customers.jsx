@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Search,
@@ -11,6 +11,8 @@ import {
 import Avatar from "../Avatar";
 import NewCustomerModal from "../NewCustomerModal";
 import { inputClass } from "../formStyles";
+import Pagination from "../Pagination";
+import { pageCount, pageOf, usePaging } from "../paging";
 import { isDone } from "../../data";
 import useData from "../../useData";
 
@@ -43,6 +45,24 @@ export default function Customers() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [adding, setAdding] = useState(false);
+  // Which page, and how many per page (30, 50 or 100)
+  const { page, pageSize, setPage, setPageSize } = usePaging("customers");
+  const topRef = useRef(null);
+
+  // A new search or filter starts again from page 1
+  function search(value) {
+    setQuery(value);
+    setPage(1);
+  }
+  function pickFilter(id) {
+    setFilter(id);
+    setPage(1);
+  }
+  // Moving to another page: back to the top of the list
+  function goToPage(n) {
+    setPage(n);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   // Count each customer's tickets: { 1001: { total: 5, open: 1 }, ... }
   const ticketCounts = {};
@@ -53,7 +73,7 @@ export default function Customers() {
   }
 
   const text = query.trim().toLowerCase();
-  const shown = customers
+  const matching = customers
     .filter(
       (c) =>
         filter === "all" || (filter === "business" ? c.company : !c.company),
@@ -61,11 +81,19 @@ export default function Customers() {
     .filter(
       (c) =>
         !text ||
-        [c.name, c.email, c.phone, c.company ?? ""].some((f) =>
-          f.toLowerCase().includes(text),
-        ),
+        [
+          c.name,
+          c.email ?? "",
+          c.phone ?? "",
+          c.company ?? "",
+          ...(c.extraEmails ?? []),
+          ...(c.extraPhones ?? []),
+        ].some((f) => f.toLowerCase().includes(text)),
     )
     .sort((a, b) => a.name.localeCompare(b.name));
+  // The list got shorter (e.g. a search): stay on a page that exists
+  const currentPage = Math.min(page, pageCount(matching.length, pageSize));
+  const shown = pageOf(matching, currentPage, pageSize);
 
   const businessCount = new Set(customers.map((c) => c.company).filter(Boolean))
     .size;
@@ -74,7 +102,10 @@ export default function Customers() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div
+        ref={topRef}
+        className="flex scroll-mt-20 flex-wrap items-center justify-between gap-4"
+      >
         <div>
           <h1 className="text-2xl font-semibold sm:text-3xl">Customers</h1>
           <p className="mt-1 text-sm text-muted">
@@ -98,7 +129,7 @@ export default function Customers() {
           <input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => search(e.target.value)}
             placeholder="Search customers"
             className={`${inputClass} pl-9`}
           />
@@ -108,7 +139,7 @@ export default function Customers() {
             <button
               key={f.id}
               type="button"
-              onClick={() => setFilter(f.id)}
+              onClick={() => pickFilter(f.id)}
               className={`flex-1 cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 transition active:scale-[0.97] sm:flex-none ${
                 filter === f.id
                   ? "bg-brand/10 font-medium text-brand"
@@ -121,7 +152,7 @@ export default function Customers() {
         </div>
       </div>
 
-      {shown.length === 0 ? (
+      {matching.length === 0 ? (
         <div className="rounded-xl border border-line bg-white px-6 py-12 text-center text-sm text-muted">
           No customers match your search.
         </div>
@@ -155,13 +186,17 @@ export default function Customers() {
                             <p className="font-medium transition group-hover:text-brand">
                               {c.name}
                             </p>
-                            <a
-                              href={`mailto:${c.email}`}
-                              onClick={stop}
-                              className="text-xs text-muted hover:text-brand"
-                            >
-                              {c.email}
-                            </a>
+                            {c.email ? (
+                              <a
+                                href={`mailto:${c.email}`}
+                                onClick={stop}
+                                className="text-xs text-muted hover:text-brand"
+                              >
+                                {c.email}
+                              </a>
+                            ) : (
+                              <p className="text-xs text-muted">No email yet</p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -227,14 +262,21 @@ export default function Customers() {
                       </span>
                     </div>
                     <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 text-sm">
-                      <a
-                        href={`mailto:${c.email}`}
-                        onClick={stop}
-                        className="flex items-center gap-2 text-muted"
-                      >
-                        <Mail className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{c.email}</span>
-                      </a>
+                      {c.email ? (
+                        <a
+                          href={`mailto:${c.email}`}
+                          onClick={stop}
+                          className="flex items-center gap-2 text-muted"
+                        >
+                          <Mail className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{c.email}</span>
+                        </a>
+                      ) : (
+                        <span className="flex items-center gap-2 text-muted">
+                          <Mail className="h-4 w-4 shrink-0" />
+                          No email yet
+                        </span>
+                      )}
                       {c.phone && (
                         <a
                           href={`tel:${c.phone}`}
@@ -251,6 +293,15 @@ export default function Customers() {
               );
             })}
           </ul>
+
+          <Pagination
+            page={currentPage}
+            pageSize={pageSize}
+            total={matching.length}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            what="customers"
+          />
         </>
       )}
 

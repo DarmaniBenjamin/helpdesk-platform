@@ -186,6 +186,39 @@ export const messages = pgTable(
   (t) => [index("messages_ticket_idx").on(t.ticketId)],
 );
 
+// Files added to a ticket's conversation: photos, PDFs, zips and so on.
+// The file itself is kept in the uploads folder (see attachments.js);
+// this is the record of it. A file is uploaded first (no message yet),
+// then joined to the reply, note or request it was sent with.
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // Empty until it's sent with a message
+    ticketId: integer("ticket_id").references(() => tickets.id, {
+      onDelete: "cascade",
+    }),
+    messageId: integer("message_id").references(() => messages.id, {
+      onDelete: "cascade",
+    }),
+    uploadedById: text("uploaded_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    fileName: text("file_name").notNull(), // the name it had, e.g. "invoice.pdf"
+    size: integer("size").notNull(), // in bytes
+    // The name it's stored under in the uploads folder (random, so two
+    // files called "photo.jpg" never clash)
+    storageKey: text("storage_key").notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("attachments_message_idx").on(t.messageId),
+    index("attachments_ticket_idx").on(t.ticketId),
+  ],
+);
+
 // ---------- Knowledge Base ----------
 
 export const answers = pgTable("answers", {

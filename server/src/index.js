@@ -18,6 +18,7 @@ import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
 import { liveRouter } from "./live.js";
+import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -65,6 +66,7 @@ app.use("/api/import", importRouter); // Freshdesk import (Admins)
 app.use("/api/live", liveRouter); // who's on which page, live notifications
 app.use("/api/notifications", notificationsRouter); // the bell
 app.use("/api/push", pushRouter); // desktop/phone notifications on and off
+app.use("/api/attachments", attachmentsRouter); // files on tickets
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {
@@ -88,4 +90,6 @@ app.listen(port, "127.0.0.1", () => {
   console.log(`API running on http://localhost:${port}`);
   // Every 5 minutes: warn about tickets that are due soon or overdue
   startDueTimeChecks();
+  // Every hour: clear out files that were uploaded but never sent
+  startFileCleanUp();
 });

@@ -24,6 +24,13 @@ import {
   onTicketAssigned,
   onCustomerReply,
 } from "./notify.js";
+import {
+  checkFiles,
+  claimFiles,
+  filesForMessages,
+  filesOfTicket,
+  removeFiles,
+} from "./attachments.js";
 
 export const ticketsRouter = Router();
 
@@ -87,15 +94,20 @@ async function loadTickets(where, viewer) {
       ),
     )
     .orderBy(asc(messages.createdAt), asc(messages.id));
+  const visible = allMessages.filter(
+    (m) => isStaff(viewer) || (m.kind !== "note" && m.kind !== "event"),
+  );
+  // The files sent with each message (attachments.js)
+  const files = await filesForMessages(visible.map((m) => m.id));
   const byTicket = {};
-  for (const m of allMessages) {
-    if (!isStaff(viewer) && (m.kind === "note" || m.kind === "event")) continue;
+  for (const m of visible) {
     (byTicket[m.ticketId] ??= []).push({
       id: m.id,
       kind: m.kind,
       author: m.authorName,
       body: m.body,
       at: ms(m.createdAt),
+      attachments: files[m.id] ?? [],
     });
   }
 
@@ -146,11 +158,14 @@ async function findTicket(id, viewer) {
   return ticket;
 }
 
-// Adds lines to a ticket's conversation or history
+// Adds lines to a ticket's conversation or history. Returns them, with
+// their IDs, in the same order.
 async function addMessages(ticketId, list) {
-  if (list.length) {
-    await db.insert(messages).values(list.map((m) => ({ ticketId, ...m })));
-  }
+  if (list.length === 0) return [];
+  return db
+    .insert(messages)
+    .values(list.map((m) => ({ ticketId, ...m })))
+    .returning({ id: messages.id });
 }
 
 // The times that go with a status: resolved/closed get stamped, and
@@ -283,6 +298,8 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
     max: 20000,
     required: true,
   });
+  // Files sent with the request (uploaded first, see attachments.js)
+  const fileIds = await checkFiles(req.body?.attachmentIds, req.user);
 
   let values;
   if (ADMINS.includes(req.user.role)) {
@@ -332,7 +349,7 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
     })
     .returning();
   // The request itself is the first message in the conversation
-  await addMessages(created.id, [
+  const [first] = await addMessages(created.id, [
     {
       kind: "customer",
       authorId: req.user.role === "customer" ? req.user.id : null,
@@ -341,6 +358,7 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
       createdAt: now,
     },
   ]);
+  await claimFiles(fileIds, created.id, first.id);
   onTicketCreated(created, authorName, req.user);
   res.status(201).json(await loadTicket(created.id, req.user));
 });
@@ -419,11 +437,12 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
 // Staff can change the status at the same time ("Then set status").
 ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const ticket = await findTicket(req.params.id, req.user);
-  const body = cleanText(req.body?.body, {
-    label: "Message",
-    max: 20000,
-    required: true,
-  });
+  const body = cleanText(req.body?.body, { label: "Message", max: 20000 });
+  // Files sent with it (uploaded first, see attachments.js)
+  const fileIds = await checkFiles(req.body?.attachmentIds, req.user);
+  // A message needs words, files, or both
+  if (!body && fileIds.length === 0)
+    throw new BadInput("Write a message or attach a file.");
   const now = new Date();
   const staff = isStaff(req.user);
 
@@ -471,9 +490,15 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       createdAt: new Date(now.getTime() + 1),
     });
   }
-  await addMessages(ticket.id, lines);
+  const [sent] = await addMessages(ticket.id, lines);
+  await claimFiles(fileIds, ticket.id, sent.id);
   await db.update(tickets).set(update).where(eq(tickets.id, ticket.id));
-  if (kind === "customer") onCustomerReply(ticket, req.user.name, body);
+  if (kind === "customer")
+    onCustomerReply(
+      ticket,
+      req.user.name,
+      body || `Sent ${fileIds.length} file${fileIds.length === 1 ? "" : "s"}`,
+    );
   res.status(201).json(await loadTicket(ticket.id, req.user));
 });
 
@@ -540,8 +565,11 @@ ticketsRouter.post("/:id/review", requireRole(...ADMINS), async (req, res) => {
 // just stop linking to it. Admins and the Super Admin only.
 ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
   const ticket = await findTicket(req.params.id, req.user);
-  // Messages are deleted with it (set up in the database tables)
+  // Its files are removed from the uploads folder too. Messages and
+  // file records are deleted with it (set up in the database tables).
+  const fileKeys = await filesOfTicket(ticket.id);
   await db.delete(tickets).where(eq(tickets.id, ticket.id));
+  removeFiles(fileKeys);
   res.json({ ok: true });
 });
 

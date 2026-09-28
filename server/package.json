@@ -16,6 +16,7 @@
         "bcryptjs": "^3.0.3",
         "drizzle-orm": "^0.45.3",
         "express": "^5.2.1",
+        "multer": "^2.4.0",
         "pg": "^8.23.0",
         "web-push": "^3.6.7"
     },

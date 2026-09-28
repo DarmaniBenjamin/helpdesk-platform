@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Search, SlidersHorizontal, X, Inbox as InboxIcon } from "lucide-react";
 import StatusBadge from "../StatusBadge";
@@ -6,6 +6,8 @@ import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
 import Avatar from "../Avatar";
 import { inputClass } from "../formStyles";
+import Pagination from "../Pagination";
+import { pageCount, pageOf, usePaging } from "../paging";
 import useData from "../../useData";
 import {
   STATUSES,
@@ -18,8 +20,6 @@ import {
   findDepartment,
   findAgent,
 } from "../../data";
-
-const PAGE_SIZE = 20;
 
 // The tabs across the top. "active" means anything not resolved/closed.
 // "unassigned" is the queue of new work nobody has picked up yet, like
@@ -59,7 +59,8 @@ function matchesTab(ticket, tab) {
   return ticket.status === tab;
 }
 
-// Does the ticket match the search text? Checks number, subject and customer.
+// Does the ticket match the search text? Checks number, subject,
+// customer and tags.
 function matchesSearch(ticket, text) {
   if (!text) return true;
   const { requester } = ticket;
@@ -67,8 +68,9 @@ function matchesSearch(ticket, text) {
     `#${ticket.id}`,
     ticket.subject,
     requester.name,
-    requester.email,
+    requester.email ?? "",
     requester.company ?? "",
+    ...(ticket.tags ?? []),
   ].some((field) => field.toLowerCase().includes(text));
 }
 
@@ -97,18 +99,27 @@ export default function Inbox() {
   const [assignee, setAssignee] = useState("any");
   const [sort, setSort] = useState("newest");
   const [showFilters, setShowFilters] = useState(false); // phones only
-  const [visible, setVisible] = useState(PAGE_SIZE);
+  // Which page, and how many per page (30, 50 or 100)
+  const { page, pageSize, setPage, setPageSize } = usePaging("inbox");
+  const topRef = useRef(null);
 
+  // A new search also starts again from page 1 (the page number is
+  // left out of the address)
   function setSearch(value) {
     setSearchParams(value ? { search: value } : {}, { replace: true });
-    setVisible(PAGE_SIZE);
   }
 
   // Wraps a setter so changing any filter also goes back to the first page
   const resetPage = (setter) => (value) => {
     setter(value);
-    setVisible(PAGE_SIZE);
+    setPage(1);
   };
+
+  // Moving to another page: back to the top of the list
+  function goToPage(n) {
+    setPage(n);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const activeFilterCount = [priority, department, assignee].filter(
     (v) => v !== "any",
@@ -139,7 +150,9 @@ export default function Inbox() {
   const results = filtered
     .filter((t) => matchesTab(t, tab))
     .sort(SORTS[sort].compare);
-  const shown = results.slice(0, visible);
+  // The list got shorter (e.g. a filter): stay on a page that exists
+  const currentPage = Math.min(page, pageCount(results.length, pageSize));
+  const shown = pageOf(results, currentPage, pageSize);
   const needAttention = tickets.filter((t) => !isDone(t)).length;
   const overdueCount = tickets.filter(isOverdue).length;
 
@@ -148,7 +161,7 @@ export default function Inbox() {
   return (
     <div className="flex flex-col gap-4 sm:gap-5">
       {/* Header */}
-      <div>
+      <div ref={topRef} className="scroll-mt-20">
         <h1 className="text-2xl font-semibold sm:text-3xl">Inbox</h1>
         <p className="mt-1 text-sm text-muted">
           {needAttention} tickets need attention
@@ -268,7 +281,7 @@ export default function Inbox() {
           </select>
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
+            onChange={(e) => resetPage(setSort)(e.target.value)}
             className={`${inputClass} cursor-pointer`}
           >
             {Object.entries(SORTS).map(([value, { label }]) => (
@@ -405,15 +418,14 @@ export default function Inbox() {
             ))}
           </ul>
 
-          {results.length > visible && (
-            <button
-              type="button"
-              onClick={() => setVisible((v) => v + PAGE_SIZE)}
-              className="h-11 cursor-pointer self-center rounded-lg border border-line bg-white px-6 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
-            >
-              Show more ({results.length - visible} left)
-            </button>
-          )}
+          <Pagination
+            page={currentPage}
+            pageSize={pageSize}
+            total={results.length}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            what="tickets"
+          />
         </>
       )}
     </div>
