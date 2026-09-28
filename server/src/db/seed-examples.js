@@ -1,7 +1,7 @@
 // FOR DEVELOPMENT ONLY. Puts the app's example data into the database:
-// the 48 example customers and 170 example tickets (with their
-// conversations and ratings), so every page has something to show while
-// you build and test.
+// the 48 example customers, 170 example tickets (with their
+// conversations and ratings) and 5 Knowledge Base answers, so every page
+// has something to show while you build and test.
 //
 // Never run this on the real database. Your real customers and tickets
 // come from the Freshdesk import instead.
@@ -10,12 +10,19 @@
 // Safe to run more than once: anything already there is left alone.
 import { sql } from "drizzle-orm";
 import { db, pool } from "./index.js";
-import { customers, tickets, messages, departments } from "./schema.js";
+import {
+  customers,
+  tickets,
+  messages,
+  departments,
+  answers,
+} from "./schema.js";
 // The example data the front end used to make up (src/data.js)
 import {
   customers as exampleCustomers,
   tickets as exampleTickets,
 } from "../../../src/data.js";
+import { STARTING_ANSWERS as exampleAnswers } from "../../../src/Components/Knowledge.js";
 
 const date = (ms) => (ms ? new Date(ms) : null);
 
@@ -88,6 +95,32 @@ try {
   console.log(
     `✓ Example tickets: ${exampleTickets.length} (${added.size} new, ${lines.length} messages)`,
   );
+
+  // ----- Knowledge Base -----
+  // Only if there are no answers yet, so running this again doesn't
+  // add them twice
+  const [{ count }] = await db
+    .select({ count: sql`count(*)::int` })
+    .from(answers);
+  if (count === 0) {
+    await db.insert(answers).values(
+      exampleAnswers.map((a) => ({
+        title: a.title,
+        problem: a.problem,
+        solution: a.solution,
+        keywords: a.keywords,
+        departmentId: departmentIds.has(a.department) ? a.department : null,
+        authorName: a.author,
+        source: a.source,
+        uses: a.uses,
+        createdAt: date(a.createdAt),
+        updatedAt: date(a.updatedAt),
+      })),
+    );
+    console.log(`✓ Example Knowledge Base answers: ${exampleAnswers.length}`);
+  } else {
+    console.log("✓ Knowledge Base already has answers, left alone");
+  }
 
   // New customers and tickets carry on numbering after the highest ones
   await db.execute(

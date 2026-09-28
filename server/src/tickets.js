@@ -514,6 +514,16 @@ ticketsRouter.post("/:id/review", requireRole(...ADMINS), async (req, res) => {
   res.json(await loadTicket(ticket.id, req.user));
 });
 
+// Delete a ticket for good: its whole conversation, internal notes and
+// history go with it. Knowledge Base answers saved from it stay, they
+// just stop linking to it. Admins and the Super Admin only.
+ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
+  const ticket = await findTicket(req.params.id, req.user);
+  // Messages are deleted with it (set up in the database tables)
+  await db.delete(tickets).where(eq(tickets.id, ticket.id));
+  res.json({ ok: true });
+});
+
 // Used when someone leaves the team: their unfinished tickets become
 // unassigned, with a line in each ticket's history saying why
 export async function unassignTicketsOf(member, actor) {

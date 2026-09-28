@@ -14,6 +14,7 @@ import {
 } from "./team.js";
 import { customersRouter } from "./customers.js";
 import { ticketsRouter } from "./tickets.js";
+import { answersRouter } from "./answers.js";
 import { handleBadInput } from "./validate.js";
 
 const app = express();
@@ -44,6 +45,7 @@ app.use("/api/invites", inviteRouter); // accepting an invite
 app.use("/api/departments", departmentsRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/tickets", ticketsRouter);
+app.use("/api/answers", answersRouter); // the Knowledge Base
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {
