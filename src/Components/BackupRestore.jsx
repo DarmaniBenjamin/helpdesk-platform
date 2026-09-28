@@ -8,12 +8,11 @@ import {
   CircleCheck,
   TriangleAlert,
   GitBranch,
-  RotateCcw,
   FileJson,
+  Info,
   X,
 } from "lucide-react";
 import Card from "./Card";
-import Modal from "./Modal";
 import {
   inputClass,
   labelClass,
@@ -92,15 +91,12 @@ export default function BackupRestore() {
     settings,
     updateSettings,
     makeBackup,
-    restoreBackup,
   } = useData();
   const backup = settings.backup;
   const fileInput = useRef(null);
 
   const [picked, setPicked] = useState(null); // { name, backup }
   const [pickError, setPickError] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [restoredAt, setRestoredAt] = useState(null);
 
   const current = backupSummary({
     tickets,
@@ -120,7 +116,6 @@ export default function BackupRestore() {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
-    setRestoredAt(null);
     try {
       const { backup: found, error } = checkBackup(await readJsonFile(file));
       if (error) {
@@ -134,12 +129,6 @@ export default function BackupRestore() {
       setPickError(err.message);
       setPicked(null);
     }
-  }
-
-  function runRestore() {
-    restoreBackup(picked.backup.data);
-    setRestoredAt(picked.backup.exportedAt);
-    setPicked(null);
   }
 
   return (
@@ -191,12 +180,14 @@ export default function BackupRestore() {
               made.
             </p>
 
-            {restoredAt && (
-              <p className="flex items-center gap-2 rounded-lg bg-brand/10 px-3 py-2.5 text-sm font-medium text-brand">
-                <CircleCheck className="h-4 w-4 shrink-0" />
-                Restored the backup from {formatDate(restoredAt)}.
-              </p>
-            )}
+            {/* Everything now lives in the database, so restoring has to
+                happen on the server. That comes with automatic backups. */}
+            <p className="flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-sky-700">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              Restoring into the database is being built, together with
+              automatic backups. Keep downloading backups: you'll be able to
+              restore them then. For now you can open one to check what's in it.
+            </p>
 
             {picked ? (
               <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3">
@@ -229,17 +220,10 @@ export default function BackupRestore() {
                     </li>
                   ))}
                 </ul>
-                {/* A grid (not flex) wrapper keeps the button full height */}
-                <div className="grid">
-                  <button
-                    type="button"
-                    onClick={() => setConfirming(true)}
-                    className={`${primaryButton} flex items-center justify-center gap-2`}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Restore this backup
-                  </button>
-                </div>
+                <p className="flex items-center gap-1.5 text-xs font-medium text-brand">
+                  <CircleCheck className="h-3.5 w-3.5" />
+                  This backup file looks good.
+                </p>
               </div>
             ) : (
               <div className="grid sm:flex">
@@ -249,7 +233,7 @@ export default function BackupRestore() {
                   className={`${secondaryButton} flex items-center justify-center gap-2`}
                 >
                   <Upload className="h-4 w-4" />
-                  Choose a backup file
+                  Check a backup file
                 </button>
               </div>
             )}
@@ -376,54 +360,6 @@ export default function BackupRestore() {
           ))}
         </ol>
       </Card>
-
-      {confirming && (
-        <Modal
-          title="Restore this backup?"
-          onClose={() => setConfirming(false)}
-          footer={
-            <>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                className={secondaryButton}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  runRestore();
-                  setConfirming(false);
-                }}
-                className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] sm:flex-none"
-              >
-                Replace everything
-              </button>
-            </>
-          }
-        >
-          <p className="flex items-start gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            Everything in the app now will be replaced with the backup from{" "}
-            {formatDate(picked.backup.exportedAt)}. Anything added since then
-            will be gone.
-          </p>
-          <p className="text-sm text-muted">
-            Tip: download a backup of what's here first, just in case.
-          </p>
-          <div className="grid sm:flex">
-            <button
-              type="button"
-              onClick={downloadBackup}
-              className={`${secondaryButton} flex items-center justify-center gap-2`}
-            >
-              <Download className="h-4 w-4" />
-              Download a backup first
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

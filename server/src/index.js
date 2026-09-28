@@ -15,6 +15,7 @@ import {
 import { customersRouter } from "./customers.js";
 import { ticketsRouter } from "./tickets.js";
 import { answersRouter } from "./answers.js";
+import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { handleBadInput } from "./validate.js";
 
 const app = express();
@@ -46,6 +47,9 @@ app.use("/api/departments", departmentsRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/answers", answersRouter); // the Knowledge Base
+app.use("/api/rules", rulesRouter); // assignment rules
+app.use("/api/automations", automationsRouter);
+app.use("/api/settings", settingsRouter); // Super Admin only
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {

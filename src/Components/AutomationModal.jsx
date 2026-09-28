@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, TriangleAlert } from "lucide-react";
 import Modal from "./Modal";
 import {
   inputClass,
@@ -66,7 +66,9 @@ function ParamInput({ param, value, onChange }) {
   );
 }
 
-// Create a new automation (no `automation` passed) or edit an existing one
+// Create a new automation (no `automation` passed) or edit an existing one.
+// Saving and deleting go to the database; the form only closes once that
+// worked, and shows the reason if it didn't.
 export default function AutomationModal({
   automation,
   onSave,
@@ -82,6 +84,11 @@ export default function AutomationModal({
     automation?.actions ?? [{ type: "setStatus", value: "open" }],
   );
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  // If saving to the database didn't work, the reason why
+  const [saveError, setSaveError] = useState("");
+  // Deleting takes two clicks: "Delete", then "Yes, delete it"
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function chooseTrigger(type) {
     setTrigger({ type, value: defaultParam(TRIGGERS[type].param) });
@@ -105,20 +112,39 @@ export default function AutomationModal({
     setActions(actions.filter((_, i) => i !== index));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (actions.length === 0) {
       setError("Add at least one action.");
       return;
     }
-    onSave({
-      name: name.trim(),
-      description: description.trim(),
-      trigger,
-      actions,
-    });
-    document.activeElement?.blur();
-    onClose();
+    setBusy(true);
+    setSaveError("");
+    try {
+      await onSave({
+        name: name.trim(),
+        description: description.trim(),
+        trigger,
+        actions,
+      });
+      document.activeElement?.blur();
+      onClose();
+    } catch (err) {
+      setSaveError(err.message);
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    setSaveError("");
+    try {
+      await onDelete();
+      onClose();
+    } catch (err) {
+      setSaveError(err.message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -127,29 +153,65 @@ export default function AutomationModal({
       onClose={onClose}
       onSubmit={handleSubmit}
       footer={
-        <>
-          {automation && (
+        confirmDelete ? (
+          // Second step of deleting: are you sure?
+          <>
+            <span className="mr-auto flex items-center gap-2 text-sm text-red-600">
+              <TriangleAlert className="h-4 w-4 shrink-0" />
+              Delete this automation for good?
+            </span>
             <button
               type="button"
-              onClick={() => {
-                onDelete();
-                onClose();
-              }}
-              className="mr-auto flex h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
+              onClick={() => setConfirmDelete(false)}
+              className={secondaryButton}
             >
-              <Trash2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Delete</span>
+              Keep it
             </button>
-          )}
-          <button type="button" onClick={onClose} className={secondaryButton}>
-            Cancel
-          </button>
-          <button type="submit" className={primaryButton}>
-            {automation ? "Save" : "Create"}
-          </button>
-        </>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+            >
+              {busy ? "Deleting…" : "Yes, delete it"}
+            </button>
+          </>
+        ) : (
+          <>
+            {automation && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="mr-auto flex h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
+            <button type="button" onClick={onClose} className={secondaryButton}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
+            >
+              {busy ? "Saving…" : automation ? "Save" : "Create"}
+            </button>
+          </>
+        )
       }
     >
+      {saveError && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+        >
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {saveError}
+        </p>
+      )}
+
       <label className={labelClass}>
         Name
         <input

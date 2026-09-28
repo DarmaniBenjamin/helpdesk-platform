@@ -296,7 +296,11 @@ export default function TicketAssignment() {
                 key={rule.id}
                 rule={rule}
                 tickets={tickets}
-                onToggle={(on) => updateRule(rule.id, { enabled: on })}
+                onToggle={(on) =>
+                  updateRule(rule.id, { enabled: on }).catch((err) =>
+                    window.alert(err.message),
+                  )
+                }
                 onEdit={() => setEditing(rule)}
               />
             ))}

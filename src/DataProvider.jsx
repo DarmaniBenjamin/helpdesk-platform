@@ -4,121 +4,13 @@ import { api } from "./api";
 import { syncDirectory } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
-// ---------- What comes from the backend ----------
-// Signing in, the team, departments, customers, tickets and the Knowledge
-// Base come from the server (see the server folder), which stores them in
-// the database. Rules, automations and settings are still example data
-// for now; they move to the database next.
+// ---------- Everything comes from the backend ----------
+// Signing in, the team, departments, customers, tickets, the Knowledge
+// Base, assignment rules, automations and settings all come from the
+// server (see the server folder), which stores them in the database.
 
-// Assignment rules to start with. They're saved and shown, but don't
-// run automatically yet: that gets decided later.
-const STARTING_RULES = [
-  {
-    id: 1,
-    name: "Website and design",
-    description:
-      "Website changes, flyers, logos and social media go to Web + Media.",
-    keywords: ["website", "flyer", "logo", "social media"],
-    department: "media",
-    agent: "a2",
-    enabled: true,
-  },
-  {
-    id: 2,
-    name: "Network problems",
-    description: "Wi-Fi and internet problems go to Support.",
-    keywords: ["wi-fi", "wifi", "internet", "access point"],
-    department: "support",
-    agent: null,
-    enabled: true,
-  },
-  {
-    id: 3,
-    name: "Email and accounts",
-    description:
-      "Mailboxes, OneDrive and Microsoft 365 go to Managed Services.",
-    keywords: ["mailbox", "onedrive", "microsoft 365", "outlook"],
-    department: "managed",
-    agent: "a1",
-    enabled: true,
-  },
-  {
-    id: 4,
-    name: "Backups and servers",
-    description: "Failed backups, restores and server space warnings.",
-    keywords: ["backup", "restore", "server"],
-    department: "managed",
-    agent: null,
-    enabled: false,
-  },
-];
-
-// Automations to start with. Like the rules, they're saved and shown
-// but don't run yet.
-const STARTING_AUTOMATIONS = [
-  {
-    id: 1,
-    name: "Auto-close resolved tickets",
-    description:
-      "Close tickets that have been resolved for 7 days without a customer reply.",
-    trigger: { type: "resolvedFor", value: 7 },
-    actions: [
-      { type: "setStatus", value: "closed" },
-      {
-        type: "emailCustomer",
-        value: "We've closed your ticket. Just reply if you still need help.",
-      },
-    ],
-    enabled: true,
-    runs: 234,
-  },
-  {
-    id: 2,
-    name: "Welcome email for new tickets",
-    description:
-      "Let customers know we got their request as soon as a ticket is created.",
-    trigger: { type: "created", value: null },
-    actions: [
-      {
-        type: "emailCustomer",
-        value:
-          "Thanks, we've received your request and will be in touch shortly.",
-      },
-      { type: "addTag", value: "new" },
-    ],
-    enabled: true,
-    runs: 2134,
-  },
-  {
-    id: 3,
-    name: "Priority escalation",
-    description: "Raise the priority if nobody has replied within 4 hours.",
-    trigger: { type: "noAgentReply", value: 4 },
-    actions: [
-      { type: "setPriority", value: 4 },
-      { type: "notifyTeam", value: null },
-      {
-        type: "addNote",
-        value: "Escalated automatically: no reply within 4 hours.",
-      },
-    ],
-    enabled: true,
-    runs: 432,
-  },
-  {
-    id: 4,
-    name: "Reopen when the customer replies",
-    description:
-      "If a customer answers a ticket we're waiting on, put it back in the queue.",
-    trigger: { type: "customerReply", value: null },
-    actions: [{ type: "setStatus", value: "open" }],
-    enabled: false,
-    runs: 0,
-  },
-];
-
-// App settings. Backup destinations and the Freshdesk connection are saved
-// here now and switched on once the backend exists.
+// App settings (Super Admin only), used until the server's copy has
+// loaded. The server has the same defaults.
 const STARTING_SETTINGS = {
   backup: {
     destination: "download", // "download", "gdrive" or "b2"
@@ -131,16 +23,15 @@ const STARTING_SETTINGS = {
   },
 };
 
-// Wraps the whole app and keeps the tickets and customers in one place.
-// Later, this is where the app will load from / save to the backend.
+// Wraps the whole app and keeps everything the pages show in one place,
+// loaded from (and saved to) the server
 export default function DataProvider({ children }) {
-  // Tickets, customers, Knowledge Base answers, the team and departments
-  // load from the server once you're signed in
+  // All of these load from the server once you're signed in
   const [tickets, setTickets] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [answers, setAnswers] = useState([]);
-  const [rules, setRules] = useState(STARTING_RULES);
-  const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
+  const [rules, setRules] = useState([]);
+  const [automations, setAutomations] = useState([]);
   const [team, setTeam] = useState([]);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
   const [departments, setDepartments] = useState([]);
@@ -149,33 +40,39 @@ export default function DataProvider({ children }) {
   // userId = the account that's signed in, or null.
   const [auth, setAuth] = useState({ checked: false, userId: null });
 
-  // Loads everything for the person who just signed in. Customers only
-  // get themselves and their own tickets (they never see the staff list,
-  // other customers, internal notes, history lines or the Knowledge Base).
+  // Loads everything the person who just signed in is allowed to see.
+  // Customers only get themselves and their own tickets. Rules and
+  // automations are for Admins, settings for the Super Admin.
   async function loadDirectory(user) {
     const isCustomer = user.role === "customer";
-    const [teamList, departmentList, customerList, ticketList, answerList] =
-      await Promise.all([
-        isCustomer ? [user] : api("/team"),
-        api("/departments"),
-        api("/customers"),
-        api("/tickets"),
-        isCustomer ? [] : api("/answers"),
-      ]);
+    const isAdmin = user.role === "owner" || user.role === "admin";
+    const [
+      teamList,
+      departmentList,
+      customerList,
+      ticketList,
+      answerList,
+      ruleList,
+      automationList,
+      settingsData,
+    ] = await Promise.all([
+      isCustomer ? [user] : api("/team"),
+      api("/departments"),
+      api("/customers"),
+      api("/tickets"),
+      isCustomer ? [] : api("/answers"),
+      isAdmin ? api("/rules") : [],
+      isAdmin ? api("/automations") : [],
+      user.role === "owner" ? api("/settings") : STARTING_SETTINGS,
+    ]);
     setTeam(teamList);
     setDepartments(departmentList);
     setCustomers(customerList);
     setTickets(ticketList);
     setAnswers(answerList);
-
-    // The example rules were assigned to example people who don't exist
-    // any more, so those go back to "anyone on the team"
-    const ids = new Set(teamList.map((m) => m.id));
-    setRules((list) =>
-      list.map((r) =>
-        r.agent && !ids.has(r.agent) ? { ...r, agent: null } : r,
-      ),
-    );
+    setRules(ruleList);
+    setAutomations(automationList);
+    setSettings(settingsData);
   }
 
   // Signed in: load everything they need, then show the app
@@ -256,6 +153,14 @@ export default function DataProvider({ children }) {
   // Base answers stay but without a team. The last one can't be deleted.
   async function deleteDepartment(id) {
     await api(`/departments/${id}`, { method: "DELETE" });
+    // Switch off its rules on the server too
+    await Promise.all(
+      rules
+        .filter((r) => r.department === id && r.enabled)
+        .map((r) =>
+          api(`/rules/${r.id}`, { method: "PATCH", body: { enabled: false } }),
+        ),
+    );
     setDepartments((list) => list.filter((d) => d.id !== id));
     setTickets((list) =>
       list.map((t) => (t.department === id ? { ...t, department: null } : t)),
@@ -268,7 +173,9 @@ export default function DataProvider({ children }) {
       ),
     );
     setRules((list) =>
-      list.map((r) => (r.department === id ? { ...r, enabled: false } : r)),
+      list.map((r) =>
+        r.department === id ? { ...r, department: null, enabled: false } : r,
+      ),
     );
     setAnswers((list) =>
       list.map((a) => (a.department === id ? { ...a, department: null } : a)),
@@ -299,6 +206,9 @@ export default function DataProvider({ children }) {
     setCustomers([]);
     setTickets([]);
     setAnswers([]);
+    setRules([]);
+    setAutomations([]);
+    setSettings(STARTING_SETTINGS);
   }
 
   // Change your own password. Throws with the server's message if the
@@ -324,14 +234,25 @@ export default function DataProvider({ children }) {
   // ---------- Settings ----------
 
   // e.g. updateSettings("backup", { schedule: "weekly" })
-  function updateSettings(section, changes) {
+  // Shows the change straight away and saves it. If the server says no,
+  // the change is undone and the reason shown.
+  async function updateSettings(section, changes) {
+    const before = settings;
     setSettings((all) => ({
       ...all,
       [section]: { ...all[section], ...changes },
     }));
+    try {
+      setSettings(
+        await api(`/settings/${section}`, { method: "PATCH", body: changes }),
+      );
+    } catch (err) {
+      setSettings(before);
+      window.alert(`That setting wasn't saved: ${err.message}`);
+    }
   }
 
-  // ---------- Backup, restore and import ----------
+  // ---------- Backup and import ----------
 
   // Everything in the app, in one object, ready to save as a file
   function makeBackup() {
@@ -340,7 +261,7 @@ export default function DataProvider({ children }) {
       ...settings,
       backup: { ...settings.backup, lastBackupAt: time },
     };
-    setSettings(backupSettings);
+    updateSettings("backup", { lastBackupAt: time }); // remember when
     return {
       app: BACKUP_APP,
       version: BACKUP_VERSION,
@@ -356,16 +277,6 @@ export default function DataProvider({ children }) {
         settings: backupSettings,
       },
     };
-  }
-
-  // Replaces everything with what's in a backup. Anything the backup
-  // doesn't have is left as it is. Tickets, customers, the Knowledge Base,
-  // the team and departments aren't replaced: they live in the database
-  // now (database backups are set up in a later step).
-  function restoreBackup(data) {
-    if (data.rules) setRules(data.rules);
-    if (data.automations) setAutomations(data.automations);
-    if (data.settings) setSettings({ ...STARTING_SETTINGS, ...data.settings });
   }
 
   // Saves the result of a Freshdesk import (see freshdeskMapping.js).
@@ -486,47 +397,52 @@ export default function DataProvider({ children }) {
   }
 
   // ---------- Automations ----------
+  // These save to the database, then update the page. If the server says
+  // no, they throw an error with its message.
 
-  function addAutomation(fields) {
-    const automation = {
-      ...fields,
-      id: Math.max(0, ...automations.map((a) => a.id)) + 1,
-      enabled: true,
-      runs: 0,
-    };
+  async function addAutomation(fields) {
+    const automation = await api("/automations", {
+      method: "POST",
+      body: fields,
+    });
     setAutomations((list) => [...list, automation]);
     return automation;
   }
 
-  function updateAutomation(id, changes) {
-    setAutomations((list) =>
-      list.map((a) => (a.id === id ? { ...a, ...changes } : a)),
-    );
+  async function updateAutomation(id, changes) {
+    const updated = await api(`/automations/${id}`, {
+      method: "PATCH",
+      body: changes,
+    });
+    setAutomations((list) => list.map((a) => (a.id === id ? updated : a)));
+    return updated;
   }
 
-  function deleteAutomation(id) {
+  async function deleteAutomation(id) {
+    await api(`/automations/${id}`, { method: "DELETE" });
     setAutomations((list) => list.filter((a) => a.id !== id));
   }
 
   // ---------- Assignment rules ----------
+  // Same as automations: saved to the database first
 
-  function addRule(fields) {
-    const rule = {
-      ...fields,
-      id: Math.max(0, ...rules.map((r) => r.id)) + 1,
-      enabled: true,
-    };
+  async function addRule(fields) {
+    const rule = await api("/rules", { method: "POST", body: fields });
     setRules((list) => [...list, rule]);
     return rule;
   }
 
-  function updateRule(id, changes) {
-    setRules((list) =>
-      list.map((r) => (r.id === id ? { ...r, ...changes } : r)),
-    );
+  async function updateRule(id, changes) {
+    const updated = await api(`/rules/${id}`, {
+      method: "PATCH",
+      body: changes,
+    });
+    setRules((list) => list.map((r) => (r.id === id ? updated : r)));
+    return updated;
   }
 
-  function deleteRule(id) {
+  async function deleteRule(id) {
+    await api(`/rules/${id}`, { method: "DELETE" });
     setRules((list) => list.filter((r) => r.id !== id));
   }
 
@@ -736,7 +652,6 @@ export default function DataProvider({ children }) {
         renameDepartment,
         deleteDepartment,
         makeBackup,
-        restoreBackup,
         saveImport,
       }}
     >

@@ -257,7 +257,11 @@ export default function Automation() {
               <AutomationRow
                 key={a.id}
                 automation={a}
-                onToggle={(on) => updateAutomation(a.id, { enabled: on })}
+                onToggle={(on) =>
+                  updateAutomation(a.id, { enabled: on }).catch((err) =>
+                    window.alert(err.message),
+                  )
+                }
                 onEdit={() => setEditing(a)}
               />
             ))}
