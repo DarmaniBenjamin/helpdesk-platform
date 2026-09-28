@@ -14,13 +14,16 @@ import {
   BookOpen,
   CircleCheck,
   TriangleAlert,
+  Trash2,
   Hand,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
 import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
-import { inputClass, labelClass } from "../formStyles";
+import Modal from "../Modal";
+import { inputClass, labelClass, secondaryButton } from "../formStyles";
+import { can } from "../teamRoles";
 import { extractKeywords, relevance } from "../Knowledge";
 import useData from "../../useData";
 import {
@@ -250,7 +253,7 @@ function Composer({ ticket, onSend }) {
 }
 
 // The panel with status, priority, department, assignee and due date
-function Properties({ ticket, me, onChange }) {
+function Properties({ ticket, me, onChange, onDelete }) {
   return (
     <div className="flex flex-col gap-4">
       <label className={labelClass}>
@@ -354,19 +357,123 @@ function Properties({ ticket, me, onChange }) {
         />
         <DueLabel ticket={ticket} />
       </label>
+
+      {/* Admins and the Super Admin only; asks before deleting */}
+      {can(me.role, "deleteTickets") && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="mt-1 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-red-200 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete ticket
+        </button>
+      )}
     </div>
+  );
+}
+
+// "Are you sure?" before deleting a ticket. It can't be undone, so the
+// ticket number has to be typed in first.
+function DeleteTicketModal({ ticket, onConfirm, onClose }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const matches = typed.trim().replace(/^#/, "") === String(ticket.id);
+
+  async function handleDelete(e) {
+    e.preventDefault();
+    if (!matches || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Delete ticket #${ticket.id}?`}
+      onClose={onClose}
+      onSubmit={handleDelete}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={secondaryButton}>
+            Keep it
+          </button>
+          <button
+            type="submit"
+            disabled={!matches || busy}
+            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+          >
+            {busy ? "Deleting…" : "Delete for good"}
+          </button>
+        </>
+      }
+    >
+      <div className="rounded-lg border border-line bg-page p-3 text-sm">
+        <p className="font-medium">{ticket.subject}</p>
+        <p className="text-muted">
+          {ticket.requester.name}
+          {ticket.requester.company && ` · ${ticket.requester.company}`}
+        </p>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          This deletes the ticket and its whole conversation, internal notes and
+          history, for good. <strong>It can't be undone.</strong> Knowledge Base
+          answers saved from it stay.
+        </p>
+      </div>
+      <p className="text-sm text-muted">
+        Finished with it? Setting the status to <strong>Closed</strong> keeps it
+        for your records instead.
+      </p>
+
+      <label className={labelClass}>
+        <span>
+          Type <strong>{ticket.id}</strong> to confirm
+        </span>
+        <input
+          autoFocus
+          inputMode="numeric"
+          autoComplete="off"
+          value={typed}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            setError("");
+          }}
+          placeholder={String(ticket.id)}
+          className={inputClass}
+        />
+      </label>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+    </Modal>
   );
 }
 
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { me, tickets, updateTicket, addMessage, answers, addAnswer } =
-    useData();
+  const {
+    me,
+    tickets,
+    updateTicket,
+    deleteTicket,
+    addMessage,
+    answers,
+    addAnswer,
+  } = useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
   // A message if a change (status, assignee...) didn't save
   const [changeError, setChangeError] = useState("");
   const [savedAnswer, setSavedAnswer] = useState(null); // the answer just saved from a note
+  const [deleting, setDeleting] = useState(false); // the "are you sure?" box
 
   const ticket = tickets.find((t) => t.id === Number(id));
 
@@ -418,18 +525,27 @@ export default function TicketDetail() {
     if (saveToAnswers) {
       // The ticket's subject becomes the title, the ticket's description the problem,
       // and the note the fix. Keywords are picked from all three.
-      const answer = addAnswer({
-        title: ticket.subject,
-        problem: ticket.description,
-        solution: body,
-        department: ticket.department,
-        ticketId: ticket.id,
-        source: "note",
-        keywords: extractKeywords(
-          `${ticket.subject} ${ticket.subject} ${ticket.description} ${body}`,
-        ),
-      });
-      setSavedAnswer(answer);
+      // The note is already saved, so if this part fails, say so
+      // instead of letting the note be sent twice
+      try {
+        const answer = await addAnswer({
+          title: ticket.subject,
+          problem: ticket.description,
+          solution: body,
+          department: ticket.department,
+          ticketId: ticket.id,
+          source: "note",
+          keywords: extractKeywords(
+            `${ticket.subject} ${ticket.subject} ${ticket.description} ${body}`,
+          ),
+        });
+        setSavedAnswer(answer);
+      } catch (err) {
+        setSavedAnswer(null);
+        setChangeError(
+          `The note was added, but it couldn't be saved to the Knowledge Base: ${err.message}`,
+        );
+      }
     } else {
       setSavedAnswer(null);
     }
@@ -503,6 +619,7 @@ export default function TicketDetail() {
                     setChangeError(err.message);
                   }
                 }}
+                onDelete={() => setDeleting(true)}
               />
             </div>
           </div>
@@ -571,6 +688,17 @@ export default function TicketDetail() {
           </div>
         </section>
       </div>
+
+      {deleting && (
+        <DeleteTicketModal
+          ticket={ticket}
+          onConfirm={async () => {
+            await deleteTicket(ticket.id);
+            navigate("/inbox", { replace: true });
+          }}
+          onClose={() => setDeleting(false)}
+        />
+      )}
     </div>
   );
 }

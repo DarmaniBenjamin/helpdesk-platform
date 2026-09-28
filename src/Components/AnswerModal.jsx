@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, Sparkles } from "lucide-react";
+import { Trash2, Sparkles, TriangleAlert } from "lucide-react";
 import Modal from "./Modal";
 import KeywordInput from "./KeywordInput";
 import {
@@ -11,7 +11,9 @@ import {
 import { extractKeywords } from "./Knowledge";
 import { DEPARTMENTS } from "../data";
 
-// Create a new saved answer (no `answer` passed) or edit an existing one
+// Create a new saved answer (no `answer` passed) or edit an existing one.
+// onSave and onDelete save to the database; the form only closes once
+// that worked, and shows the reason if it didn't.
 export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
   const [title, setTitle] = useState(answer?.title ?? "");
   const [department, setDepartment] = useState(
@@ -20,6 +22,10 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
   const [problem, setProblem] = useState(answer?.problem ?? "");
   const [solution, setSolution] = useState(answer?.solution ?? "");
   const [keywords, setKeywords] = useState(answer?.keywords ?? []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  // Deleting takes two clicks: "Delete", then "Yes, delete it"
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Fill in keywords from what's been written so far
   function suggestKeywords() {
@@ -29,20 +35,39 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
     setKeywords([...new Set([...keywords, ...suggested])]);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    onSave({
-      title: title.trim(),
-      department,
-      problem: problem.trim(),
-      solution: solution.trim(),
-      // No keywords typed? Work them out automatically
-      keywords: keywords.length
-        ? keywords
-        : extractKeywords(`${title} ${title} ${problem} ${solution}`),
-    });
-    document.activeElement?.blur();
-    onClose();
+    setBusy(true);
+    setError("");
+    try {
+      await onSave({
+        title: title.trim(),
+        department,
+        problem: problem.trim(),
+        solution: solution.trim(),
+        // No keywords typed? Work them out automatically
+        keywords: keywords.length
+          ? keywords
+          : extractKeywords(`${title} ${title} ${problem} ${solution}`),
+      });
+      document.activeElement?.blur();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    setError("");
+    try {
+      await onDelete();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -51,29 +76,65 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
       onClose={onClose}
       onSubmit={handleSubmit}
       footer={
-        <>
-          {answer && (
+        confirmDelete ? (
+          // Second step of deleting: are you sure?
+          <>
+            <span className="mr-auto flex items-center gap-2 text-sm text-red-600">
+              <TriangleAlert className="h-4 w-4 shrink-0" />
+              Delete this answer for good?
+            </span>
             <button
               type="button"
-              onClick={() => {
-                onDelete();
-                onClose();
-              }}
-              className="mr-auto flex h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
+              onClick={() => setConfirmDelete(false)}
+              className={secondaryButton}
             >
-              <Trash2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Delete</span>
+              Keep it
             </button>
-          )}
-          <button type="button" onClick={onClose} className={secondaryButton}>
-            Cancel
-          </button>
-          <button type="submit" className={primaryButton}>
-            Save
-          </button>
-        </>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+            >
+              {busy ? "Deleting…" : "Yes, delete it"}
+            </button>
+          </>
+        ) : (
+          <>
+            {answer && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="mr-auto flex h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97]"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
+            <button type="button" onClick={onClose} className={secondaryButton}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className={`${primaryButton} disabled:cursor-wait disabled:opacity-70`}
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </>
+        )
       }
     >
+      {error && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600"
+        >
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {error}
+        </p>
+      )}
+
       <label className={labelClass}>
         Title
         <input

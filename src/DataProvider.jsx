@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { DataContext } from "./useData";
 import { api } from "./api";
-import { STARTING_ANSWERS } from "./Components/Knowledge";
 import { syncDirectory } from "./data";
 import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
 // ---------- What comes from the backend ----------
-// Signing in, the team, departments, customers and tickets come from the
-// server (see the server folder), which stores them in the database.
-// Rules, automations, the Knowledge Base and settings are still example
-// data for now; they move to the database next.
+// Signing in, the team, departments, customers, tickets and the Knowledge
+// Base come from the server (see the server folder), which stores them in
+// the database. Rules, automations and settings are still example data
+// for now; they move to the database next.
 
 // Assignment rules to start with. They're saved and shown, but don't
 // run automatically yet: that gets decided later.
@@ -135,13 +134,13 @@ const STARTING_SETTINGS = {
 // Wraps the whole app and keeps the tickets and customers in one place.
 // Later, this is where the app will load from / save to the backend.
 export default function DataProvider({ children }) {
-  // Tickets, customers, the team and departments load from the server
-  // once you're signed in
+  // Tickets, customers, Knowledge Base answers, the team and departments
+  // load from the server once you're signed in
   const [tickets, setTickets] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [answers, setAnswers] = useState([]);
   const [rules, setRules] = useState(STARTING_RULES);
   const [automations, setAutomations] = useState(STARTING_AUTOMATIONS);
-  const [answers, setAnswers] = useState(STARTING_ANSWERS);
   const [team, setTeam] = useState([]);
   const [settings, setSettings] = useState(STARTING_SETTINGS);
   const [departments, setDepartments] = useState([]);
@@ -152,19 +151,22 @@ export default function DataProvider({ children }) {
 
   // Loads everything for the person who just signed in. Customers only
   // get themselves and their own tickets (they never see the staff list,
-  // other customers, internal notes or history lines).
+  // other customers, internal notes, history lines or the Knowledge Base).
   async function loadDirectory(user) {
-    const [teamList, departmentList, customerList, ticketList] =
+    const isCustomer = user.role === "customer";
+    const [teamList, departmentList, customerList, ticketList, answerList] =
       await Promise.all([
-        user.role === "customer" ? [user] : api("/team"),
+        isCustomer ? [user] : api("/team"),
         api("/departments"),
         api("/customers"),
         api("/tickets"),
+        isCustomer ? [] : api("/answers"),
       ]);
     setTeam(teamList);
     setDepartments(departmentList);
     setCustomers(customerList);
     setTickets(ticketList);
+    setAnswers(answerList);
 
     // The example rules were assigned to example people who don't exist
     // any more, so those go back to "anyone on the team"
@@ -203,10 +205,8 @@ export default function DataProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The signed-in person (null when nobody is), and the name written on
-  // their replies and notes
+  // The signed-in person (null when nobody is)
   const me = team.find((m) => m.id === auth.userId) ?? null;
-  const myName = me?.name ?? "";
 
   // Everyone on the staff who can be given tickets: active members who
   // aren't customers. Every "Assigned to" list in the app uses these.
@@ -298,6 +298,7 @@ export default function DataProvider({ children }) {
     setTeam([]);
     setCustomers([]);
     setTickets([]);
+    setAnswers([]);
   }
 
   // Change your own password. Throws with the server's message if the
@@ -358,13 +359,12 @@ export default function DataProvider({ children }) {
   }
 
   // Replaces everything with what's in a backup. Anything the backup
-  // doesn't have is left as it is. Tickets, customers, the team and
-  // departments aren't replaced: they live in the database now (database
-  // backups are set up in a later step).
+  // doesn't have is left as it is. Tickets, customers, the Knowledge Base,
+  // the team and departments aren't replaced: they live in the database
+  // now (database backups are set up in a later step).
   function restoreBackup(data) {
     if (data.rules) setRules(data.rules);
     if (data.automations) setAutomations(data.automations);
-    if (data.answers) setAnswers(data.answers);
     if (data.settings) setSettings({ ...STARTING_SETTINGS, ...data.settings });
   }
 
@@ -450,40 +450,39 @@ export default function DataProvider({ children }) {
   }
 
   // ---------- Saved answers (knowledge base) ----------
+  // These save to the database, then update the page. If the server says
+  // no, they throw an error with its message.
 
-  function addAnswer(fields) {
-    const now = Date.now();
-    const answer = {
-      ticketId: null,
-      source: "manual",
-      author: myName,
-      ...fields,
-      id: Math.max(0, ...answers.map((a) => a.id)) + 1,
-      createdAt: now,
-      updatedAt: now,
-      uses: 0,
-    };
+  // A new answer: { title, problem, solution, keywords, department },
+  // plus ticketId and source: "note" when it's saved from a ticket's note
+  async function addAnswer(fields) {
+    const answer = await api("/answers", { method: "POST", body: fields });
     setAnswers((list) => [answer, ...list]); // newest first
     return answer;
   }
 
-  function updateAnswer(id, changes) {
-    setAnswers((list) =>
-      list.map((a) =>
-        a.id === id ? { ...a, ...changes, updatedAt: Date.now() } : a,
-      ),
-    );
+  async function updateAnswer(id, changes) {
+    const updated = await api(`/answers/${id}`, {
+      method: "PATCH",
+      body: changes,
+    });
+    setAnswers((list) => list.map((a) => (a.id === id ? updated : a)));
+    return updated;
   }
 
-  function deleteAnswer(id) {
+  async function deleteAnswer(id) {
+    await api(`/answers/${id}`, { method: "DELETE" });
     setAnswers((list) => list.filter((a) => a.id !== id));
   }
 
-  // Count how often an answer gets copied, so the most useful ones can rise to the top
+  // Count how often an answer gets copied, so the most useful ones can
+  // rise to the top. Shown straight away; if saving fails it doesn't
+  // matter much, so nothing else happens.
   function recordAnswerUse(id) {
     setAnswers((list) =>
       list.map((a) => (a.id === id ? { ...a, uses: a.uses + 1 } : a)),
     );
+    api(`/answers/${id}/use`, { method: "POST" }).catch(() => {});
   }
 
   // ---------- Automations ----------
@@ -677,6 +676,17 @@ export default function DataProvider({ children }) {
     );
   }
 
+  // Delete a ticket for good, with its whole conversation, notes and
+  // history. Knowledge Base answers saved from it stay, but stop linking
+  // to it. Admins and the Super Admin only.
+  async function deleteTicket(id) {
+    await api(`/tickets/${id}`, { method: "DELETE" });
+    setTickets((list) => list.filter((t) => t.id !== id));
+    setAnswers((list) =>
+      list.map((a) => (a.ticketId === id ? { ...a, ticketId: null } : a)),
+    );
+  }
+
   return (
     <DataContext.Provider
       value={{
@@ -684,6 +694,7 @@ export default function DataProvider({ children }) {
         customers,
         addTicket,
         updateTicket,
+        deleteTicket,
         addMessage,
         addCustomer,
         updateCustomer,

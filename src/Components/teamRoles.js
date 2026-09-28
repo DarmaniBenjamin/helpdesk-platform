@@ -64,6 +64,7 @@ export const PERMISSIONS = [
     roles: STAFF_ROLES,
   },
   { key: "createTickets", label: "Create tickets", roles: ADMINS_UP },
+  { key: "deleteTickets", label: "Delete tickets", roles: ADMINS_UP },
   {
     key: "team",
     label: "Invite and remove agents and customers",
