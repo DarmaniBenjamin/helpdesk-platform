@@ -279,19 +279,61 @@ export default function DataProvider({ children }) {
     };
   }
 
-  // Saves the result of a Freshdesk import (see freshdeskMapping.js).
-  // Tickets keep a copy of their customer, so those are refreshed too.
-  // (For now this only changes what's on screen. Importing into the
-  // database is the next step.)
-  function saveImport(newCustomers, newTickets) {
-    const byId = new Map(newCustomers.map((c) => [c.id, c]));
-    setCustomers(newCustomers);
-    setTickets(
-      newTickets.map((t) => ({
-        ...t,
-        requester: byId.get(t.customerId) ?? t.requester,
-      })),
+  // Saves a Freshdesk import (worked out in freshdeskMapping.js) to the
+  // database: customers first, then tickets, in batches so no single
+  // request is too big. `onProgress` gets a short message to show.
+  // Returns the counts from the server and anything it couldn't save.
+  // Afterwards the customers and tickets are loaded again, so the page
+  // shows exactly what's in the database.
+  async function saveImport(newCustomers, newTickets, replace, onProgress) {
+    const totals = {
+      customers: { added: 0, updated: 0, skipped: 0 },
+      tickets: { added: 0, updated: 0, skipped: 0 },
+      problems: [],
+    };
+
+    async function send(path, key, list, batchSize, label) {
+      for (let i = 0; i < list.length; i += batchSize) {
+        onProgress?.(
+          `Saving ${label}… ${Math.min(i + batchSize, list.length)} of ${list.length}`,
+        );
+        const r = await api(path, {
+          method: "POST",
+          body: { [key]: list.slice(i, i + batchSize), replace },
+        });
+        totals[key].added += r.added;
+        totals[key].updated += r.updated;
+        totals[key].skipped += r.skipped;
+        totals.problems.push(...r.problems);
+      }
+    }
+
+    // Only what the server needs: tickets keep a copy of their customer
+    // on screen, but that doesn't need to be sent
+    const ticketsToSend = newTickets.map((t) => {
+      const copy = { ...t };
+      delete copy.requester;
+      return copy;
+    });
+
+    await send(
+      "/import/customers",
+      "customers",
+      newCustomers,
+      500,
+      "customers",
     );
+    // Tickets with their whole conversation, so smaller batches
+    await send("/import/tickets", "tickets", ticketsToSend, 50, "tickets");
+
+    onProgress?.("Loading what was saved…");
+    const [customerList, ticketList] = await Promise.all([
+      api("/customers"),
+      api("/tickets"),
+    ]);
+    setCustomers(customerList);
+    setTickets(ticketList);
+    return totals;
   }
 
   // ---------- Team ----------

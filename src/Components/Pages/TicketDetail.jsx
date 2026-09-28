@@ -16,6 +16,7 @@ import {
   TriangleAlert,
   Trash2,
   Hand,
+  Tag,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -577,6 +578,20 @@ export default function TicketDetail() {
               {SOURCES[ticket.source] ?? ticket.source}
             </span>
           </div>
+          {/* Tags, e.g. brought over from Freshdesk */}
+          {ticket.tags?.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {ticket.tags.map((tag) => (
+                <li
+                  key={tag}
+                  className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand"
+                >
+                  <Tag className="h-3 w-3" />
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       {changeError && (
@@ -729,13 +744,23 @@ function CustomerCard({ customer, otherOpen }) {
       </Link>
 
       <div className="flex flex-col gap-2 text-sm">
-        <a
-          href={`mailto:${customer.email}`}
-          className="flex items-center gap-2 text-muted hover:text-brand"
-        >
-          <Mail className="h-4 w-4 shrink-0" />
-          <span className="truncate">{customer.email}</span>
-        </a>
+        {customer.email ? (
+          <a
+            href={`mailto:${customer.email}`}
+            className="flex items-center gap-2 text-muted hover:text-brand"
+          >
+            <Mail className="h-4 w-4 shrink-0" />
+            <span className="truncate">{customer.email}</span>
+          </a>
+        ) : (
+          <Link
+            to={`/customers/${customer.id}`}
+            className="flex items-center gap-2 text-muted hover:text-brand"
+          >
+            <Mail className="h-4 w-4 shrink-0" />
+            <span className="truncate">No email yet, add one</span>
+          </Link>
+        )}
         {customer.phone && (
           <a
             href={`tel:${customer.phone}`}

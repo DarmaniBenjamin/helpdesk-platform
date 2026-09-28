@@ -116,8 +116,8 @@ export async function testConnection(connection) {
   };
 }
 
-// Pulls companies, contacts, tickets and (optionally) each ticket's notes
-// and replies. `maxTickets` = how many of the newest tickets to get.
+// Pulls companies, contacts, tickets, agents and (optionally) each
+// ticket's notes and replies. `maxTickets` = how many of the newest tickets to get.
 // `onProgress` gets a short message to show while it works.
 export async function fetchEverything(
   connection,
@@ -143,9 +143,10 @@ export async function fetchEverything(
     },
   );
 
-  // 2. Agents, so replies and notes show who wrote them. Non-admin keys
-  // often aren't allowed this list, so if Freshdesk says no, carry on
-  // without names instead of stopping the whole import.
+  // 2. Agents: who wrote each reply and note, and who each ticket was
+  // assigned to (matched to your team by email). Non-admin keys often
+  // aren't allowed this list, so if Freshdesk says no, carry on without
+  // it instead of stopping the whole import.
   onProgress({ message: "Getting agents…" });
   let agents = [];
   try {
@@ -182,7 +183,7 @@ export async function fetchEverything(
         contacts.push(await get(connection, `/contacts/${id}`, options));
       } catch (err) {
         if (err.name === "AbortError") throw err;
-        // A deleted or blocked contact: fall back to the details on the ticket
+        // A deleted contact: fall back to the details on the ticket
         const t = tickets.find((x) => x.requester_id === id);
         if (t?.requester) contacts.push(t.requester);
       }
@@ -220,5 +221,12 @@ export async function fetchEverything(
     }
   }
 
-  return { tickets, contacts, companies };
+  // Only what's needed from each agent: their ID, name and email
+  const agentList = agents.map((a) => ({
+    id: a.id,
+    name: a.contact?.name ?? "",
+    email: a.contact?.email ?? "",
+  }));
+
+  return { tickets, contacts, companies, agents: agentList };
 }

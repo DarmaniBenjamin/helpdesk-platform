@@ -30,7 +30,7 @@ import {
   mergeTickets,
 } from "./freshdeskMapping";
 import { downloadJson, readJsonFile } from "./backupUtils";
-import { DEPARTMENTS, STATUSES, PRIORITIES, findDepartment } from "../data";
+import { STATUSES, PRIORITIES, findDepartment } from "../data";
 import useData from "../useData";
 
 // ---------- Small pieces ----------
@@ -195,10 +195,18 @@ function countLine(label, r) {
   return `${label}: ${r.added} added, ${r.updated} updated, ${r.skipped} left as they were`;
 }
 
+// How a ticket came in, in words
+const SOURCE_NAMES = {
+  email: "Email",
+  portal: "Customer portal",
+  phone: "Phone",
+  agent: "Created by the team",
+};
+
 // ---------- The page section ----------
 
 export default function FreshdeskImport() {
-  const { customers, tickets, saveImport } = useData();
+  const { customers, tickets, team, departments, saveImport } = useData();
   const navigate = useNavigate();
   const fileInput = useRef(null);
 
@@ -210,9 +218,12 @@ export default function FreshdeskImport() {
   const [ticketMapping, setTicketMapping] = useState({});
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeTickets, setIncludeTickets] = useState(true);
-  const [department, setDepartment] = useState(DEPARTMENTS[0].id);
+  // "" = No team yet
+  const [department, setDepartment] = useState(() => departments[0]?.id ?? "");
   const [replace, setReplace] = useState(false);
   const [result, setResult] = useState(null);
+  const [importing, setImporting] = useState(null); // progress message
+  const [importError, setImportError] = useState("");
 
   // ----- Loading data (from Freshdesk or from files) -----
 
@@ -231,6 +242,7 @@ export default function FreshdeskImport() {
     setIncludeTickets(found.tickets.length > 0);
     setResult(null);
     setFileError("");
+    setImportError("");
   }
 
   // Saves exactly what Freshdesk sent as a JSON file, to keep or import later
@@ -241,6 +253,7 @@ export default function FreshdeskImport() {
         companies: source.companies,
         contacts: source.contacts,
         tickets: source.tickets,
+        agents: source.agents,
       },
       `freshdesk-export-${stamp}.json`,
     );
@@ -252,13 +265,14 @@ export default function FreshdeskImport() {
     setFileError("");
     setResult(null);
 
-    const found = { tickets: [], contacts: [], companies: [] };
+    const found = { tickets: [], contacts: [], companies: [], agents: [] };
     try {
       for (const file of files) {
         const part = readExport(await readJsonFile(file));
         found.tickets.push(...part.tickets);
         found.contacts.push(...part.contacts);
         found.companies.push(...part.companies);
+        found.agents.push(...part.agents);
       }
     } catch (err) {
       setFileError(err.message);
@@ -295,8 +309,10 @@ export default function FreshdeskImport() {
           customerMerge.list,
           department,
           customerMerge.aliases,
+          source.agents ?? [],
+          team,
         )
-      : { tickets: [], skipped: [] };
+      : { tickets: [], skipped: [], unmatched: new Map() };
     const ticketMerge = mergeTickets(tickets, converted.tickets, replace);
 
     return {
@@ -314,18 +330,35 @@ export default function FreshdeskImport() {
     ticketMapping,
     customers,
     tickets,
+    team,
     department,
     replace,
   ]);
 
-  function runImport() {
-    saveImport(plan.customerMerge.list, plan.ticketMerge.list);
-    setResult({
-      customers: plan.customerMerge,
-      tickets: plan.ticketMerge,
-      problems: plan.problems,
-    });
-    setSource(null);
+  // Saves everything to the database, in batches, showing how far it got
+  async function runImport() {
+    setImportError("");
+    setImporting("Starting…");
+    try {
+      const saved = await saveImport(
+        plan.contacts.contacts,
+        plan.converted.tickets,
+        replace,
+        setImporting,
+      );
+      setResult({
+        customers: saved.customers,
+        tickets: saved.tickets,
+        problems: [...plan.problems, ...saved.problems],
+      });
+      setSource(null);
+    } catch (err) {
+      setImportError(
+        `The import stopped: ${err.message} Anything saved before this is kept, so you can run it again with "Keep what's here".`,
+      );
+    } finally {
+      setImporting(null);
+    }
   }
 
   const nothingToImport =
@@ -335,6 +368,9 @@ export default function FreshdeskImport() {
 
   const firstContact = plan?.contacts.contacts[0];
   const firstTicket = plan?.converted.tickets[0];
+  const unmatched = plan ? [...plan.converted.unmatched] : [];
+  const assigneeName = (id) =>
+    id ? (team.find((m) => m.id === id)?.name ?? "Someone") : "Nobody";
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -550,14 +586,16 @@ export default function FreshdeskImport() {
                   onChange={(e) => setDepartment(e.target.value)}
                   className={`${inputClass} cursor-pointer`}
                 >
-                  {DEPARTMENTS.map((d) => (
+                  {departments.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
                     </option>
                   ))}
+                  <option value="">No team yet</option>
                 </select>
                 <span className="text-xs font-normal text-muted">
-                  You can move them afterwards. Tickets come in unassigned.
+                  You can move them afterwards. Each ticket goes to the same
+                  person as in Freshdesk, if they're on your team.
                 </span>
               </label>
 
@@ -606,8 +644,12 @@ export default function FreshdeskImport() {
                   <PreviewList
                     rows={[
                       ["Name", firstContact.name],
-                      ["Email", firstContact.email],
+                      ["Email", firstContact.email ?? "None"],
                       ["Phone", firstContact.phone || "None"],
+                      [
+                        "Extra phones",
+                        firstContact.extraPhones.join(", ") || "None",
+                      ],
                       ["Business", firstContact.company ?? "Individual"],
                       [
                         "Extra emails",
@@ -627,6 +669,12 @@ export default function FreshdeskImport() {
                       ["Status", STATUSES[firstTicket.status].label],
                       ["Priority", PRIORITIES[firstTicket.priority].label],
                       ["Team", findDepartment(firstTicket.department).name],
+                      ["Assigned to", assigneeName(firstTicket.assignee)],
+                      [
+                        "Source",
+                        SOURCE_NAMES[firstTicket.source] ?? firstTicket.source,
+                      ],
+                      ["Tags", firstTicket.tags.join(", ") || "None"],
                       [
                         "Created",
                         new Date(firstTicket.createdAt).toLocaleString(
@@ -656,20 +704,67 @@ export default function FreshdeskImport() {
               <li>{countLine("Tickets", plan.ticketMerge)}</li>
             </ul>
             {plan.problems.length > 0 && (
-              <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+              <details className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+                <summary className="flex cursor-pointer items-start gap-2">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {plan.problems.length} can't be imported, e.g.{" "}
+                    {plan.problems[0]}
+                  </span>
+                </summary>
+                <ul className="mt-2 flex list-disc flex-col gap-1 pl-5">
+                  {plan.problems.slice(0, 50).map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {unmatched.length > 0 && (
+              <details className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+                <summary className="flex cursor-pointer items-start gap-2">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {unmatched.reduce((n, [, count]) => n + count, 0)} tickets
+                    were assigned in Freshdesk to people who aren't on your team
+                    yet. They'll come in unassigned.
+                  </span>
+                </summary>
+                <ul className="mt-2 flex list-disc flex-col gap-1 pl-5">
+                  {unmatched.map(([name, count]) => (
+                    <li key={name}>
+                      {name}: {count} ticket{count === 1 ? "" : "s"}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2">
+                  Best fix: invite them on the Team page with the same email
+                  they use in Freshdesk, and import once they've joined. You can
+                  also assign these tickets by hand afterwards.
+                </p>
+              </details>
+            )}
+            {importError && (
+              <p
+                role="alert"
+                className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-600"
+              >
                 <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                {plan.problems.length} can't be imported, e.g.{" "}
-                {plan.problems[0]}
+                {importError}
               </p>
             )}
-            <div className="grid gap-2 sm:flex sm:justify-end">
+            <div className="grid gap-2 sm:flex sm:items-center sm:justify-end">
+              {importing && (
+                <p className="text-center text-sm text-muted sm:mr-auto sm:text-left">
+                  {importing}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={runImport}
-                disabled={nothingToImport}
+                disabled={nothingToImport || Boolean(importing)}
                 className={`${primaryButton} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand`}
               >
-                Import
+                {importing ? "Importing…" : "Import"}
               </button>
             </div>
           </div>

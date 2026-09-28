@@ -24,10 +24,27 @@ export const CONTACT_FIELDS = [
   {
     key: "email",
     label: "Email",
+    hint: "Contacts without one still come over. Add it on their page later.",
     guesses: ["email", "primary_email"],
-    required: true,
   },
-  { key: "phone", label: "Phone", guesses: ["phone", "mobile", "work_phone"] },
+  {
+    key: "phone",
+    label: "Phone",
+    hint: "If empty, their mobile becomes the main number",
+    guesses: ["phone", "work_phone"],
+  },
+  {
+    key: "mobile",
+    label: "Mobile",
+    hint: "Added to their phone numbers",
+    guesses: ["mobile", "mobile_phone"],
+  },
+  {
+    key: "otherPhones",
+    label: "Other phone numbers",
+    hint: "Added to their phone numbers",
+    guesses: ["other_phone_numbers", "extra_phones", "extraPhones"],
+  },
   {
     key: "company",
     label: "Business",
@@ -75,6 +92,24 @@ export const TICKET_FIELDS = [
   { key: "status", label: "Status", guesses: ["status"] },
   { key: "priority", label: "Priority", guesses: ["priority"] },
   {
+    key: "assignee",
+    label: "Assigned to",
+    hint: "Matched to your team by email. No match = unassigned.",
+    guesses: ["responder_id", "assignee", "responder"],
+  },
+  {
+    key: "source",
+    label: "Source",
+    hint: "How it came in: email, portal or phone",
+    guesses: ["source"],
+  },
+  {
+    key: "tags",
+    label: "Tags",
+    hint: 'Labels like "printer" or "vip"',
+    guesses: ["tags"],
+  },
+  {
     key: "createdAt",
     label: "Created date",
     guesses: ["created_at", "createdAt"],
@@ -103,12 +138,25 @@ export const FRESHDESK_STATUSES = {
   7: "waiting",
 };
 
+// Freshdesk's source numbers -> how a ticket came in here (email, portal,
+// phone or agent). Chat and the feedback widget are closest to the portal;
+// an outbound email was started by one of the team.
+export const FRESHDESK_SOURCES = {
+  1: "email",
+  2: "portal",
+  3: "phone",
+  7: "portal",
+  9: "portal",
+  10: "agent",
+};
+
 // ---------- Reading the file ----------
 
-// Finds the tickets, contacts and companies in whatever was uploaded.
-// Works with { tickets: [...], contacts: [...] }, or a plain list of either.
+// Finds the tickets, contacts, companies and agents in whatever was
+// uploaded. Works with { tickets: [...], contacts: [...] }, or a plain
+// list of either.
 export function readExport(json) {
-  const found = { tickets: [], contacts: [], companies: [] };
+  const found = { tickets: [], contacts: [], companies: [], agents: [] };
   const lists = Array.isArray(json)
     ? [json]
     : Object.entries(json ?? {}).map(([name, value]) => {
@@ -116,6 +164,10 @@ export function readExport(json) {
         const key = name.toLowerCase();
         if (Array.isArray(value) && key.includes("compan")) {
           found.companies.push(...value);
+          return [];
+        }
+        if (Array.isArray(value) && key.includes("agent")) {
+          found.agents.push(...value);
           return [];
         }
         if (Array.isArray(value) && key.includes("contact")) {
@@ -193,6 +245,35 @@ function toPriority(value) {
   return n >= 1 && n <= 4 ? Math.round(n) : 2;
 }
 
+function toSource(value) {
+  if (typeof value === "number") return FRESHDESK_SOURCES[value] ?? "email";
+  const text = String(value ?? "").toLowerCase();
+  if (["email", "portal", "phone", "agent"].includes(text)) return text;
+  if (text.includes("phone")) return "phone";
+  if (text.includes("portal") || text.includes("chat")) return "portal";
+  return FRESHDESK_SOURCES[Number(text)] ?? "email";
+}
+
+// Tags can be a list, or text like "printer, vip"
+function toTags(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value ?? "")
+        .split(",")
+        .filter(Boolean);
+  return [
+    ...new Set(list.map((t) => String(t).trim().toLowerCase()).filter(Boolean)),
+  ].slice(0, 20);
+}
+
+// A phone value: one number, or a list of them
+function toPhones(value) {
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .map((p) => String(p ?? "").trim())
+    .filter((p) => p && p !== "null");
+}
+
 // Reads one field from a record using the chosen mapping
 function pick(record, mapping, key) {
   const m = mapping[key];
@@ -210,14 +291,32 @@ export function convertContacts(records, mapping, companies) {
 
   for (const r of records) {
     const id = Number(pick(r, mapping, "id"));
-    const name = String(pick(r, mapping, "name") ?? "").trim();
-    const email = String(pick(r, mapping, "email") ?? "")
+    const rawEmail = String(pick(r, mapping, "email") ?? "")
       .trim()
       .toLowerCase();
-    if (!id || !name || !email) {
-      skipped.push(
-        `${name || email || "A contact"} (missing ID, name or email)`,
-      );
+    // Something that looks like an email, or none at all
+    const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail : null;
+
+    // Every number they have: main phone first, then mobile, then others.
+    // No repeats. The first one is their main number.
+    const phones = [
+      ...new Set([
+        ...toPhones(pick(r, mapping, "phone")),
+        ...toPhones(pick(r, mapping, "mobile")),
+        ...toPhones(pick(r, mapping, "otherPhones")),
+      ]),
+    ];
+
+    // No name in Freshdesk: use their email or phone so they can be found
+    const name =
+      String(pick(r, mapping, "name") ?? "").trim() || email || phones[0] || "";
+
+    if (!id) {
+      skipped.push(`${name || "A contact"} (no contact ID)`);
+      continue;
+    }
+    if (!name) {
+      skipped.push(`Contact ${id} (no name, email or phone)`);
       continue;
     }
 
@@ -234,17 +333,12 @@ export function convertContacts(records, mapping, companies) {
       id,
       name,
       email,
-      // Freshdesk has phone and mobile: use the chosen one, or the other if empty
-      phone: String(
-        (mapping.phone.on &&
-          (pick(r, mapping, "phone") || r.phone || r.mobile || r.work_phone)) ||
-          "",
-      ),
+      phone: phones[0] ?? "",
       company,
       extraEmails: Array.isArray(extra)
         ? extra.map((e) => String(e).toLowerCase()).filter((e) => e !== email)
         : [],
-      extraPhones: [],
+      extraPhones: phones.slice(1),
       createdAt: toTime(pick(r, mapping, "createdAt"), now),
     });
   }
@@ -260,13 +354,35 @@ function findCustomer(value, byId, byEmail) {
   if (typeof value === "object") {
     return (
       byId.get(Number(value.id)) ??
-      byEmail.get(String(value.email ?? "").toLowerCase()) ??
+      (value.email && byEmail.get(String(value.email).toLowerCase())) ??
       null
     );
   }
   return (
     byId.get(Number(value)) ?? byEmail.get(String(value).toLowerCase()) ?? null
   );
+}
+
+// Works out who on your team a ticket goes to. `value` is Freshdesk's
+// agent ID (responder_id), an email, or an object with an email.
+// `freshdeskAgents`: ID -> { name, email } from Freshdesk.
+// `staffByEmail`: email -> your team member.
+// Returns { member } when matched, { name } when Freshdesk had someone
+// who isn't on your team, or {} when it wasn't assigned.
+function findAssignee(value, freshdeskAgents, staffByEmail) {
+  if (value === undefined || value === null || value === "") return {};
+  // Freshdesk's agent ID: look up who that is
+  const agent =
+    typeof value === "object"
+      ? value
+      : String(value).includes("@")
+        ? { email: String(value) }
+        : freshdeskAgents.get(Number(value));
+  const email = agent?.email ?? "";
+  const name = agent?.name ?? "";
+  const member = staffByEmail.get(email.trim().toLowerCase());
+  if (member) return { member };
+  return { name: name || email || `Freshdesk agent ${value}` };
 }
 
 // Freshdesk conversations -> this app's messages
@@ -289,20 +405,43 @@ function convertMessages(list, customerName) {
 // `customers` must already include the contacts being imported.
 // `aliases` (from mergeCustomers) points Freshdesk contact IDs at the
 // customer they were matched to.
+// `freshdeskAgents`: Freshdesk's agents ({ id, name, email }), and
+// `team`: your team, so each ticket goes to the same person as in
+// Freshdesk (matched by email). Only active staff can be given tickets.
+// Returns the tickets, the ones skipped, and `unmatched`: Freshdesk
+// agents who aren't on your team -> how many tickets they had.
 export function convertTickets(
   records,
   mapping,
   customers,
   department,
   aliases = new Map(),
+  freshdeskAgents = [],
+  team = [],
 ) {
   const byId = new Map(customers.map((c) => [c.id, c]));
   for (const [id, customer] of aliases) byId.set(id, customer);
   const byEmail = new Map();
   for (const c of customers) {
-    byEmail.set(c.email, c);
+    if (c.email) byEmail.set(c.email, c);
     for (const e of c.extraEmails ?? []) byEmail.set(e, c);
   }
+
+  const agentsById = new Map(
+    freshdeskAgents.map((a) => [
+      Number(a.id),
+      {
+        name: a.name ?? a.contact?.name ?? "",
+        email: a.email ?? a.contact?.email ?? "",
+      },
+    ]),
+  );
+  const staffByEmail = new Map(
+    team
+      .filter((m) => m.role !== "customer" && m.status === "active")
+      .map((m) => [String(m.email).toLowerCase(), m]),
+  );
+  const unmatched = new Map();
 
   const result = [];
   const skipped = [];
@@ -354,17 +493,31 @@ export function convertTickets(
     ].map((m, i) => ({ ...m, id: i + 1 }));
 
     const firstReply = conversation.find((m) => m.kind === "agent");
+
+    // Who it goes to. Someone who isn't on your team: unassigned, and
+    // counted so the page can tell you who to invite.
+    const assigned = findAssignee(
+      pick(r, mapping, "assignee"),
+      agentsById,
+      staffByEmail,
+    );
+    if (assigned.name)
+      unmatched.set(assigned.name, (unmatched.get(assigned.name) ?? 0) + 1);
+
     const ticket = {
       id,
       subject,
       description,
       status,
       priority,
-      department,
+      department: department || null,
       customerId: customer.id,
       requester: customer,
-      assignee: null,
-      source: "email",
+      assignee: assigned.member?.id ?? null,
+      source: mapping.source.on
+        ? toSource(pick(r, mapping, "source"))
+        : "email",
+      tags: mapping.tags.on ? toTags(pick(r, mapping, "tags")) : [],
       createdAt,
       firstResponseDue: createdAt + SLA_HOURS[priority].firstResponse * HOUR,
       dueBy: toTime(
@@ -384,13 +537,14 @@ export function convertTickets(
     }
     result.push(ticket);
   }
-  return { tickets: result, skipped };
+  return { tickets: result, skipped, unmatched };
 }
 
 // ---------- A small example file, to test with ----------
 
 export const EXAMPLE_EXPORT = {
   companies: [{ id: 501, name: "Spice Isle Traders" }],
+  agents: [{ id: 7001, name: "Alex Charles", email: "alex@example.com" }],
   contacts: [
     {
       id: 90001,
@@ -406,6 +560,7 @@ export const EXAMPLE_EXPORT = {
       name: "Devon Charles",
       email: "devon.charles@example.com",
       mobile: "+1 (473) 533-2020",
+      other_phone_numbers: ["+1 (473) 440-3030"],
       company_id: null,
       created_at: "2024-06-01T09:30:00Z",
     },
@@ -417,6 +572,9 @@ export const EXAMPLE_EXPORT = {
       description_text:
         "The front desk printer shows offline since this morning.",
       requester_id: 90001,
+      responder_id: 7001,
+      source: 1,
+      tags: ["printer"],
       status: 4,
       priority: 2,
       created_at: "2025-03-03T14:05:00Z",
@@ -449,6 +607,8 @@ export const EXAMPLE_EXPORT = {
       subject: "Can't connect to the office Wi-Fi",
       description_text: "My laptop can see the network but won't connect.",
       requester_id: 90002,
+      source: 3,
+      tags: [],
       status: 2,
       priority: 3,
       created_at: "2025-03-05T08:10:00Z",
@@ -470,7 +630,7 @@ export function mergeCustomers(existing, incoming, replace) {
   const byEmail = new Map();
   function remember(customer, index) {
     byId.set(customer.id, index);
-    byEmail.set(customer.email, index);
+    if (customer.email) byEmail.set(customer.email, index);
     for (const e of customer.extraEmails ?? []) byEmail.set(e, index);
   }
   list.forEach(remember);
@@ -481,7 +641,11 @@ export function mergeCustomers(existing, incoming, replace) {
   let skipped = 0;
 
   for (const contact of incoming) {
-    let index = byId.get(contact.id) ?? byEmail.get(contact.email);
+    // Same ID, or any of their emails already belongs to someone here
+    let index = byId.get(contact.id);
+    for (const e of [contact.email, ...contact.extraEmails]) {
+      if (index === undefined && e) index = byEmail.get(e);
+    }
     if (index === undefined) {
       index = list.length;
       list.push(contact);
