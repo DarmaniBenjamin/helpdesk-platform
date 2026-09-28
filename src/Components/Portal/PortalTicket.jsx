@@ -11,6 +11,8 @@ import {
 import Avatar from "../Avatar";
 import PortalStatusBadge from "./PortalStatusBadge";
 import { inputClass } from "../formStyles";
+import { AttachButton, AttachmentChips, AttachmentList } from "../Attachments";
+import useAttachments from "../useAttachments";
 import { isDone, timeAgo } from "../../data";
 import useData from "../../useData";
 
@@ -39,6 +41,8 @@ function Bubble({ message, mine }) {
           }`}
         >
           {message.body}
+          {/* Photos and files sent with it */}
+          <AttachmentList files={message.attachments} onColor={mine} />
         </div>
       </div>
     </li>
@@ -151,6 +155,8 @@ export default function PortalTicket() {
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""); // if something didn't save
+  // Photos or files to send with the reply
+  const attach = useAttachments();
 
   const ticket = tickets.find((t) => String(t.id) === id);
 
@@ -179,12 +185,14 @@ export default function PortalTicket() {
   async function sendReply(e) {
     e.preventDefault();
     const body = reply.trim();
-    if (!body || busy) return;
+    if ((!body && attach.files.length === 0) || attach.uploading || busy)
+      return;
     setBusy(true);
     setError("");
     try {
-      await addMessage(ticket.id, "customer", body);
+      await addMessage(ticket.id, "customer", body, null, attach.ids);
       setReply("");
+      attach.clear();
       document.activeElement?.blur();
     } catch (err) {
       setError(err.message);
@@ -303,6 +311,13 @@ export default function PortalTicket() {
                 rows={4}
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
+                // Pasting a screenshot attaches it
+                onPaste={(e) => {
+                  if (e.clipboardData.files.length) {
+                    e.preventDefault();
+                    attach.add(e.clipboardData.files);
+                  }
+                }}
                 placeholder={
                   ticket.status === "resolved"
                     ? "Still not working? Reply here and we'll pick it back up."
@@ -310,10 +325,16 @@ export default function PortalTicket() {
                 }
                 className={`${inputClass} h-auto resize-y py-2.5`}
               />
-              <div className="grid sm:flex sm:justify-end">
+              <AttachmentChips attach={attach} />
+              <div className="grid gap-2 sm:flex sm:items-center sm:justify-between">
+                <AttachButton attach={attach} />
                 <button
                   type="submit"
-                  disabled={!reply.trim() || busy}
+                  disabled={
+                    (!reply.trim() && attach.files.length === 0) ||
+                    attach.uploading > 0 ||
+                    busy
+                  }
                   className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" />

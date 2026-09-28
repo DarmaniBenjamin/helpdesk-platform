@@ -677,6 +677,7 @@ export default function DataProvider({ children }) {
   // A new ticket. Admins pick the customer, department, priority and due
   // time; a customer sending a request from the portal only gives the
   // subject and description (the server fills in the rest).
+  // attachmentIds: files already uploaded (see useAttachments.js)
   async function addTicket({
     customer,
     subject,
@@ -684,6 +685,7 @@ export default function DataProvider({ children }) {
     priority,
     dueBy,
     description,
+    attachmentIds = [],
   }) {
     return showTicket(
       await api("/tickets", {
@@ -695,6 +697,7 @@ export default function DataProvider({ children }) {
           priority,
           dueBy,
           description,
+          attachmentIds,
         },
       }),
     );
@@ -710,11 +713,12 @@ export default function DataProvider({ children }) {
 
   // Add a reply ("agent") or internal note ("note"), and optionally change
   // the status at the same time. Customers' replies are always "customer".
-  async function addMessage(id, kind, body, newStatus) {
+  // attachmentIds: files already uploaded (see useAttachments.js)
+  async function addMessage(id, kind, body, newStatus, attachmentIds = []) {
     return showTicket(
       await api(`/tickets/${id}/messages`, {
         method: "POST",
-        body: { kind, body, status: newStatus || undefined },
+        body: { kind, body, status: newStatus || undefined, attachmentIds },
       }),
     );
   }

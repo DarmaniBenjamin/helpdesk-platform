@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowLeft, PhoneCall } from "lucide-react";
 import { inputClass, labelClass } from "../formStyles";
+import { AttachButton, AttachmentChips } from "../Attachments";
+import useAttachments from "../useAttachments";
 import useData from "../../useData";
 
 // Every request comes in with no team and nobody assigned (the server
@@ -19,15 +21,19 @@ export default function PortalNewRequest() {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Photos or files that show the problem (e.g. an error message)
+  const attach = useAttachments();
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (attach.uploading) return;
     setBusy(true);
     setError("");
     try {
       const ticket = await addTicket({
         subject: subject.trim(),
         description: description.trim(),
+        attachmentIds: attach.ids,
       });
       navigate(`/portal/tickets/${ticket.id}`, { state: { created: true } });
     } catch (err) {
@@ -74,10 +80,30 @@ export default function PortalNewRequest() {
             rows={7}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            // Pasting a screenshot attaches it
+            onPaste={(e) => {
+              if (e.clipboardData.files.length) {
+                e.preventDefault();
+                attach.add(e.clipboardData.files);
+              }
+            }}
             placeholder="What happened, when it started, and anything you've already tried."
             className={`${inputClass} h-auto resize-y py-2.5`}
           />
         </label>
+
+        {/* Photos or files, e.g. a picture of the error on screen */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">
+            Photos or files{" "}
+            <span className="font-normal text-muted">(optional)</span>
+          </p>
+          <AttachmentChips attach={attach} />
+          <AttachButton
+            attach={attach}
+            className="w-fit border border-dashed border-line"
+          />
+        </div>
 
         <p className="flex items-start gap-3 rounded-lg bg-page p-3 text-sm text-muted">
           <PhoneCall className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
@@ -96,7 +122,7 @@ export default function PortalNewRequest() {
           </Link>
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || attach.uploading > 0}
             className="order-first h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last"
           >
             {busy ? "Sending…" : "Send request"}

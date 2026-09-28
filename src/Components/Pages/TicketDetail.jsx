@@ -23,6 +23,8 @@ import StatusBadge from "../StatusBadge";
 import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
 import Modal from "../Modal";
+import { AttachButton, AttachmentChips, AttachmentList } from "../Attachments";
+import useAttachments from "../useAttachments";
 import { inputClass, labelClass, secondaryButton } from "../formStyles";
 import { can } from "../teamRoles";
 import { extractKeywords, relevance } from "../Knowledge";
@@ -107,9 +109,12 @@ function Message({ message }) {
           </span>
         )}
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
-        {message.body}
-      </p>
+      {message.body && (
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
+          {message.body}
+        </p>
+      )}
+      <AttachmentList files={message.attachments} />
     </li>
   );
 }
@@ -129,11 +134,16 @@ function Composer({ ticket, onSend }) {
 
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  // Files to send with it: picked with the paperclip, dropped on the
+  // box, or pasted (e.g. a screenshot)
+  const attach = useAttachments();
+  const canSend =
+    (body.trim() || attach.files.length > 0) && !attach.uploading && !sending;
 
   // Saves to the database. What you wrote is only cleared once it's
   // saved, so nothing is lost if it doesn't go through.
   async function send() {
-    if (!body.trim() || sending) return;
+    if (!canSend) return;
     setSending(true);
     setSendError("");
     try {
@@ -141,11 +151,13 @@ function Composer({ ticket, onSend }) {
         kind,
         body.trim(),
         thenStatus || null,
-        kind === "note" && saveToAnswers,
+        kind === "note" && saveToAnswers && Boolean(body.trim()),
+        attach.ids,
       );
       setBody("");
       setThenStatus("");
       setSaveChoice(null);
+      attach.clear();
     } catch (err) {
       setSendError(err.message);
     } finally {
@@ -190,6 +202,21 @@ function Composer({ ticket, onSend }) {
             send();
           }
         }}
+        // Pasting a screenshot attaches it
+        onPaste={(e) => {
+          if (e.clipboardData.files.length) {
+            e.preventDefault();
+            attach.add(e.clipboardData.files);
+          }
+        }}
+        // Dropping files on the box attaches them
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          if (e.dataTransfer.files.length) {
+            e.preventDefault();
+            attach.add(e.dataTransfer.files);
+          }
+        }}
         rows={4}
         placeholder={
           isNote
@@ -201,9 +228,16 @@ function Composer({ ticket, onSend }) {
         }`}
       />
 
-      <div className="flex flex-col gap-2 border-t border-line p-3 sm:flex-row sm:items-center sm:justify-end">
+      {(attach.files.length > 0 || attach.uploading > 0 || attach.error) && (
+        <div className="border-t border-line px-4 py-3">
+          <AttachmentChips attach={attach} />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 border-t border-line p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <AttachButton attach={attach} className="sm:mr-auto" />
         {isNote && (
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-amber-800 sm:mr-auto">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-amber-800">
             <input
               type="checkbox"
               checked={saveToAnswers}
@@ -233,7 +267,7 @@ function Composer({ ticket, onSend }) {
         <button
           type="button"
           onClick={send}
-          disabled={!body.trim() || sending}
+          disabled={!canSend}
           className={`flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 text-sm font-medium text-white transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 ${
             isNote
               ? "bg-amber-500 hover:bg-amber-500/90"
@@ -521,8 +555,8 @@ export default function TicketDetail() {
 
   // Sends a reply or note to the server (throws if it doesn't save, so
   // the reply box can keep what was written)
-  async function handleSend(kind, body, status, saveToAnswers) {
-    await addMessage(ticket.id, kind, body, status);
+  async function handleSend(kind, body, status, saveToAnswers, attachmentIds) {
+    await addMessage(ticket.id, kind, body, status, attachmentIds);
     if (saveToAnswers) {
       // The ticket's subject becomes the title, the ticket's description the problem,
       // and the note the fix. Keywords are picked from all three.
