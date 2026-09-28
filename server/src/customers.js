@@ -17,7 +17,7 @@ function publicCustomer(c) {
   return {
     id: c.id,
     name: c.name,
-    email: c.email,
+    email: c.email ?? "", // "" = no email yet (some Freshdesk contacts)
     phone: c.phone,
     company: c.company,
     extraEmails: c.extraEmails,
@@ -106,11 +106,12 @@ customersRouter.patch("/:id", requireRole(...STAFF), async (req, res) => {
   if ("extraEmails" in req.body)
     changes.extraEmails = cleanList(req.body.extraEmails, cleanEmail);
 
-  // None of their emails can belong to another customer
+  // None of their emails can belong to another customer. (Some customers
+  // imported from Freshdesk have no main email yet, hence the filter.)
   const emails = [
     changes.email ?? customer.email,
     ...(changes.extraEmails ?? customer.extraEmails),
-  ];
+  ].filter(Boolean);
   for (const email of emails) {
     const owner = await customerWithEmail(email, customer.id);
     if (owner) throw new BadInput(`${owner.name} already uses ${email}.`, 409);
@@ -155,6 +156,11 @@ customersRouter.post(
   requireRole(...ADMINS),
   async (req, res) => {
     const customer = await findCustomer(req.params.id);
+    // They sign in with their email, so they need one first
+    if (!customer.email)
+      throw new BadInput(
+        "Add an email address for this customer first, so they can sign in.",
+      );
 
     const [existing] = await db
       .select({ id: users.id })

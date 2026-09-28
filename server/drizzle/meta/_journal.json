@@ -8,6 +8,13 @@
       "when": 1790518944760,
       "tag": "0000_curious_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790607386858,
+      "tag": "0001_massive_starhawk",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
   pgEnum,
   text,
   integer,
+  bigint,
   smallint,
   boolean,
   jsonb,
@@ -53,11 +54,18 @@ export const departments = pgTable("departments", {
 
 // ---------- Customers ----------
 
+// Freshdesk contact IDs are bigger than a normal "integer" can hold
+// (e.g. 73007855456), so customer IDs are "bigint". mode: "number" gives
+// them to the code as normal numbers.
+const customerId = (name) => bigint(name, { mode: "number" });
+
 export const customers = pgTable("customers", {
   // Kept the same as Freshdesk's contact IDs when importing
-  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  id: customerId("id").primaryKey().generatedByDefaultAsIdentity(),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+  // Empty (null) is allowed: some Freshdesk contacts only have a phone
+  // number. Add an email on the customer's page later.
+  email: text("email").unique(),
   phone: text("phone").notNull().default(""),
   company: text("company"), // empty = an individual
   extraEmails: text("extra_emails").array().notNull().default([]),
@@ -82,7 +90,7 @@ export const users = pgTable("users", {
   // Never the password itself: a scrambled version that can only be checked
   passwordHash: text("password_hash"),
   // For customers: which customer record they are
-  customerId: integer("customer_id").references(() => customers.id, {
+  customerId: customerId("customer_id").references(() => customers.id, {
     onDelete: "cascade",
   }),
   invitedAt: time("invited_at"),
@@ -120,13 +128,15 @@ export const tickets = pgTable(
     departmentId: text("department_id").references(() => departments.id, {
       onDelete: "set null",
     }),
-    customerId: integer("customer_id")
+    customerId: customerId("customer_id")
       .notNull()
       .references(() => customers.id),
     assigneeId: text("assignee_id").references(() => users.id, {
       onDelete: "set null",
     }),
     source: text("source").notNull().default("agent"), // email, portal, phone, agent
+    // Labels like "printer" or "vip", e.g. brought over from Freshdesk
+    tags: text("tags").array().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: time("updated_at").notNull().defaultNow(),
     firstResponseDue: time("first_response_due"),

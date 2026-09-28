@@ -16,9 +16,14 @@ import { customersRouter } from "./customers.js";
 import { ticketsRouter } from "./tickets.js";
 import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
+import { importRouter } from "./import.js";
 import { handleBadInput } from "./validate.js";
 
 const app = express();
+// Freshdesk imports send tickets in batches with their whole
+// conversation, so they're allowed to be bigger. This has to come before
+// the normal 1mb limit below, which would refuse them first.
+app.use("/api/import", express.json({ limit: "20mb" }));
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
 // Work out who is signed in (from their session cookie) on every request
@@ -50,6 +55,7 @@ app.use("/api/answers", answersRouter); // the Knowledge Base
 app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
+app.use("/api/import", importRouter); // Freshdesk import (Admins)
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {

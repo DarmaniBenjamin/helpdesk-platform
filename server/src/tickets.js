@@ -51,7 +51,7 @@ function publicCustomer(c) {
   return {
     id: c.id,
     name: c.name,
-    email: c.email,
+    email: c.email ?? "", // "" = no email yet (some Freshdesk contacts)
     phone: c.phone,
     company: c.company,
     extraEmails: c.extraEmails,
@@ -105,6 +105,7 @@ async function loadTickets(where, viewer) {
     requester: publicCustomer(customer),
     assignee: t.assigneeId,
     source: t.source,
+    tags: t.tags,
     createdAt: ms(t.createdAt),
     updatedAt: ms(t.updatedAt),
     firstResponseDue: ms(t.firstResponseDue),
