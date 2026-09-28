@@ -25,20 +25,23 @@ import { getPageTitle } from "./navLinks";
 import { isOverdue, timeAgo } from "../data";
 import useData from "../useData";
 
-// Notifications built from the real ticket data
+// Notifications built from the real ticket data. With no tickets yet
+// (a brand new database) there's nothing to show, so the list is empty.
 function buildNotifications(tickets) {
   const list = [];
 
   const newest = tickets[0];
-  list.push({
-    id: 1,
-    icon: Ticket,
-    unread: true,
-    ticketId: newest.id,
-    title: `New ticket #${newest.id}`,
-    text: `${newest.requester.name}: ${newest.subject}`,
-    time: timeAgo(newest.createdAt),
-  });
+  if (newest) {
+    list.push({
+      id: 1,
+      icon: Ticket,
+      unread: true,
+      ticketId: newest.id,
+      title: `New ticket #${newest.id}`,
+      text: `${newest.requester.name}: ${newest.subject}`,
+      time: timeAgo(newest.createdAt),
+    });
+  }
 
   const overdue = tickets.find(isOverdue);
   if (overdue) {
@@ -229,6 +232,11 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
                 </button>
               </div>
               <ul className="max-h-80 overflow-y-auto p-2">
+                {notifications.length === 0 && (
+                  <li className="px-2.5 py-6 text-center text-sm text-muted">
+                    No notifications yet
+                  </li>
+                )}
                 {notifications.map((n) => (
                   <li key={n.id}>
                     <button
