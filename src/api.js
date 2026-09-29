@@ -20,6 +20,11 @@ export function setTabId(id) {
   tabId = id;
 }
 
+// What to say when the answer isn't from our server at all (e.g. a web
+// page came back instead of data)
+const NOT_OUR_SERVER =
+  "The helpdesk server didn't answer. If this is the live site, make sure you're on the Web Service's address (open /api/health there to check).";
+
 // e.g. await api("/auth/login", { method: "POST", body: { email, password } })
 // `raw`: send a file as it is (e.g. a backup), instead of `body`
 export async function api(path, { method = "GET", body, raw } = {}) {
@@ -38,16 +43,22 @@ export async function api(path, { method = "GET", body, raw } = {}) {
     throw new ApiError("Can't reach the server. Check your connection.", 0);
   }
 
-  const data = await res.json().catch(() => null);
+  // Our server always answers in JSON. Anything else (a web page, an
+  // empty answer) means something in between answered instead.
+  const isJson = (res.headers.get("content-type") ?? "").includes("json");
+  const data = isJson ? await res.json().catch(() => null) : null;
   if (!res.ok) {
     // No message from our server usually means it isn't running
     const message =
       data?.error ??
       (res.status >= 500
         ? "Can't reach the server. Is the backend running?"
-        : "Something went wrong.");
+        : isJson
+          ? "Something went wrong."
+          : NOT_OUR_SERVER);
     throw new ApiError(message, res.status);
   }
+  if (data === null) throw new ApiError(NOT_OUR_SERVER, res.status);
   return data;
 }
 
@@ -68,15 +79,19 @@ export async function uploadFiles(files) {
   } catch {
     throw new ApiError("Can't reach the server. Check your connection.", 0);
   }
-  const data = await res.json().catch(() => null);
+  const isJson = (res.headers.get("content-type") ?? "").includes("json");
+  const data = isJson ? await res.json().catch(() => null) : null;
   if (!res.ok) {
     throw new ApiError(
       data?.error ??
         (res.status === 413
           ? "Those files are too big."
-          : "The files couldn't be uploaded."),
+          : isJson
+            ? "The files couldn't be uploaded."
+            : NOT_OUR_SERVER),
       res.status,
     );
   }
+  if (data === null) throw new ApiError(NOT_OUR_SERVER, res.status);
   return data;
 }
