@@ -18,8 +18,8 @@
 // ones only look at waits that started after the automation was made,
 // so turning one on doesn't set it off on years of old tickets.
 //
-// Everything they do is written into the ticket's history, with the
-// rule's or automation's name, so it's always clear what happened.
+// Everything they do is recorded with the rule's or automation's name,
+// so it's always clear what happened (see activity.js).
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import {
@@ -53,8 +53,7 @@ const STATUS_NAMES = {
 };
 const PRIORITY_NAMES = { 1: "Low", 2: "Medium", 3: "High", 4: "Urgent" };
 
-// A history line on a ticket, written by a rule or automation. Only
-// the important kinds show in the ticket; the rest go to the bell of
+// Records a change made by a rule or automation. It goes to the bell of
 // whoever has the ticket (see activity.js).
 async function historyLine(ticketId, who, type, text) {
   const [ticket] = await db
@@ -71,9 +70,14 @@ async function historyLine(ticketId, who, type, text) {
 }
 
 // Tells every open tab that a ticket changed, so it shows up straight
-// away (e.g. an automation closed it while you were looking)
-function announce(ticketId) {
-  sendToEveryone("changed", { resource: "tickets", id: ticketId });
+// away (e.g. an automation closed it while you were looking), including
+// the customer's own tabs
+function announce(ticket) {
+  sendToEveryone("changed", {
+    resource: "tickets",
+    id: ticket.id,
+    customerId: ticket.customerId,
+  });
 }
 
 // Only active staff can be given tickets
@@ -490,7 +494,7 @@ async function checkTimeBased() {
             changedTo,
             new Set([automation.id]),
           );
-        announce(ticket.id);
+        announce(ticket);
       } catch (err) {
         console.error(`Automation "${automation.name}":`, err);
       }

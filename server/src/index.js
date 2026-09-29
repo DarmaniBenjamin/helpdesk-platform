@@ -3,8 +3,9 @@
 //
 // Run with: npm run dev   (restarts by itself when you save a file)
 import express from "express";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
+import { tickets } from "./db/schema.js";
 import { authRouter, loadSession } from "./auth.js";
 import {
   teamRouter,
@@ -41,10 +42,12 @@ app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 app.use(loadSession);
 
 // ---------- Live updates ----------
-// After anything is changed (added, edited, deleted), every open tab is
-// told what changed, so it can load it again and show it without a
-// refresh. The tab that made the change says who it is (X-Tab-Id), so
-// it doesn't load its own change twice.
+// After anything is changed (added, edited, deleted), every open tab of
+// everyone signed in is told what changed, so it can load it again and
+// show it without a refresh. The tab that made the change says who it
+// is (X-Tab-Id), so it doesn't load its own change twice. For tickets,
+// the message also says whose ticket it is, so customers only hear
+// about their own (see live.js).
 const LIVE = [
   "tickets",
   "customers",
@@ -67,19 +70,32 @@ app.use("/api", (req, res, next) => {
     res.locals.sent = body;
     return json(body);
   };
-  res.on("finish", () => {
+  res.on("finish", async () => {
     if (res.statusCode >= 400) return;
     const [resource, id, more] = req.originalUrl
       .split("?")[0]
       .replace(/^\/api\//, "")
       .split("/");
     if (!LIVE.includes(resource)) return;
-    sendToEveryone("changed", {
+    const change = {
       resource,
       id: id ?? res.locals.sent?.id ?? null,
       deleted: req.method === "DELETE" && Boolean(id) && !more,
       tab: req.get("x-tab-id") ?? null,
-    });
+    };
+    // Whose ticket it is, so that customer's tabs update too
+    if (resource === "tickets") {
+      change.customerId = res.locals.sent?.customerId ?? null;
+      if (!change.customerId && Number(change.id)) {
+        const [row] = await db
+          .select({ customerId: tickets.customerId })
+          .from(tickets)
+          .where(eq(tickets.id, Number(change.id)))
+          .catch(() => []);
+        change.customerId = row?.customerId ?? null;
+      }
+    }
+    sendToEveryone("changed", change);
   });
   next();
 });
@@ -111,7 +127,7 @@ app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
 app.use("/api/import", importRouter); // Freshdesk import (Admins)
-app.use("/api/live", liveRouter); // who's on which page, live updates
+app.use("/api/live", liveRouter); // live updates, who's on which page
 app.use("/api/notifications", notificationsRouter); // the bell
 app.use("/api/push", pushRouter); // desktop/phone notifications on and off
 app.use("/api/attachments", attachmentsRouter); // files on tickets

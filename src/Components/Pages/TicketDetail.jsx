@@ -85,18 +85,6 @@ function Message({ message, onDelete }) {
     }
   }
 
-  // Status changes, assignments etc.: a small line in the middle
-  if (message.kind === "event") {
-    return (
-      <li className="flex justify-center">
-        <span className="rounded-full bg-white px-3 py-1 text-center text-xs text-muted ring-1 ring-line">
-          <span className="font-medium text-ink">{message.author}</span>{" "}
-          {message.body} · {timeAgo(message.at)}
-        </span>
-      </li>
-    );
-  }
-
   const styles = {
     customer: "border-line bg-white",
     agent: "border-brand/30 bg-brand/5",
@@ -767,20 +755,24 @@ export default function TicketDetail() {
 
         {/* Left side: the conversation */}
         <section className="flex min-w-0 flex-col gap-4 lg:order-1">
+          {/* Only the messages and notes. Changes (status, assigned,
+              priority...) aren't shown here: they go to the bell. */}
           <ul className="flex flex-col gap-3">
-            {ticket.messages.map((m) => (
-              <Message
-                key={m.id}
-                message={m}
-                // Notes can be deleted by whoever wrote them, or an Admin
-                onDelete={
-                  m.kind === "note" &&
-                  (m.authorId === me.id || can(me.role, "deleteTickets"))
-                    ? (note) => deleteNote(ticket.id, note.id)
-                    : undefined
-                }
-              />
-            ))}
+            {ticket.messages
+              .filter((m) => m.kind !== "event")
+              .map((m) => (
+                <Message
+                  key={m.id}
+                  message={m}
+                  // Notes can be deleted by whoever wrote them, or an Admin
+                  onDelete={
+                    m.kind === "note" &&
+                    (m.authorId === me.id || can(me.role, "deleteTickets"))
+                      ? (note) => deleteNote(ticket.id, note.id)
+                      : undefined
+                  }
+                />
+              ))}
           </ul>
 
           {savedAnswer?.ticketId === ticket.id && (

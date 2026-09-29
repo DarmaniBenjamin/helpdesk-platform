@@ -4,10 +4,11 @@
 //
 // Who gets what (only active staff, never customers):
 //   - A new ticket or request comes in   -> Admins and the Super Admin
-//   - A ticket is assigned to you        -> you (not when you took it yourself)
+//   - A ticket is assigned to you        -> you (also when you took it yourself)
 //   - A customer replies on your ticket  -> you, or the Admins if nobody has it
 //   - Your ticket is due within an hour  -> you, or the Admins if nobody has it
 //   - Your ticket is overdue             -> you, or the Admins if nobody has it
+//   - Any other change to a ticket       -> see activity.js
 //
 // Each notification is saved (so the bell keeps it), sent down the live
 // connection to any open tab (live.js), and pushed to every browser the
@@ -201,14 +202,18 @@ export function onTicketCreated(ticket, customerName, actor) {
   );
 }
 
-// Someone gave you a ticket (taking one yourself doesn't notify you)
+// A ticket was assigned to you (by someone else, a rule, or yourself)
 export function onTicketAssigned(ticket, assigneeId, actor) {
-  if (!assigneeId || assigneeId === actor.id) return;
+  if (!assigneeId) return;
   inBackground(
     notify([assigneeId], {
       kind: "assigned",
       title: `Ticket #${ticket.id} assigned to you`,
-      body: short(`${actor.name} gave you: ${ticket.subject}`),
+      body: short(
+        assigneeId === actor.id
+          ? `You took: ${ticket.subject}`
+          : `${actor.name} gave you: ${ticket.subject}`,
+      ),
       ticketId: ticket.id,
     }),
   );

@@ -25,7 +25,7 @@ import {
   onCustomerReply,
 } from "./notify.js";
 import { afterTicketEvent } from "./automation.js";
-import { isShownEvent, recordEvent } from "./activity.js";
+import { recordEvent } from "./activity.js";
 import {
   checkFiles,
   claimFiles,
@@ -97,11 +97,11 @@ async function loadTickets(where, viewer) {
       ),
     )
     .orderBy(asc(messages.createdAt), asc(messages.id));
-  // Customers never see notes or history lines. Staff see the history
-  // lines that matter (created, assigned, resolved, closed); the rest go
-  // to the bell instead (see activity.js).
-  const visible = allMessages.filter((m) =>
-    isStaff(viewer) ? isShownEvent(m) : m.kind !== "note" && m.kind !== "event",
+  // Customers never see notes or history lines. Staff get the history
+  // too (Ticket Review uses it), but the ticket page doesn't show it:
+  // changes go to the bell instead (see activity.js).
+  const visible = allMessages.filter(
+    (m) => isStaff(viewer) || (m.kind !== "note" && m.kind !== "event"),
   );
   // The files sent with each message (attachments.js)
   const files = await filesForMessages(visible.map((m) => m.id));
@@ -188,7 +188,7 @@ function statusTimes(ticket, status, now) {
   return { resolvedAt: null, closedAt: null };
 }
 
-// What kind of history line a change is (see activity.js)
+// What kind of change it is (see activity.js)
 function eventTypeOf(field, value) {
   if (field === "status") return `status:${value}`;
   if (field === "assigneeId") return "assigned";
@@ -196,7 +196,7 @@ function eventTypeOf(field, value) {
   return field; // priority, dueBy
 }
 
-// A history line like "changed status to Closed (from Resolved)"
+// A change in words, like "changed status to Closed (from Resolved)"
 async function describeChange(field, value, actor, before) {
   switch (field) {
     case "status":
@@ -377,7 +377,7 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
     },
   ]);
   await claimFiles(fileIds, created.id, first.id);
-  // "Created" shows first in the ticket's history
+  // Recorded (who made it); the Admins get "New ticket" in their bell
   await recordEvent({
     ticket: created,
     actor: req.user,
@@ -395,8 +395,9 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
 });
 
 // Change a ticket's status, priority, department, assignee or due date.
-// Each change is written into the ticket's history. A customer can only
-// mark their own ticket as fixed (Resolved).
+// Each change is recorded and sent to the bell of the people involved
+// (see activity.js). A customer can only mark their own ticket as fixed
+// (Resolved).
 ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
   const ticket = await findTicket(req.params.id, req.user);
   const body = req.body ?? {};
@@ -446,7 +447,7 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
         updatedAt: now,
       })
       .where(eq(tickets.id, ticket.id));
-    // One history line per change. Who's notified is worked out from the
+    // One record per change. Who's notified is worked out from the
     // ticket as it is now (e.g. the new person it's assigned to).
     const [after] = await db
       .select()
@@ -530,7 +531,7 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       actor: req.user,
       type: `status:${newStatus}`,
       body: `changed status to ${STATUSES[newStatus]} (from ${STATUSES[ticket.status]})`,
-      // A moment after the message, so it always shows underneath it
+      // A moment after the message, so it always comes after it
       at: new Date(now.getTime() + 1),
     });
   }
@@ -550,8 +551,8 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
 
 // Delete an internal note. Only notes can be deleted (replies were
 // already seen by the customer). Whoever wrote the note can delete it,
-// and so can Admins and the Super Admin. Its files go too. It isn't
-// shown in the ticket; the people concerned get it in their bell.
+// and so can Admins and the Super Admin. Its files go too. The people
+// involved get it in their bell.
 ticketsRouter.delete(
   "/:id/messages/:messageId",
   requireRole(...STAFF),
@@ -578,8 +579,8 @@ ticketsRouter.delete(
     const now = new Date();
     await db.transaction(async (tx) => {
       await tx.delete(messages).where(eq(messages.id, note.id));
-      // Not shown in the ticket: the person who has the ticket, and
-      // whoever wrote the note, get it in their bell instead
+      // The person who has the ticket, whoever deleted it, and whoever
+      // wrote the note get it in their bell
       await recordEvent({
         ticket,
         actor: req.user,
@@ -634,8 +635,8 @@ ticketsRouter.post(
 );
 
 // Ticket Review: an Admin ticks off a finished ticket once they've
-// checked it (or takes the tick off). Recorded (the person who has the
-// ticket gets it in their bell).
+// checked it (or takes the tick off). Recorded, and the person who has
+// the ticket gets it in their bell.
 ticketsRouter.post("/:id/review", requireRole(...ADMINS), async (req, res) => {
   const ticket = await findTicket(req.params.id, req.user);
   const reviewed = Boolean(req.body?.reviewed);
@@ -673,7 +674,7 @@ ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
 });
 
 // Used when someone leaves the team: their unfinished tickets become
-// unassigned, with a line in each ticket's history saying why
+// unassigned, with a record on each saying why
 export async function unassignTicketsOf(member, actor) {
   const open = await db
     .select({ id: tickets.id })
