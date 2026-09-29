@@ -188,7 +188,7 @@ export default function RequestForm() {
       {/* Hidden from people; spam robots fill it in (see requests.js) */}
       <div
         aria-hidden="true"
-        className="absolute -left-[9999px] h-px w-px overflow-hidden"
+        className="absolute left-[-9999px] h-px w-px overflow-hidden"
       >
         <label>
           Leave this empty
