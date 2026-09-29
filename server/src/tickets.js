@@ -25,6 +25,7 @@ import {
   onCustomerReply,
 } from "./notify.js";
 import { afterTicketEvent } from "./automation.js";
+import { isShownEvent, recordEvent } from "./activity.js";
 import {
   checkFiles,
   claimFiles,
@@ -96,8 +97,11 @@ async function loadTickets(where, viewer) {
       ),
     )
     .orderBy(asc(messages.createdAt), asc(messages.id));
-  const visible = allMessages.filter(
-    (m) => isStaff(viewer) || (m.kind !== "note" && m.kind !== "event"),
+  // Customers never see notes or history lines. Staff see the history
+  // lines that matter (created, assigned, resolved, closed); the rest go
+  // to the bell instead (see activity.js).
+  const visible = allMessages.filter((m) =>
+    isStaff(viewer) ? isShownEvent(m) : m.kind !== "note" && m.kind !== "event",
   );
   // The files sent with each message (attachments.js)
   const files = await filesForMessages(visible.map((m) => m.id));
@@ -162,8 +166,8 @@ async function findTicket(id, viewer) {
   return ticket;
 }
 
-// Adds lines to a ticket's conversation or history. Returns them, with
-// their IDs, in the same order.
+// Adds lines to a ticket's conversation. Returns them, with their IDs,
+// in the same order.
 async function addMessages(ticketId, list) {
   if (list.length === 0) return [];
   return db
@@ -184,11 +188,21 @@ function statusTimes(ticket, status, now) {
   return { resolvedAt: null, closedAt: null };
 }
 
-// A history line like "changed status to Resolved"
-async function describeChange(field, value, actor) {
+// What kind of history line a change is (see activity.js)
+function eventTypeOf(field, value) {
+  if (field === "status") return `status:${value}`;
+  if (field === "assigneeId") return "assigned";
+  if (field === "departmentId") return "department";
+  return field; // priority, dueBy
+}
+
+// A history line like "changed status to Closed (from Resolved)"
+async function describeChange(field, value, actor, before) {
   switch (field) {
     case "status":
-      return `changed status to ${STATUSES[value]}`;
+      return before
+        ? `changed status to ${STATUSES[value]} (from ${STATUSES[before]})`
+        : `changed status to ${STATUSES[value]}`;
     case "priority":
       return `changed priority to ${PRIORITIES[value]}`;
     case "departmentId": {
@@ -363,6 +377,17 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
     },
   ]);
   await claimFiles(fileIds, created.id, first.id);
+  // "Created" shows first in the ticket's history
+  await recordEvent({
+    ticket: created,
+    actor: req.user,
+    type: "created",
+    body:
+      req.user.role === "customer"
+        ? "sent this request from the customer portal"
+        : "created the ticket",
+    at: new Date(now.getTime() + 1),
+  });
   // Assignment rules and "A new ticket is created" automations
   await afterTicketEvent(created.id, "created");
   onTicketCreated(created, authorName, req.user);
@@ -408,16 +433,6 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
 
   if (Object.keys(changes).length) {
     const now = new Date();
-    const history = [];
-    for (const [field, value] of Object.entries(changes)) {
-      history.push({
-        kind: "event",
-        authorId: req.user.id,
-        authorName: req.user.name,
-        body: await describeChange(field, value, req.user),
-        createdAt: now,
-      });
-    }
     await db
       .update(tickets)
       .set({
@@ -431,7 +446,26 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
         updatedAt: now,
       })
       .where(eq(tickets.id, ticket.id));
-    await addMessages(ticket.id, history);
+    // One history line per change. Who's notified is worked out from the
+    // ticket as it is now (e.g. the new person it's assigned to).
+    const [after] = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, ticket.id));
+    for (const [field, value] of Object.entries(changes)) {
+      await recordEvent({
+        ticket: after,
+        actor: req.user,
+        type: eventTypeOf(field, value),
+        body: await describeChange(field, value, req.user, ticket[field]),
+        // The person who had it before hears about it being taken off them
+        alsoTell:
+          field === "assigneeId" || field === "status"
+            ? [ticket.assigneeId]
+            : [],
+        at: now,
+      });
+    }
     if (changes.assigneeId)
       onTicketAssigned(ticket, changes.assigneeId, req.user);
     // "The status changes to" automations
@@ -489,17 +523,17 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       createdAt: now,
     },
   ];
+  const [sent] = await addMessages(ticket.id, lines);
   if (newStatus) {
-    lines.push({
-      kind: "event",
-      authorId: req.user.id,
-      authorName: req.user.name,
-      body: `changed status to ${STATUSES[newStatus]}`,
+    await recordEvent({
+      ticket,
+      actor: req.user,
+      type: `status:${newStatus}`,
+      body: `changed status to ${STATUSES[newStatus]} (from ${STATUSES[ticket.status]})`,
       // A moment after the message, so it always shows underneath it
-      createdAt: new Date(now.getTime() + 1),
+      at: new Date(now.getTime() + 1),
     });
   }
-  const [sent] = await addMessages(ticket.id, lines);
   await claimFiles(fileIds, ticket.id, sent.id);
   await db.update(tickets).set(update).where(eq(tickets.id, ticket.id));
   if (kind === "customer") {
@@ -516,8 +550,8 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
 
 // Delete an internal note. Only notes can be deleted (replies were
 // already seen by the customer). Whoever wrote the note can delete it,
-// and so can Admins and the Super Admin. Its files go too, and a line
-// in the ticket's history says a note was deleted.
+// and so can Admins and the Super Admin. Its files go too. It isn't
+// shown in the ticket; the people concerned get it in their bell.
 ticketsRouter.delete(
   "/:id/messages/:messageId",
   requireRole(...STAFF),
@@ -544,16 +578,19 @@ ticketsRouter.delete(
     const now = new Date();
     await db.transaction(async (tx) => {
       await tx.delete(messages).where(eq(messages.id, note.id));
-      await tx.insert(messages).values({
-        ticketId: ticket.id,
-        kind: "event",
-        authorId: req.user.id,
-        authorName: req.user.name,
+      // Not shown in the ticket: the person who has the ticket, and
+      // whoever wrote the note, get it in their bell instead
+      await recordEvent({
+        ticket,
+        actor: req.user,
+        type: "note-deleted",
         body:
           note.authorId === req.user.id
-            ? "deleted an internal note"
+            ? "deleted their internal note"
             : `deleted an internal note by ${note.authorName}`,
-        createdAt: now,
+        alsoTell: [note.authorId],
+        at: now,
+        tx,
       });
       await tx
         .update(tickets)
@@ -597,7 +634,8 @@ ticketsRouter.post(
 );
 
 // Ticket Review: an Admin ticks off a finished ticket once they've
-// checked it (or takes the tick off). Recorded in its history too.
+// checked it (or takes the tick off). Recorded (the person who has the
+// ticket gets it in their bell).
 ticketsRouter.post("/:id/review", requireRole(...ADMINS), async (req, res) => {
   const ticket = await findTicket(req.params.id, req.user);
   const reviewed = Boolean(req.body?.reviewed);
@@ -609,17 +647,15 @@ ticketsRouter.post("/:id/review", requireRole(...ADMINS), async (req, res) => {
       reviewedAt: reviewed ? now : null,
     })
     .where(eq(tickets.id, ticket.id));
-  await addMessages(ticket.id, [
-    {
-      kind: "event",
-      authorId: req.user.id,
-      authorName: req.user.name,
-      body: reviewed
-        ? "marked the ticket as reviewed"
-        : "took the review tick off",
-      createdAt: now,
-    },
-  ]);
+  await recordEvent({
+    ticket,
+    actor: req.user,
+    type: "review",
+    body: reviewed
+      ? "marked the ticket as reviewed"
+      : "took the review tick off",
+    at: now,
+  });
   res.json(await loadTicket(ticket.id, req.user));
 });
 
@@ -664,6 +700,7 @@ export async function unassignTicketsOf(member, actor) {
     open.map((t) => ({
       ticketId: t.id,
       kind: "event",
+      eventType: "assigned",
       authorId: actor.id,
       authorName: actor.name,
       body: `unassigned the ticket (${member.name} was removed from the team)`,

@@ -28,3 +28,5 @@ dist-ssr
 *.sw?
 # Files attached to tickets (kept on the server, never uploaded to git)
 uploads/
+# Backups saved on the server (they hold everything, keep them private)
+backups/

@@ -181,6 +181,9 @@ export const messages = pgTable(
     }),
     authorName: text("author_name").notNull(),
     body: text("body").notNull(),
+    // For history lines: what kind of change it was, e.g. "assigned" or
+    // "status:closed" (see activity.js for which show in the ticket)
+    eventType: text("event_type"),
     createdAt: createdAt(),
   },
   (t) => [index("messages_ticket_idx").on(t.ticketId)],
@@ -299,7 +302,8 @@ export const notifications = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // newTicket, assigned, customerReply, dueSoon, overdue or automation
+    // newTicket, assigned, customerReply, dueSoon, overdue, automation
+    // or activity (a change on your ticket, see activity.js)
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),

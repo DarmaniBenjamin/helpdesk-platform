@@ -35,6 +35,7 @@ import {
 import { ADMINS, STAFF } from "./permissions.js";
 import { notify, onTicketAssigned } from "./notify.js";
 import { sendToEveryone } from "./live.js";
+import { recordEvent } from "./activity.js";
 
 const HOUR = 60 * 60 * 1000;
 // The name on replies sent by "Reply to the customer". Also how they're
@@ -52,22 +53,27 @@ const STATUS_NAMES = {
 };
 const PRIORITY_NAMES = { 1: "Low", 2: "Medium", 3: "High", 4: "Urgent" };
 
-// A history line on a ticket, written by a rule or automation
-async function historyLine(ticketId, who, text, at = new Date()) {
-  await db.insert(messages).values({
-    ticketId,
-    kind: "event",
-    authorId: null,
-    authorName: who,
-    body: text,
-    createdAt: at,
-  });
+// A history line on a ticket, written by a rule or automation. Only
+// the important kinds show in the ticket; the rest go to the bell of
+// whoever has the ticket (see activity.js).
+async function historyLine(ticketId, who, type, text) {
+  const [ticket] = await db
+    .select()
+    .from(tickets)
+    .where(eq(tickets.id, ticketId));
+  if (ticket)
+    await recordEvent({
+      ticket,
+      actor: { id: null, name: who },
+      type,
+      body: text,
+    });
 }
 
 // Tells every open tab that a ticket changed, so it shows up straight
 // away (e.g. an automation closed it while you were looking)
 function announce(ticketId) {
-  sendToEveryone("ticketChanged", { id: ticketId });
+  sendToEveryone("changed", { resource: "tickets", id: ticketId });
 }
 
 // Only active staff can be given tickets
@@ -142,7 +148,7 @@ export async function runAssignmentRules(ticketId) {
     parts.push(`assigned it to ${u?.name ?? "someone"}`);
   }
   const who = `Assignment rule "${best.name}"`;
-  await historyLine(ticket.id, who, parts.join(" and "));
+  await historyLine(ticket.id, who, "assigned", parts.join(" and "));
   if (changes.assigneeId)
     onTicketAssigned(ticket, changes.assigneeId, { id: null, name: who });
   return true;
@@ -208,7 +214,8 @@ async function doActions(automation, ticketId) {
         await historyLine(
           ticketId,
           who,
-          `changed status to ${STATUS_NAMES[value]}`,
+          `status:${value}`,
+          `changed status to ${STATUS_NAMES[value]} (from ${STATUS_NAMES[ticket.status]})`,
         );
         newStatus = value;
         break;
@@ -223,6 +230,7 @@ async function doActions(automation, ticketId) {
         await historyLine(
           ticketId,
           who,
+          "priority",
           `changed priority to ${PRIORITY_NAMES[p]}`,
         );
         break;
@@ -238,7 +246,12 @@ async function doActions(automation, ticketId) {
           .update(tickets)
           .set({ departmentId: String(value), updatedAt: now })
           .where(eq(tickets.id, ticketId));
-        await historyLine(ticketId, who, `moved the ticket to ${d.name}`);
+        await historyLine(
+          ticketId,
+          who,
+          "department",
+          `moved the ticket to ${d.name}`,
+        );
         break;
       }
       case "assignAgent": {
@@ -251,7 +264,12 @@ async function doActions(automation, ticketId) {
           .update(tickets)
           .set({ assigneeId: value, updatedAt: now })
           .where(eq(tickets.id, ticketId));
-        await historyLine(ticketId, who, `assigned the ticket to ${u.name}`);
+        await historyLine(
+          ticketId,
+          who,
+          "assigned",
+          `assigned the ticket to ${u.name}`,
+        );
         onTicketAssigned(ticket, value, { id: null, name: who });
         break;
       }
@@ -306,7 +324,7 @@ async function doActions(automation, ticketId) {
           .update(tickets)
           .set({ tags: [...ticket.tags, tag].slice(0, 20), updatedAt: now })
           .where(eq(tickets.id, ticketId));
-        await historyLine(ticketId, who, `added the tag "${tag}"`);
+        await historyLine(ticketId, who, "tag", `added the tag "${tag}"`);
         break;
       }
       default:

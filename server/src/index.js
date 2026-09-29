@@ -17,9 +17,10 @@ import { ticketsRouter } from "./tickets.js";
 import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
-import { liveRouter } from "./live.js";
+import { liveRouter, sendToEveryone } from "./live.js";
 import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import { startAutomations } from "./automation.js";
+import { backupRouter, startAutomaticBackups } from "./backup.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -32,10 +33,56 @@ const app = express();
 // conversation, so they're allowed to be bigger. This has to come before
 // the normal 1mb limit below, which would refuse them first.
 app.use("/api/import", express.json({ limit: "20mb" }));
+// A backup being restored is the whole database in one request
+app.use("/api/backup/restore", express.json({ limit: "500mb" }));
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
 // Work out who is signed in (from their session cookie) on every request
 app.use(loadSession);
+
+// ---------- Live updates ----------
+// After anything is changed (added, edited, deleted), every open tab is
+// told what changed, so it can load it again and show it without a
+// refresh. The tab that made the change says who it is (X-Tab-Id), so
+// it doesn't load its own change twice.
+const LIVE = [
+  "tickets",
+  "customers",
+  "answers",
+  "rules",
+  "automations",
+  "team",
+  "me",
+  "invites",
+  "departments",
+  "settings",
+  "import",
+  "backup",
+];
+app.use("/api", (req, res, next) => {
+  if (req.method === "GET") return next();
+  // Keep what's sent back, e.g. the ID of a ticket that was just made
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    res.locals.sent = body;
+    return json(body);
+  };
+  res.on("finish", () => {
+    if (res.statusCode >= 400) return;
+    const [resource, id, more] = req.originalUrl
+      .split("?")[0]
+      .replace(/^\/api\//, "")
+      .split("/");
+    if (!LIVE.includes(resource)) return;
+    sendToEveryone("changed", {
+      resource,
+      id: id ?? res.locals.sent?.id ?? null,
+      deleted: req.method === "DELETE" && Boolean(id) && !more,
+      tab: req.get("x-tab-id") ?? null,
+    });
+  });
+  next();
+});
 
 // ---------- Health check ----------
 // Open http://localhost:5173/api/health in the browser to see if the
@@ -64,10 +111,11 @@ app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
 app.use("/api/import", importRouter); // Freshdesk import (Admins)
-app.use("/api/live", liveRouter); // who's on which page, live notifications
+app.use("/api/live", liveRouter); // who's on which page, live updates
 app.use("/api/notifications", notificationsRouter); // the bell
 app.use("/api/push", pushRouter); // desktop/phone notifications on and off
 app.use("/api/attachments", attachmentsRouter); // files on tickets
+app.use("/api/backup", backupRouter); // backups and restoring (Super Admin)
 
 // Anything else under /api that doesn't exist
 app.use("/api", (req, res) => {
@@ -95,4 +143,6 @@ app.listen(port, "127.0.0.1", () => {
   startFileCleanUp();
   // Every 5 minutes: time-based automations ("no reply for 24 hours")
   startAutomations();
+  // Every hour: an automatic backup, if one is due
+  startAutomaticBackups();
 });

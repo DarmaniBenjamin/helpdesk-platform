@@ -1,8 +1,8 @@
 // How the helpdesk is set up: assignment rules, automations and settings.
 //   Rules and automations: Admins and the Super Admin.
 //   Settings (backups, the Freshdesk connection): the Super Admin only.
-// (Rules and automations are saved and shown, but don't run on their own
-// yet; that comes later.)
+// This file saves them; automation.js runs the rules and automations,
+// and backup.js makes the backups.
 import { Router } from "express";
 import { asc, eq } from "drizzle-orm";
 import { db } from "./db/index.js";
@@ -269,7 +269,9 @@ export const settingsRouter = Router();
 // (The Freshdesk API key is never saved: it's typed in each time.)
 const DEFAULTS = {
   backup: {
-    destination: "download", // "download", "gdrive" or "b2"
+    // Where automatic backups go: "server" (the backups folder).
+    // Google Drive ("gdrive") and Backblaze B2 ("b2") come later.
+    destination: "server",
     schedule: "daily", // "off", "daily" or "weekly"
     keep: 14, // how many old backups to keep
     lastBackupAt: null,
@@ -283,8 +285,8 @@ function cleanSection(section, changes) {
   const clean = {};
   if (section === "backup") {
     if ("destination" in changes) {
-      if (!["download", "gdrive", "b2"].includes(changes.destination))
-        throw new BadInput("That backup destination isn't valid.");
+      if (changes.destination !== "server")
+        throw new BadInput("Only this server can hold backups for now.");
       clean.destination = changes.destination;
     }
     if ("schedule" in changes) {
@@ -323,6 +325,9 @@ function cleanSection(section, changes) {
 async function loadSettings() {
   const rows = await db.select().from(settings);
   const saved = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  // Saved before backups went to the server
+  if (saved.backup?.destination && saved.backup.destination !== "server")
+    saved.backup = { ...saved.backup, destination: "server" };
   return Object.fromEntries(
     Object.entries(DEFAULTS).map(([key, defaults]) => [
       key,

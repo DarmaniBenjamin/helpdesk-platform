@@ -36,6 +36,13 @@
       "when": 1790644571726,
       "tag": "0004_burly_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790645514424,
+      "tag": "0005_right_warhawk",
+      "breakpoints": true
     }
   ]
 }
