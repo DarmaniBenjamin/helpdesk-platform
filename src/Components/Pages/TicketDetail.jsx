@@ -9,7 +9,6 @@ import {
   Phone,
   Building2,
   UserRound,
-  ExternalLink,
   TicketX,
   BookOpen,
   CircleCheck,
@@ -335,6 +334,73 @@ function Composer({ ticket, onSend }) {
   );
 }
 
+// Who the ticket is for, in one line under the title: their name (opens
+// their page), business, buttons to call or email them, and how many
+// other tickets of theirs are still open (also opens their page, where
+// they're listed)
+function CustomerLine({ customer, otherOpen }) {
+  const iconLink =
+    "flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:border-brand/40 hover:text-brand active:scale-[0.95]";
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <Link
+        to={`/customers/${customer.id}`}
+        className="flex min-w-0 items-center gap-2 font-medium hover:text-brand"
+      >
+        <Avatar name={customer.name} size="sm" />
+        <span className="truncate">{customer.name}</span>
+      </Link>
+      <span className="flex min-w-0 items-center gap-1 text-muted">
+        {customer.company ? (
+          <Building2 className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <UserRound className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="truncate">{customer.company ?? "Individual"}</span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        {customer.phone && (
+          <a
+            href={`tel:${customer.phone}`}
+            title={`Call ${customer.phone}`}
+            aria-label={`Call ${customer.name}`}
+            className={iconLink}
+          >
+            <Phone className="h-4 w-4" />
+          </a>
+        )}
+        {customer.email ? (
+          <a
+            href={`mailto:${customer.email}`}
+            title={`Email ${customer.email}`}
+            aria-label={`Email ${customer.name}`}
+            className={iconLink}
+          >
+            <Mail className="h-4 w-4" />
+          </a>
+        ) : (
+          <Link
+            to={`/customers/${customer.id}`}
+            title="No email yet: add one on their page"
+            className="text-xs text-muted hover:text-brand"
+          >
+            No email yet
+          </Link>
+        )}
+      </span>
+      {otherOpen.length > 0 && (
+        <Link
+          to={`/customers/${customer.id}`}
+          className="rounded-md bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand transition hover:bg-brand/20"
+        >
+          {otherOpen.length} other open ticket
+          {otherOpen.length === 1 ? "" : "s"}
+        </Link>
+      )}
+    </div>
+  );
+}
+
 // The panel with status, priority, department, assignee and due date
 function Properties({ ticket, me, onChange, onDelete }) {
   return (
@@ -652,6 +718,7 @@ export default function TicketDetail() {
           <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
             {ticket.subject}
           </h1>
+          <CustomerLine customer={customer} otherOpen={otherOpen} />
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={ticket.status} />
             <PriorityBadge priority={ticket.priority} />
@@ -687,7 +754,7 @@ export default function TicketDetail() {
         </p>
       )}
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[1fr_20rem]">
-        {/* Right side on desktop: ticket details and customer.
+        {/* Right side on desktop: ticket details.
             Desktop: stays pinned in view while the conversation scrolls,
             and scrolls on its own if it's taller than the screen
             (7rem = the top bar plus the page's padding above and below). */}
@@ -720,10 +787,6 @@ export default function TicketDetail() {
                 onDelete={() => setDeleting(true)}
               />
             </div>
-          </div>
-
-          <div className="hidden rounded-xl border border-line bg-white p-4 lg:block">
-            <CustomerCard customer={customer} otherOpen={otherOpen} />
           </div>
 
           {suggested.length > 0 && (
@@ -793,11 +856,6 @@ export default function TicketDetail() {
 
           {/* key: a fresh reply box for every ticket, so drafts never follow you */}
           <Composer key={ticket.id} ticket={ticket} onSend={handleSend} />
-
-          {/* Phones and tablets: customer card goes below the conversation */}
-          <div className="rounded-xl border border-line bg-white p-4 lg:hidden">
-            <CustomerCard customer={customer} otherOpen={otherOpen} />
-          </div>
         </section>
       </div>
 
@@ -810,83 +868,6 @@ export default function TicketDetail() {
           }}
           onClose={() => setDeleting(false)}
         />
-      )}
-    </div>
-  );
-}
-
-function CustomerCard({ customer, otherOpen }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="font-semibold">Customer</p>
-      <Link
-        to={`/customers/${customer.id}`}
-        className="group flex items-center gap-3"
-      >
-        <Avatar name={customer.name} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium group-hover:text-brand">
-            {customer.name}
-          </p>
-          <p className="flex items-center gap-1 truncate text-xs text-muted">
-            {customer.company ? (
-              <Building2 className="h-3 w-3 shrink-0" />
-            ) : (
-              <UserRound className="h-3 w-3 shrink-0" />
-            )}
-            {customer.company ?? "Individual"}
-          </p>
-        </div>
-        <ExternalLink className="h-4 w-4 shrink-0 text-muted group-hover:text-brand" />
-      </Link>
-
-      <div className="flex flex-col gap-2 text-sm">
-        {customer.email ? (
-          <a
-            href={`mailto:${customer.email}`}
-            className="flex items-center gap-2 text-muted hover:text-brand"
-          >
-            <Mail className="h-4 w-4 shrink-0" />
-            <span className="truncate">{customer.email}</span>
-          </a>
-        ) : (
-          <Link
-            to={`/customers/${customer.id}`}
-            className="flex items-center gap-2 text-muted hover:text-brand"
-          >
-            <Mail className="h-4 w-4 shrink-0" />
-            <span className="truncate">No email yet, add one</span>
-          </Link>
-        )}
-        {customer.phone && (
-          <a
-            href={`tel:${customer.phone}`}
-            className="flex items-center gap-2 text-muted hover:text-brand"
-          >
-            <Phone className="h-4 w-4 shrink-0" />
-            {customer.phone}
-          </a>
-        )}
-      </div>
-
-      {otherOpen.length > 0 && (
-        <div className="border-t border-line pt-3">
-          <p className="mb-2 text-xs font-medium text-muted">
-            Other open tickets
-          </p>
-          <ul className="flex flex-col gap-1">
-            {otherOpen.slice(0, 3).map((t) => (
-              <li key={t.id}>
-                <Link
-                  to={`/tickets/${t.id}`}
-                  className="block truncate rounded-md px-2 py-1.5 text-sm transition hover:bg-brand/5 hover:text-brand"
-                >
-                  <span className="text-muted">#{t.id}</span> {t.subject}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </div>
   );
