@@ -5,10 +5,10 @@
     "type": "module",
     "scripts": {
         "dev": "node --watch --env-file=.env src/index.js",
-        "start": "node src/index.js",
+        "start": "node --env-file-if-exists=.env src/db/migrate.js && node --env-file-if-exists=.env src/db/seed.js && node --env-file-if-exists=.env src/index.js",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "db:seed": "node src/db/seed.js",
+        "db:seed": "node --env-file-if-exists=.env src/db/seed.js",
         "db:studio": "drizzle-kit studio",
         "db:seed-examples": "node --env-file=.env src/db/seed-examples.js"
     },
@@ -22,5 +22,8 @@
     },
     "devDependencies": {
         "drizzle-kit": "^0.31.11"
+    },
+    "engines": {
+        "node": ">=22.12"
     }
 }

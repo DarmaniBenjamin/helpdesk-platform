@@ -129,13 +129,13 @@ export default function DataProvider({ children }) {
   // Let every page see the current departments and agents
   syncDirectory(departments, agents);
 
-  // ---------- The live connection (staff only) ----------
+  // ---------- The live connection (everyone signed in) ----------
   // One connection per open tab (see server/src/live.js). The server
-  // uses it to say who's on which page, to deliver new notifications,
-  // and to say when something changed (someone else's edit, or an
+  // uses it to say when something changed (someone else's edit, or an
   // automation), so every page stays up to date without refreshing.
-  // If it drops (e.g. the server restarts), the browser reconnects by
-  // itself.
+  // Staff also get new notifications and who's on which page through
+  // it; customers only hear about their own tickets. If it drops (e.g.
+  // the server restarts), the browser reconnects by itself.
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const connectionId = useRef(null);
@@ -150,20 +150,22 @@ export default function DataProvider({ children }) {
     }).catch(() => {});
   }
 
+  const signedIn = Boolean(me);
   useEffect(() => {
-    if (!isStaff) return;
+    if (!signedIn) return;
     const source = new EventSource("/api/live");
     let connectedBefore = false;
 
     source.addEventListener("hello", (e) => {
       connectionId.current = JSON.parse(e.data).connectionId;
       setTabId(connectionId.current);
-      reportPage(window.location.pathname);
+      if (isStaff) reportPage(window.location.pathname);
       // Reconnected after a drop: catch up on anything missed
       if (connectedBefore) {
-        api("/notifications")
-          .then(setNotifications)
-          .catch(() => {});
+        if (isStaff)
+          api("/notifications")
+            .then(setNotifications)
+            .catch(() => {});
         api("/tickets")
           .then(setTickets)
           .catch(() => {});
@@ -209,7 +211,7 @@ export default function DataProvider({ children }) {
     // Only when someone signs in or out (the functions it uses only
     // change the lists, so they never go out of date)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStaff, me?.id]);
+  }, [signedIn, me?.id]);
 
   // Loads again whatever the server said changed (see the live
   // connection above). `later` waits a moment, so a burst of changes
@@ -217,6 +219,9 @@ export default function DataProvider({ children }) {
   function refresh({ resource, id, deleted }, later) {
     const role = me?.role;
     const isAdmin = role === "owner" || role === "admin";
+    // Customers are only told about their own tickets (and a restore)
+    if (role === "customer" && resource !== "tickets" && resource !== "backup")
+      return;
     switch (resource) {
       case "tickets": {
         const ticketId = Number(id);
@@ -580,8 +585,7 @@ export default function DataProvider({ children }) {
 
   // Takes someone off the team (or cancels their invite). Their sign-in
   // stops working straight away. The server makes their unfinished
-  // tickets unassigned (with a line in each ticket's history saying
-  // why), so the tickets are loaded again afterwards.
+  // tickets unassigned, so the tickets are loaded again afterwards.
   async function removeMember(id) {
     const member = team.find((m) => m.id === id);
     await api(`/team/${id}`, { method: "DELETE" });
@@ -741,9 +745,9 @@ export default function DataProvider({ children }) {
   }
 
   // ---------- Tickets ----------
-  // Every change goes to the server, which saves it, writes the ticket's
-  // history, and sends back the whole updated ticket to show. If the
-  // server says no, these throw an error with its message.
+  // Every change goes to the server, which saves it and sends back the
+  // whole updated ticket to show. If the server says no, these throw an
+  // error with its message.
 
   // Puts the server's copy of a ticket on screen
   function showTicket(ticket) {

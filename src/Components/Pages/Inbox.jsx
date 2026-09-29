@@ -384,9 +384,11 @@ export default function Inbox() {
           </div>
 
           {/* Phones, tablets and small laptops: cards */}
-          <ul className="grid gap-3 md:grid-cols-2 xl:hidden">
+          {/* grid-cols-1 and min-w-0: a long name or company is cut off
+              with "…" instead of making the card wider than the phone */}
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:hidden">
             {shown.map((t) => (
-              <li key={t.id}>
+              <li key={t.id} className="min-w-0">
                 <div
                   onClick={() => openTicket(t)}
                   className={`group cursor-pointer rounded-xl border bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md active:scale-[0.99] active:bg-brand/5 ${
