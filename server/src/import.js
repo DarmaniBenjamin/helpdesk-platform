@@ -23,6 +23,7 @@ import {
 import { requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
 import { BadInput } from "./validate.js";
+import { getSla } from "./sla.js";
 
 export const importRouter = Router();
 
@@ -30,13 +31,6 @@ const HOUR = 60 * 60 * 1000;
 const STATUSES = ["open", "pending", "waiting", "resolved", "closed"];
 const SOURCES = ["email", "portal", "phone", "agent"];
 const MESSAGE_KINDS = ["customer", "agent", "note", "event"];
-// Same as tickets.js
-const SLA_HOURS = {
-  1: { firstResponse: 8, resolve: 72 },
-  2: { firstResponse: 4, resolve: 24 },
-  3: { firstResponse: 2, resolve: 8 },
-  4: { firstResponse: 1, resolve: 4 },
-};
 const MAX_PER_BATCH = 1000;
 
 // ---------- Small cleaners (never throw: odd values get a safe default) ----------
@@ -167,6 +161,9 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
   const incoming = req.body?.tickets;
   const replace = req.body?.replace === true;
   checkBatch(incoming, "tickets");
+  // How fast each priority must be answered / fixed, in hours (sla.js),
+  // for tickets that don't bring their own due times
+  const SLA_HOURS = await getSla();
 
   // Looked up once per batch instead of once per ticket
   const departmentIds = new Set(

@@ -4,9 +4,10 @@
 // departments, customers, the team (with their scrambled passwords, so
 // everyone can still sign in after a restore), tickets with their whole
 // conversation and history, file records, the Knowledge Base, rules,
-// automations and settings. It doesn't hold sign-in sessions or
-// notifications (those don't matter after a restore), or the attached
-// files themselves (those are in the uploads folder: back that up too).
+// automations and settings (including the SLA targets). It doesn't hold
+// sign-in sessions or notifications (those don't matter after a
+// restore), or the attached files themselves (those are in the uploads
+// folder: back that up too).
 //
 // Keep backup files somewhere safe: they hold everything, including
 // customers' details.
@@ -31,6 +32,7 @@ import { db, pool } from "./db/index.js";
 import { settings } from "./db/schema.js";
 import { hashToken, requireRole } from "./auth.js";
 import { BadInput } from "./validate.js";
+import { forgetSla } from "./sla.js";
 
 export const backupRouter = Router();
 
@@ -235,6 +237,8 @@ async function restore(backup, req) {
       }
     }
     await client.query("commit");
+    // The SLA targets came back with the settings: read them again
+    forgetSla();
   } catch (err) {
     await client.query("rollback");
     if (err instanceof BadInput) throw err;

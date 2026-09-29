@@ -26,6 +26,7 @@ import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { freshdeskRouter } from "./freshdesk.js";
+import { slaRouter } from "./sla.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -70,6 +71,7 @@ const LIVE = [
   "settings",
   "import",
   "backup",
+  "sla",
 ];
 app.use("/api", (req, res, next) => {
   if (req.method === "GET") return next();
@@ -141,6 +143,7 @@ app.use("/api/notifications", notificationsRouter); // the bell
 app.use("/api/push", pushRouter); // desktop/phone notifications on and off
 app.use("/api/attachments", attachmentsRouter); // files on tickets
 app.use("/api/backup", backupRouter); // backups and restoring (Super Admin)
+app.use("/api/sla", slaRouter); // SLA targets (changed by Admins)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 
 // Anything else under /api that doesn't exist

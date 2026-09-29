@@ -25,6 +25,7 @@ import {
   onCustomerReply,
 } from "./notify.js";
 import { afterTicketEvent } from "./automation.js";
+import { getSla } from "./sla.js";
 import { recordEvent } from "./activity.js";
 import {
   checkFiles,
@@ -48,13 +49,6 @@ const STATUSES = {
   closed: "Closed",
 };
 const PRIORITIES = { 1: "Low", 2: "Medium", 3: "High", 4: "Urgent" };
-// How fast each priority must be answered / fixed, in hours
-const SLA_HOURS = {
-  1: { firstResponse: 8, resolve: 72 },
-  2: { firstResponse: 4, resolve: 24 },
-  3: { firstResponse: 2, resolve: 8 },
-  4: { firstResponse: 1, resolve: 4 },
-};
 const isDone = (status) => status === "resolved" || status === "closed";
 const isStaff = (user) => STAFF.includes(user.role);
 
@@ -318,6 +312,8 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
   });
   // Files sent with the request (uploaded first, see attachments.js)
   const fileIds = await checkFiles(req.body?.attachmentIds, req.user);
+  // How fast each priority must be answered / fixed, in hours (sla.js)
+  const SLA_HOURS = await getSla();
 
   let values;
   if (ADMINS.includes(req.user.role)) {
