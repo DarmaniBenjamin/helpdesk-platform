@@ -1,7 +1,5 @@
-// Helpers for backups: saving the app's data to a file and reading it back
-
-export const BACKUP_APP = "helpdesk-platform";
-export const BACKUP_VERSION = 1;
+// Helpers for reading and saving JSON files in the browser (used by the
+// Freshdesk import and Backup & Restore)
 
 // Downloads any data as a .json file
 export function downloadJson(data, fileName) {
@@ -31,40 +29,31 @@ export function readJsonFile(file) {
   });
 }
 
-// "helpdesk-backup-2026-09-26-1430.json"
-export function backupFileName(time = Date.now()) {
-  const d = new Date(time);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `helpdesk-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-    d.getDate(),
-  )}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+// "4.2 MB", "830 KB"
+export function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-// Checks a file really is one of our backups before anything is replaced
-export function checkBackup(json) {
-  if (json?.app !== BACKUP_APP || !json.data) {
-    return { error: "This isn't a helpdesk backup file." };
-  }
-  if (json.version > BACKUP_VERSION) {
-    return {
-      error: "This backup is from a newer version of the app. Update first.",
-    };
-  }
-  const { data } = json;
-  if (!Array.isArray(data.tickets) || !Array.isArray(data.customers)) {
-    return { error: "This backup is missing its tickets or customers." };
-  }
-  return { backup: json };
-}
-
-// What's inside a backup, for showing before restoring
-export function backupSummary(data) {
-  return [
-    { label: "Tickets", count: data.tickets?.length ?? 0 },
-    { label: "Customers", count: data.customers?.length ?? 0 },
-    { label: "Team members", count: data.team?.length ?? 0 },
-    { label: "Knowledge Base answers", count: data.answers?.length ?? 0 },
-    { label: "Assignment rules", count: data.rules?.length ?? 0 },
-    { label: "Automations", count: data.automations?.length ?? 0 },
-  ];
+// What's inside a backup file (made by server/src/backup.js), to show
+// before restoring it. Returns null if it isn't one of our backups.
+export function backupContents(backup) {
+  if (backup?.app !== "helpdesk-platform" || !backup.tables) return null;
+  const count = (table) => backup.tables[table]?.length ?? 0;
+  return {
+    exportedAt: backup.exportedAt,
+    version: backup.version,
+    items: [
+      { label: "Tickets", count: count("tickets") },
+      { label: "Customers", count: count("customers") },
+      {
+        label: "Team members",
+        count: (backup.tables.users ?? []).filter((u) => u.role !== "customer")
+          .length,
+      },
+      { label: "Knowledge Base answers", count: count("answers") },
+      { label: "Assignment rules", count: count("rules") },
+      { label: "Automations", count: count("automations") },
+    ],
+  };
 }

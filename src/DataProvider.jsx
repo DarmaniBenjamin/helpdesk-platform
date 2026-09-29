@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { DataContext } from "./useData";
-import { api } from "./api";
+import { api, setTabId } from "./api";
 import { pausePush, resumePush } from "./push";
 import { syncDirectory } from "./data";
-import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 
 // ---------- Everything comes from the backend ----------
 // Signing in, the team, departments, customers, tickets, the Knowledge
@@ -15,7 +14,7 @@ import { BACKUP_APP, BACKUP_VERSION } from "./Components/backupUtils";
 // loaded. The server has the same defaults.
 const STARTING_SETTINGS = {
   backup: {
-    destination: "download", // "download", "gdrive" or "b2"
+    destination: "server", // where automatic backups go
     schedule: "daily", // "off", "daily" or "weekly"
     keep: 14, // how many old backups to keep
     lastBackupAt: null,
@@ -132,9 +131,11 @@ export default function DataProvider({ children }) {
 
   // ---------- The live connection (staff only) ----------
   // One connection per open tab (see server/src/live.js). The server
-  // uses it to say who's on which page, and to deliver new notifications
-  // straight away. If it drops (e.g. the server restarts), the browser
-  // reconnects by itself.
+  // uses it to say who's on which page, to deliver new notifications,
+  // and to say when something changed (someone else's edit, or an
+  // automation), so every page stays up to date without refreshing.
+  // If it drops (e.g. the server restarts), the browser reconnects by
+  // itself.
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const connectionId = useRef(null);
@@ -156,14 +157,32 @@ export default function DataProvider({ children }) {
 
     source.addEventListener("hello", (e) => {
       connectionId.current = JSON.parse(e.data).connectionId;
+      setTabId(connectionId.current);
       reportPage(window.location.pathname);
       // Reconnected after a drop: catch up on anything missed
       if (connectedBefore) {
         api("/notifications")
           .then(setNotifications)
           .catch(() => {});
+        api("/tickets")
+          .then(setTickets)
+          .catch(() => {});
       }
       connectedBefore = true;
+    });
+
+    // Something changed somewhere else: load it again. Lots of changes
+    // close together (e.g. an import) are loaded once, after they stop.
+    const waiting = {};
+    function later(key, load) {
+      clearTimeout(waiting[key]);
+      waiting[key] = setTimeout(() => load().catch(() => {}), 400);
+    }
+    source.addEventListener("changed", (e) => {
+      const change = JSON.parse(e.data);
+      // This tab made the change, so it already shows it
+      if (change.tab && change.tab === connectionId.current) return;
+      refresh(change, later);
     });
 
     source.addEventListener("presence", (e) => {
@@ -184,10 +203,97 @@ export default function DataProvider({ children }) {
     return () => {
       source.close();
       connectionId.current = null;
+      setTabId(null);
       setPresence([]);
     };
-    // Only when someone signs in or out
+    // Only when someone signs in or out (the functions it uses only
+    // change the lists, so they never go out of date)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaff, me?.id]);
+
+  // Loads again whatever the server said changed (see the live
+  // connection above). `later` waits a moment, so a burst of changes
+  // is loaded once.
+  function refresh({ resource, id, deleted }, later) {
+    const role = me?.role;
+    const isAdmin = role === "owner" || role === "admin";
+    switch (resource) {
+      case "tickets": {
+        const ticketId = Number(id);
+        if (deleted) {
+          setTickets((list) => list.filter((t) => t.id !== ticketId));
+        } else if (ticketId) {
+          later(`ticket-${ticketId}`, () =>
+            api(`/tickets/${ticketId}`)
+              .then(showTicket)
+              .catch((err) => {
+                // Deleted in the meantime
+                if (err.status === 404)
+                  setTickets((list) => list.filter((t) => t.id !== ticketId));
+              }),
+          );
+        } else {
+          later("tickets", () => api("/tickets").then(setTickets));
+        }
+        break;
+      }
+      case "customers":
+        // Tickets keep a copy of their customer, so update those too
+        later("customers", () =>
+          api("/customers").then((list) => {
+            setCustomers(list);
+            const byId = new Map(list.map((c) => [c.id, c]));
+            setTickets((all) =>
+              all.map((t) =>
+                byId.has(t.customerId)
+                  ? { ...t, requester: byId.get(t.customerId) }
+                  : t,
+              ),
+            );
+          }),
+        );
+        break;
+      case "import":
+        later("import", () =>
+          Promise.all([api("/customers"), api("/tickets")]).then(
+            ([customerList, ticketList]) => {
+              setCustomers(customerList);
+              setTickets(ticketList);
+            },
+          ),
+        );
+        break;
+      case "answers":
+        later("answers", () => api("/answers").then(setAnswers));
+        break;
+      case "rules":
+        if (isAdmin) later("rules", () => api("/rules").then(setRules));
+        break;
+      case "automations":
+        if (isAdmin)
+          later("automations", () => api("/automations").then(setAutomations));
+        break;
+      case "team":
+      case "me":
+      case "invites":
+        later("team", () => api("/team").then(setTeam));
+        break;
+      case "departments":
+        later("departments", () => api("/departments").then(setDepartments));
+        break;
+      case "settings":
+        if (role === "owner")
+          later("settings", () => api("/settings").then(setSettings));
+        break;
+      case "backup":
+        // A restore replaced everything: start fresh
+        if (!String(id ?? "").startsWith("restore")) break;
+        window.location.reload();
+        break;
+      default:
+        break;
+    }
+  }
 
   // Moving to another page: tell the server
   useEffect(() => {
@@ -359,32 +465,8 @@ export default function DataProvider({ children }) {
     }
   }
 
-  // ---------- Backup and import ----------
-
-  // Everything in the app, in one object, ready to save as a file
-  function makeBackup() {
-    const time = Date.now();
-    const backupSettings = {
-      ...settings,
-      backup: { ...settings.backup, lastBackupAt: time },
-    };
-    updateSettings("backup", { lastBackupAt: time }); // remember when
-    return {
-      app: BACKUP_APP,
-      version: BACKUP_VERSION,
-      exportedAt: time,
-      data: {
-        tickets,
-        customers,
-        departments,
-        team,
-        rules,
-        automations,
-        answers,
-        settings: backupSettings,
-      },
-    };
-  }
+  // ---------- Import ----------
+  // (Backups are made and restored by the server: see BackupRestore.jsx)
 
   // Saves a Freshdesk import (worked out in freshdeskMapping.js) to the
   // database: customers first, then tickets, in batches so no single
@@ -724,7 +806,7 @@ export default function DataProvider({ children }) {
   }
 
   // Delete an internal note (only its writer, or an Admin). Its files go
-  // too, and the ticket's history says a note was deleted.
+  // too; the people concerned get it in their bell.
   async function deleteNote(ticketId, messageId) {
     return showTicket(
       await api(`/tickets/${ticketId}/messages/${messageId}`, {
@@ -745,7 +827,7 @@ export default function DataProvider({ children }) {
   }
 
   // Ticket Review: an Admin ticks off a finished ticket once they've
-  // checked it (or unticks it). Recorded on the ticket and in its history.
+  // checked it (or unticks it). Recorded on the ticket.
   async function markReviewed(id, reviewed) {
     return showTicket(
       await api(`/tickets/${id}/review`, {
@@ -815,7 +897,6 @@ export default function DataProvider({ children }) {
         addDepartment,
         renameDepartment,
         deleteDepartment,
-        makeBackup,
         saveImport,
         notifications,
         markNotificationRead,

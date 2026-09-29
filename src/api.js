@@ -10,14 +10,26 @@ export class ApiError extends Error {
   }
 }
 
+// This tab's ID on the live connection (see DataProvider.jsx). It's sent
+// with every change, so when the server tells all tabs "this changed",
+// the tab that made the change knows it already has it.
+let tabId = null;
+export function setTabId(id) {
+  tabId = id;
+}
+
 // e.g. await api("/auth/login", { method: "POST", body: { email, password } })
-export async function api(path, { method = "GET", body } = {}) {
+// `raw`: send a file as it is (e.g. a backup), instead of `body`
+export async function api(path, { method = "GET", body, raw } = {}) {
+  const headers = {};
+  if (body || raw) headers["Content-Type"] = "application/json";
+  if (tabId) headers["X-Tab-Id"] = tabId;
   let res;
   try {
     res = await fetch(`/api${path}`, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      headers,
+      body: raw ?? (body ? JSON.stringify(body) : undefined),
       credentials: "same-origin",
     });
   } catch {
