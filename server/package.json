@@ -8,7 +8,7 @@
         "start": "node src/index.js",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "db:seed": "node --env-file=.env src/db/seed.js",
+        "db:seed": "node src/db/seed.js",
         "db:studio": "drizzle-kit studio",
         "db:seed-examples": "node --env-file=.env src/db/seed-examples.js"
     },
