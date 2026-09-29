@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { DataContext } from "./useData";
 import { api, setTabId } from "./api";
 import { pausePush, resumePush } from "./push";
-import { syncDirectory } from "./data";
+import { SLA_HOURS, syncDirectory } from "./data";
 
 // ---------- Everything comes from the backend ----------
 // Signing in, the team, departments, customers, tickets, the Knowledge
@@ -40,6 +40,8 @@ export default function DataProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   // Who's on which page right now: [{ userId, path, since }]
   const [presence, setPresence] = useState([]);
+  // SLA targets per priority, in hours (from the server)
+  const [sla, setSlaState] = useState(() => structuredClone(SLA_HOURS));
   // checked = we've asked the server who's signed in (until then, pages
   // wait instead of sending you to the sign-in page).
   // userId = the account that's signed in, or null.
@@ -61,6 +63,7 @@ export default function DataProvider({ children }) {
       automationList,
       settingsData,
       notificationList,
+      slaTargets,
     ] = await Promise.all([
       isCustomer ? [user] : api("/team"),
       api("/departments"),
@@ -71,6 +74,7 @@ export default function DataProvider({ children }) {
       isAdmin ? api("/automations") : [],
       user.role === "owner" ? api("/settings") : STARTING_SETTINGS,
       isCustomer ? [] : api("/notifications"),
+      api("/sla"),
     ]);
     setTeam(teamList);
     setDepartments(departmentList);
@@ -81,6 +85,22 @@ export default function DataProvider({ children }) {
     setAutomations(automationList);
     setSettings(settingsData);
     setNotifications(notificationList);
+    setSla(slaTargets);
+  }
+
+  // The SLA targets are also kept in data.js (SLA_HOURS), which the
+  // pages read for due times, so both are updated together
+  function setSla(targets) {
+    for (const [p, hours] of Object.entries(targets)) {
+      if (SLA_HOURS[p]) Object.assign(SLA_HOURS[p], hours);
+    }
+    setSlaState(structuredClone(targets));
+  }
+
+  // Changes the SLA targets (Admins and the Super Admin). Throws with the
+  // server's message if it says no.
+  async function updateSla(targets) {
+    setSla(await api("/sla", { method: "PATCH", body: targets }));
   }
 
   // Signed in: load everything they need, then show the app
@@ -285,6 +305,9 @@ export default function DataProvider({ children }) {
         break;
       case "departments":
         later("departments", () => api("/departments").then(setDepartments));
+        break;
+      case "sla":
+        later("sla", () => api("/sla").then(setSla));
         break;
       case "settings":
         if (role === "owner")
@@ -906,6 +929,8 @@ export default function DataProvider({ children }) {
         markNotificationRead,
         markAllNotificationsRead,
         presence,
+        sla,
+        updateSla,
       }}
     >
       {children}

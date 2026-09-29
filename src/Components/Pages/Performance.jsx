@@ -10,16 +10,17 @@ import {
   ShieldCheck,
   Info,
   X,
+  Pencil,
 } from "lucide-react";
 import Card from "../Card";
 import Avatar from "../Avatar";
 import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
+import SlaTargetsModal from "../SlaTargetsModal";
 import { inputClass } from "../formStyles";
 import useData from "../../useData";
 import {
   PRIORITIES,
-  SLA_HOURS,
   AGENTS,
   HOUR,
   isDone,
@@ -109,12 +110,13 @@ function ratingChange(current, previous) {
   return Math.round((current - previous) * 10) / 10;
 }
 
-// 1 -> "1 hour", 8 -> "8 hours", 72 -> "3 days"
+// 1 -> "1 hour", 8 -> "8 hours", 72 -> "3 days", 0.5 -> "30 minutes"
 function hoursText(hours) {
   if (hours >= 24 && hours % 24 === 0) {
     const days = hours / 24;
     return `${days} day${days === 1 ? "" : "s"}`;
   }
+  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
   return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
@@ -390,7 +392,10 @@ function FeedbackItem({ ticket }) {
 // ---------- The page ----------
 
 export default function Performance() {
-  const { tickets } = useData();
+  const { tickets, me, sla, updateSla } = useData();
+  // Admins and the Super Admin can change the SLA targets
+  const canEditSla = me.role === "owner" || me.role === "admin";
+  const [editingSla, setEditingSla] = useState(false);
 
   // "Now" refreshes every minute, so "Due soon" and "Overdue" stay current
   const [now, setNow] = useState(() => Date.now());
@@ -452,7 +457,7 @@ export default function Performance() {
     .reverse()
     .map((p) => ({
       priority: p,
-      ...SLA_HOURS[p],
+      ...sla[p],
       ...slaStats(
         tickets.filter((t) => t.priority === p),
         from,
@@ -925,7 +930,21 @@ export default function Performance() {
       </div>
 
       {/* SLA targets */}
-      <Card title="SLA targets by priority">
+      <Card
+        title="SLA targets by priority"
+        action={
+          canEditSla && (
+            <button
+              type="button"
+              onClick={() => setEditingSla(true)}
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+            >
+              <Pencil className="h-4 w-4" />
+              <span className="hidden sm:inline">Edit targets</span>
+            </button>
+          )
+        }
+      >
         <p className="-mt-2 mb-4 text-sm text-muted">
           The time allowed for each priority, and how well it was met in this
           period.
@@ -975,14 +994,22 @@ export default function Performance() {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-sky-700">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="mt-4 flex items-start gap-2 rounded-lg bg-brand/5 px-3 py-2.5 text-sm text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
           <p>
-            These targets set the due time on every new ticket. Changing them
-            from this page comes later.
+            These targets set the due times on every new ticket. Changing them
+            doesn't move the due times of tickets that already exist.
           </p>
         </div>
       </Card>
+
+      {editingSla && (
+        <SlaTargetsModal
+          sla={sla}
+          onSave={updateSla}
+          onClose={() => setEditingSla(false)}
+        />
+      )}
     </div>
   );
 }

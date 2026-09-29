@@ -17,6 +17,7 @@ import Profile from "./Components/Pages/Profile";
 import Settings from "./Components/Pages/Settings";
 import Login from "./Components/Pages/Login";
 import AcceptInvite from "./Components/Pages/AcceptInvite";
+import RequestForm from "./Components/Pages/RequestForm";
 import PortalHome from "./Components/Portal/PortalHome";
 import PortalNewRequest from "./Components/Portal/PortalNewRequest";
 import PortalTicket from "./Components/Portal/PortalTicket";
@@ -24,7 +25,8 @@ import ComingSoon from "./Components/Pages/ComingSoon";
 import ScrollToTop from "./Components/ScrollToTop";
 
 // Three parts:
-// 1. Pages anyone can open: sign in, and accepting an invite
+// 1. Pages anyone can open: sign in, accepting an invite, and the
+//    public request form (/request, also for putting on another website)
 // 2. The customer portal (/portal/...), for customers
 // 3. Everything else, for staff, inside the sidebar layout
 export default function App() {
@@ -34,6 +36,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/welcome/:id" element={<AcceptInvite />} />
+        <Route path="/request" element={<RequestForm />} />
 
         <Route path="/portal" element={<PortalLayout />}>
           <Route index element={<PortalHome />} />
