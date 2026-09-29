@@ -66,8 +66,25 @@ const SOURCES = {
   agent: "Created by an agent",
 };
 
-// One entry in the conversation
-function Message({ message }) {
+// One entry in the conversation. `onDelete` is only given for internal
+// notes this person may delete (their own, or any if they're an Admin).
+function Message({ message, onDelete }) {
+  // Deleting asks "are you sure?" right on the note first
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirmDelete() {
+    setDeleting(true);
+    setError("");
+    try {
+      await onDelete(message);
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
+    }
+  }
+
   // Status changes, assignments etc.: a small line in the middle
   if (message.kind === "event") {
     return (
@@ -105,10 +122,53 @@ function Message({ message }) {
         {message.kind === "note" && (
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Lock className="h-3 w-3" />
-            Only agents see this
+            <span className="hidden sm:inline">Only agents see this</span>
+            <span className="sm:hidden">Internal</span>
           </span>
         )}
+        {onDelete && !confirming && (
+          <button
+            type="button"
+            aria-label="Delete this note"
+            title="Delete this note"
+            onClick={() => setConfirming(true)}
+            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-amber-700/70 transition hover:bg-red-50 hover:text-red-500 active:scale-[0.92]"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
+      {confirming && (
+        <div className="mt-3 flex flex-col gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 sm:flex-row sm:items-center">
+          <p className="flex-1">
+            Delete this note
+            {message.attachments?.length ? " and its files" : ""}? This can't be
+            undone.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                setError("");
+              }}
+              disabled={deleting}
+              className="h-9 flex-1 cursor-pointer rounded-lg border border-red-200 bg-white px-3 text-sm transition hover:bg-red-100 sm:flex-none"
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="h-9 flex-1 cursor-pointer rounded-lg bg-red-500 px-3 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+            >
+              {deleting ? "Deleting…" : "Delete note"}
+            </button>
+          </div>
+          {error && <p className="w-full text-xs">{error}</p>}
+        </div>
+      )}
       {message.body && (
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
           {message.body}
@@ -501,6 +561,7 @@ export default function TicketDetail() {
     updateTicket,
     deleteTicket,
     addMessage,
+    deleteNote,
     answers,
     addAnswer,
   } = useData();
@@ -708,7 +769,17 @@ export default function TicketDetail() {
         <section className="flex min-w-0 flex-col gap-4 lg:order-1">
           <ul className="flex flex-col gap-3">
             {ticket.messages.map((m) => (
-              <Message key={m.id} message={m} />
+              <Message
+                key={m.id}
+                message={m}
+                // Notes can be deleted by whoever wrote them, or an Admin
+                onDelete={
+                  m.kind === "note" &&
+                  (m.authorId === me.id || can(me.role, "deleteTickets"))
+                    ? (note) => deleteNote(ticket.id, note.id)
+                    : undefined
+                }
+              />
             ))}
           </ul>
 

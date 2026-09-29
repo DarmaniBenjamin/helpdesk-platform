@@ -223,6 +223,15 @@ export async function filesOfTicket(ticketId) {
   return rows.map((r) => r.storageKey);
 }
 
+// The stored names of one message's files (e.g. a note being deleted)
+export async function filesOfMessage(messageId) {
+  const rows = await db
+    .select({ storageKey: attachments.storageKey })
+    .from(attachments)
+    .where(eq(attachments.messageId, messageId));
+  return rows.map((r) => r.storageKey);
+}
+
 // Deletes files from the uploads folder
 export function removeFiles(storageKeys) {
   storageKeys.forEach(removeFile);

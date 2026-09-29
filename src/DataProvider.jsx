@@ -723,6 +723,16 @@ export default function DataProvider({ children }) {
     );
   }
 
+  // Delete an internal note (only its writer, or an Admin). Its files go
+  // too, and the ticket's history says a note was deleted.
+  async function deleteNote(ticketId, messageId) {
+    return showTicket(
+      await api(`/tickets/${ticketId}/messages/${messageId}`, {
+        method: "DELETE",
+      }),
+    );
+  }
+
   // A customer's star rating (1-5) and comment on a finished ticket.
   // Shows up on the Performance & Feedback page.
   async function rateTicket(id, rating, comment) {
@@ -765,6 +775,7 @@ export default function DataProvider({ children }) {
         updateTicket,
         deleteTicket,
         addMessage,
+        deleteNote,
         addCustomer,
         updateCustomer,
         findCustomerByEmail,

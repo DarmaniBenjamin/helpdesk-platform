@@ -29,6 +29,7 @@ import {
   claimFiles,
   filesForMessages,
   filesOfTicket,
+  filesOfMessage,
   removeFiles,
 } from "./attachments.js";
 
@@ -105,6 +106,8 @@ async function loadTickets(where, viewer) {
       id: m.id,
       kind: m.kind,
       author: m.authorName,
+      // Who wrote it (staff only), so the page knows who can delete a note
+      ...(isStaff(viewer) ? { authorId: m.authorId } : {}),
       body: m.body,
       at: ms(m.createdAt),
       attachments: files[m.id] ?? [],
@@ -501,6 +504,57 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
     );
   res.status(201).json(await loadTicket(ticket.id, req.user));
 });
+
+// Delete an internal note. Only notes can be deleted (replies were
+// already seen by the customer). Whoever wrote the note can delete it,
+// and so can Admins and the Super Admin. Its files go too, and a line
+// in the ticket's history says a note was deleted.
+ticketsRouter.delete(
+  "/:id/messages/:messageId",
+  requireRole(...STAFF),
+  async (req, res) => {
+    const ticket = await findTicket(req.params.id, req.user);
+    const [note] = await db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.id, Number(req.params.messageId) || 0),
+          eq(messages.ticketId, ticket.id),
+        ),
+      );
+    if (!note) throw new BadInput("That note doesn't exist.", 404);
+    if (note.kind !== "note")
+      throw new BadInput("Only internal notes can be deleted.");
+    if (note.authorId !== req.user.id && !ADMINS.includes(req.user.role))
+      throw new BadInput("You can only delete your own notes.", 403);
+
+    // Its files are removed from the uploads folder too (the file
+    // records are deleted with the note)
+    const fileKeys = await filesOfMessage(note.id);
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx.delete(messages).where(eq(messages.id, note.id));
+      await tx.insert(messages).values({
+        ticketId: ticket.id,
+        kind: "event",
+        authorId: req.user.id,
+        authorName: req.user.name,
+        body:
+          note.authorId === req.user.id
+            ? "deleted an internal note"
+            : `deleted an internal note by ${note.authorName}`,
+        createdAt: now,
+      });
+      await tx
+        .update(tickets)
+        .set({ updatedAt: now })
+        .where(eq(tickets.id, ticket.id));
+    });
+    removeFiles(fileKeys);
+    res.json(await loadTicket(ticket.id, req.user));
+  },
+);
 
 // A customer rates their finished request (1-5 stars and a comment).
 // Shows up on Performance & Feedback and Ticket Review.

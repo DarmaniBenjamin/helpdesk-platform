@@ -15,6 +15,7 @@ import AnswerModal from "../AnswerModal";
 import Avatar from "../Avatar";
 import { inputClass } from "../formStyles";
 import { matchesAnswer } from "../Knowledge";
+import { copyText } from "../copyText";
 import useData from "../../useData";
 import { DEPARTMENTS, findDepartment, timeAgo } from "../../data";
 
@@ -33,15 +34,14 @@ const SORTS = {
 function AnswerCard({ answer, open, onToggle, onEdit, onKeyword, onCopy }) {
   const [copied, setCopied] = useState(false);
 
+  // copyText also works on plain http (e.g. from another device on
+  // your network), where the browser's normal copy is switched off
   async function copySolution() {
-    try {
-      await navigator.clipboard.writeText(answer.solution);
+    if (await copyText(answer.solution, "Copy this answer:")) {
       setCopied(true);
-      onCopy();
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Some browsers block the clipboard on plain http; nothing to do
     }
+    onCopy(); // counts as used either way
   }
 
   return (
