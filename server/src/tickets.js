@@ -24,6 +24,7 @@ import {
   onTicketAssigned,
   onCustomerReply,
 } from "./notify.js";
+import { afterTicketEvent } from "./automation.js";
 import {
   checkFiles,
   claimFiles,
@@ -362,6 +363,8 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
     },
   ]);
   await claimFiles(fileIds, created.id, first.id);
+  // Assignment rules and "A new ticket is created" automations
+  await afterTicketEvent(created.id, "created");
   onTicketCreated(created, authorName, req.user);
   res.status(201).json(await loadTicket(created.id, req.user));
 });
@@ -431,6 +434,9 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
     await addMessages(ticket.id, history);
     if (changes.assigneeId)
       onTicketAssigned(ticket, changes.assigneeId, req.user);
+    // "The status changes to" automations
+    if (changes.status)
+      await afterTicketEvent(ticket.id, "statusChanged", changes.status);
   }
   res.json(await loadTicket(ticket.id, req.user));
 });
@@ -496,12 +502,15 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const [sent] = await addMessages(ticket.id, lines);
   await claimFiles(fileIds, ticket.id, sent.id);
   await db.update(tickets).set(update).where(eq(tickets.id, ticket.id));
-  if (kind === "customer")
+  if (kind === "customer") {
     onCustomerReply(
       ticket,
       req.user.name,
       body || `Sent ${fileIds.length} file${fileIds.length === 1 ? "" : "s"}`,
     );
+    await afterTicketEvent(ticket.id, "customerReply");
+  }
+  if (newStatus) await afterTicketEvent(ticket.id, "statusChanged", newStatus);
   res.status(201).json(await loadTicket(ticket.id, req.user));
 });
 

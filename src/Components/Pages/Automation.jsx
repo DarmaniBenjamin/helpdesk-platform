@@ -237,10 +237,15 @@ export default function Automation() {
           </button>
         </div>
 
-        <div className="mb-4 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-sky-700">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        {/* How they run (server/src/automation.js) */}
+        <div className="mb-4 flex items-start gap-2 rounded-lg bg-brand/5 px-3 py-2.5 text-sm text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
           <p>
-            Automations are saved here but don't run yet. That part comes later.
+            Automations that are on run by themselves. "New ticket", "customer
+            replies" and "status changes" ones run straight away; the time-based
+            ones are checked every 5 minutes and run once each time a ticket has
+            waited long enough. Everything they do shows in the ticket's history
+            with the automation's name.
           </p>
         </div>
 

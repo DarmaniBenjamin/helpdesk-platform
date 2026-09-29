@@ -270,6 +270,24 @@ export const automations = pgTable("automations", {
   createdAt: createdAt(),
 });
 
+// Which time-based automations have already run on which ticket, so
+// each runs once per situation. "anchor" is when the waiting started,
+// e.g. the time of the customer's last message.
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    automationId: integer("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    anchor: text("anchor").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.automationId, t.ticketId, t.anchor] })],
+);
+
 // ---------- Notifications ----------
 
 // Each notification someone gets (shown in the bell). Also sent as a
@@ -281,7 +299,7 @@ export const notifications = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // newTicket, assigned, customerReply, dueSoon or overdue
+    // newTicket, assigned, customerReply, dueSoon, overdue or automation
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),

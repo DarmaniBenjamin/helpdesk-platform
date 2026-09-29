@@ -274,11 +274,15 @@ export default function TicketAssignment() {
           </button>
         </div>
 
-        <div className="mb-4 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-sky-700">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        {/* How they run (server/src/automation.js) */}
+        <div className="mb-4 flex items-start gap-2 rounded-lg bg-brand/5 px-3 py-2.5 text-sm text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
           <p>
-            Rules are saved here but don't assign tickets automatically yet.
-            That part comes later.
+            Every new ticket is checked against the rules that are on. The rule
+            with the most of its keywords in the subject or description wins,
+            and the ticket goes to its team (and person, if it has one). Rules
+            only fill in what's missing, so a team or person picked by hand is
+            never changed.
           </p>
         </div>
 

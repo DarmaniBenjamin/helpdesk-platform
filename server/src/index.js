@@ -19,6 +19,7 @@ import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
 import { liveRouter } from "./live.js";
 import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
+import { startAutomations } from "./automation.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -92,4 +93,6 @@ app.listen(port, "127.0.0.1", () => {
   startDueTimeChecks();
   // Every hour: clear out files that were uploaded but never sent
   startFileCleanUp();
+  // Every 5 minutes: time-based automations ("no reply for 24 hours")
+  startAutomations();
 });

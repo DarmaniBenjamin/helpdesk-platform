@@ -30,6 +30,11 @@ export function sendToUser(userId, event, data) {
   }
 }
 
+// Sends something to every open tab (they're all staff)
+export function sendToEveryone(event, data) {
+  for (const c of connections.values()) send(c.res, event, data);
+}
+
 // Who's on which page: one line per person per page. If someone has the
 // same page open in two tabs, the one opened first counts.
 function presenceList() {
