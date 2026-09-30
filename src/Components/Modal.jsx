@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -7,8 +7,40 @@ import { X } from "lucide-react";
 // Fixed header and footer, and only the middle scrolls.
 // Pass onSubmit to turn the middle + footer into a form.
 // It comes in with a short animation: the background fades, the box rises
-// (index.css).
+// (index.css). It goes out the same way, however it's closed: the X,
+// Cancel, clicking outside, Escape, or after saving (see below).
 export default function Modal({ title, onClose, onSubmit, footer, children }) {
+  const overlayRef = useRef(null);
+
+  // The closing animation. The page removes the pop-up the moment it's
+  // closed, so just before it goes, an exact copy is put in its place to
+  // play the animation, then removed. The copy can't be clicked, so the
+  // page behind works straight away.
+  useLayoutEffect(() => {
+    const openedAt = Date.now();
+    const overlay = overlayRef.current;
+    return () => {
+      // (React's development mode opens and closes everything once as a
+      // check when it first appears; no animation for that)
+      if (!overlay || Date.now() - openedAt < 50) return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const copy = overlay.cloneNode(true);
+      // Typed text isn't copied by itself, so it's copied across, so the
+      // fields don't look empty while it fades
+      const from = overlay.querySelectorAll("input, textarea, select");
+      copy.querySelectorAll("input, textarea, select").forEach((field, i) => {
+        field.value = from[i]?.value ?? field.value;
+      });
+      copy.setAttribute("aria-hidden", "true");
+      copy.classList.replace("animate-fade-in", "animate-fade-out");
+      copy
+        .querySelector("[role='dialog']")
+        ?.classList.replace("animate-dialog-in", "animate-dialog-out");
+      document.body.appendChild(copy);
+      setTimeout(() => copy.remove(), 180);
+    };
+  }, []);
+
   function close() {
     // Close the phone keyboard first. Removing a focused input while the
     // keyboard is up can leave iPhones stuck at a strange scroll position.
@@ -52,6 +84,7 @@ export default function Modal({ title, onClose, onSubmit, footer, children }) {
 
   return createPortal(
     <div
+      ref={overlayRef}
       onClick={close}
       className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-ink/40 p-4 backdrop-blur-sm sm:p-6"
     >

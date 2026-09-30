@@ -252,6 +252,17 @@ html.theme-switching * {
     transform: translateY(-4px) scale(0.97);
   }
 }
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -278,6 +289,15 @@ html.theme-switching * {
 /* Pop-up windows */
 .animate-dialog-in {
   animation: dialog-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+/* ...and going away again (Modal.jsx): the box drops back and fades,
+   and the dim background fades. Clicks go straight through. */
+.animate-dialog-out {
+  animation: dialog-out 0.16s ease-in forwards;
+}
+.animate-fade-out {
+  animation: fade-out 0.16s ease-in forwards;
+  pointer-events: none;
 }
 /* The soft circles on the sign-in page, drifting very slowly */
 .animate-drift {
