@@ -18,6 +18,7 @@ import {
   LogOut,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
+import useClosing from "./useClosing";
 import Avatar from "./Avatar";
 import PresenceMenu from "./PresenceMenu";
 import PushToggle from "./PushToggle";
@@ -99,6 +100,9 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const userRef = useRef(null);
   useDismiss(notifRef, () => setNotifOpen(false), notifOpen);
   useDismiss(userRef, () => setUserOpen(false), userOpen);
+  // They stay a moment after closing, to pop back into their button
+  const notifPanel = useClosing(notifOpen);
+  const userPanel = useClosing(userOpen);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -171,8 +175,10 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
             iconEffect="group-hover:rotate-12"
             onClick={() => setNotifOpen((o) => !o)}
           />
-          {notifOpen && (
-            <div className={`${panelClass} sm:w-80`}>
+          {notifPanel.shown && (
+            <div
+              className={`${panelClass} sm:w-80 ${notifPanel.closing ? "animate-pop-out" : ""}`}
+            >
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
                 <p className="text-sm font-semibold">Notifications</p>
                 <button
@@ -266,8 +272,10 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
               }`}
             />
           </button>
-          {userOpen && (
-            <div className={`${panelClass} sm:w-56`}>
+          {userPanel.shown && (
+            <div
+              className={`${panelClass} sm:w-56 ${userPanel.closing ? "animate-pop-out" : ""}`}
+            >
               <div className="border-b border-line px-4 py-3">
                 <p className="truncate text-sm font-semibold">{me.name}</p>
                 <p className="truncate text-xs text-muted">{me.email}</p>

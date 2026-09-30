@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import { Eye } from "lucide-react";
 import Avatar from "./Avatar";
 import useDismiss from "./useDismiss";
+import useClosing from "./useClosing";
 import { getViewers } from "./presence";
 import { getPageTitle } from "./navLinks";
 import { ROLES } from "./teamRoles";
@@ -31,6 +32,8 @@ export default function PresenceMenu() {
 
   const wrapRef = useRef(null);
   useDismiss(wrapRef, () => setOpenOn(null), open);
+  // It stays a moment after closing, to pop back into its button
+  const panel = useClosing(open);
 
   // Mouse: open on hover. Touch: open and close with a tap.
   const lastPointer = useRef("mouse");
@@ -73,10 +76,12 @@ export default function PresenceMenu() {
         </span>
       </button>
 
-      {open && (
+      {panel.shown && (
         // The outer box has padding instead of a margin on top, so the mouse
         // can move from the button to the panel without it closing
-        <div className="fixed left-3 right-3 top-16 z-30 pt-2 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-72">
+        <div
+          className={`fixed left-3 right-3 top-16 z-30 pt-2 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-72 ${panel.closing ? "animate-pop-out" : ""}`}
+        >
           <div className="rounded-xl border border-line bg-white shadow-xl">
             <div className="border-b border-line px-4 py-3">
               <p className="text-sm font-semibold">Viewing this page</p>

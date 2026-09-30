@@ -1,5 +1,4 @@
 @import "tailwindcss";
-
 @theme {
   --font-sans: "Poppins", system-ui, sans-serif;
   --color-brand: #00b67a;
@@ -247,6 +246,12 @@ html.theme-switching * {
     transform: translateY(-4px) scale(0.97);
   }
 }
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -305,6 +310,13 @@ button[aria-expanded="true"] + div.fixed,
 button[aria-expanded="true"] + div.absolute {
   animation: pop-in 0.14s ease-out backwards;
   transform-origin: top right;
+}
+/* ...and pop back into it when they close (useClosing.js keeps them on
+   screen just long enough). Clicks go straight through while it plays. */
+.animate-pop-out {
+  animation: pop-out 0.12s ease-in forwards;
+  transform-origin: top right;
+  pointer-events: none;
 }
 
 /* Lists on every page (tickets, customers, messages, answers...): each

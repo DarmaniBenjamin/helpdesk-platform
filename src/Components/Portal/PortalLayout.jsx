@@ -3,6 +3,7 @@ import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { ChevronDown, Inbox, LogOut, Plus, User } from "lucide-react";
 import Avatar from "../Avatar";
 import useDismiss from "../useDismiss";
+import useClosing from "../useClosing";
 import { ThemeSwitchRow } from "../ThemeToggle";
 import LoadingScreen from "../LoadingScreen";
 import useData from "../../useData";
@@ -16,6 +17,8 @@ export default function PortalLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   useDismiss(menuRef, () => setMenuOpen(false), menuOpen);
+  // It stays a moment after closing, to pop back into its button
+  const menuPanel = useClosing(menuOpen);
 
   useEffect(() => {
     document.title = "Help Center · Ticket Support";
@@ -80,8 +83,10 @@ export default function PortalLayout() {
                   }`}
                 />
               </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-60 rounded-xl border border-line bg-white shadow-xl">
+              {menuPanel.shown && (
+                <div
+                  className={`absolute right-0 top-full z-30 mt-2 w-60 rounded-xl border border-line bg-white shadow-xl ${menuPanel.closing ? "animate-pop-out" : ""}`}
+                >
                   <div className="border-b border-line px-4 py-3">
                     <p className="truncate text-sm font-semibold">{me.name}</p>
                     <p className="truncate text-xs text-muted">{me.email}</p>
