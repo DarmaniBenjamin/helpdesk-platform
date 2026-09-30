@@ -41,8 +41,12 @@ export default function StaffLayout() {
           onToggleSidebar={() => setCollapsed((c) => !c)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:overflow-y-auto">
-          {/* Pages this person isn't allowed to open show a message instead */}
-          {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
+          {/* key: each page comes in with a short fade (index.css) when you
+              move to it. Pages this person isn't allowed to open show a
+              message instead. */}
+          <div key={location.pathname} className="animate-page-in">
+            {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
+          </div>
         </main>
       </div>
     </div>

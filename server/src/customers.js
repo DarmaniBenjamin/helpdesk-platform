@@ -1,14 +1,16 @@
 // Customers: the people and businesses you support. Staff can see, add
 // and edit them; Admins can give a customer access to the customer
-// portal. A customer who signs in only ever gets their own record.
+// portal, and delete customers. A customer who signs in only ever gets
+// their own record.
 import { Router } from "express";
 import { and, asc, eq, ne, or, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
-import { customers, users } from "./db/schema.js";
+import { customers, tickets, users } from "./db/schema.js";
 import { publicUser, requireAuth, requireRole } from "./auth.js";
 import { makeInviteToken } from "./team.js";
 import { ADMINS, STAFF } from "./permissions.js";
 import { BadInput, cleanEmail, cleanText } from "./validate.js";
+import { filesOfTicket, removeFiles } from "./attachments.js";
 
 export const customersRouter = Router();
 
@@ -190,3 +192,33 @@ customersRouter.post(
     res.status(201).json({ member: await publicUser(user, []), token });
   },
 );
+
+// Delete a customer for good (Admins and the Super Admin). Everything of
+// theirs goes with them, all at once:
+//   - every one of their tickets, with the whole conversation, notes,
+//     history and attached files
+//   - their customer portal login, if they have one
+// Knowledge Base answers saved from their tickets stay, they just stop
+// linking to them. Returns how many tickets were deleted.
+customersRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
+  const customer = await findCustomer(req.params.id);
+  const theirTickets = await db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(eq(tickets.customerId, customer.id));
+
+  // The stored names of their files, to remove from the uploads folder
+  // once the records are gone
+  const fileKeys = [];
+  for (const t of theirTickets) fileKeys.push(...(await filesOfTicket(t.id)));
+
+  await db.transaction(async (tx) => {
+    // Messages, file records and notifications about these tickets are
+    // deleted with them (set up in the database tables)
+    await tx.delete(tickets).where(eq(tickets.customerId, customer.id));
+    // Their portal login (and its sign-ins) goes with the customer
+    await tx.delete(customers).where(eq(customers.id, customer.id));
+  });
+  removeFiles(fileKeys);
+  res.json({ ok: true, tickets: theirTickets.length });
+});

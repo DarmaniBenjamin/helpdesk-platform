@@ -6,6 +6,8 @@ import { X } from "lucide-react";
 // so you can still see the page behind it.
 // Fixed header and footer, and only the middle scrolls.
 // Pass onSubmit to turn the middle + footer into a form.
+// It comes in with a short animation: the background fades, the box rises
+// (index.css).
 export default function Modal({ title, onClose, onSubmit, footer, children }) {
   function close() {
     // Close the phone keyboard first. Removing a focused input while the
@@ -51,14 +53,14 @@ export default function Modal({ title, onClose, onSubmit, footer, children }) {
   return createPortal(
     <div
       onClick={close}
-      className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-ink/40 p-4 backdrop-blur-sm sm:p-6"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-ink/40 p-4 backdrop-blur-sm sm:p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-3rem)]"
+        className="animate-dialog-in flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-3rem)]"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3 sm:px-6">
           <h2 className="text-lg font-semibold">{title}</h2>

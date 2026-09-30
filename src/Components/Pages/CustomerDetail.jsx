@@ -16,6 +16,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Avatar from "../Avatar";
+import Modal from "../Modal";
 import StatusBadge from "../StatusBadge";
 import DueLabel from "../DueLabel";
 import {
@@ -24,6 +25,7 @@ import {
   primaryButton,
   secondaryButton,
 } from "../formStyles";
+import { can } from "../teamRoles";
 import useData from "../../useData";
 import { isDone, isOverdue, timeAgo } from "../../data";
 
@@ -168,10 +170,106 @@ function ContactList({
   );
 }
 
+// "Are you sure?" before deleting a customer. Their tickets go too, so
+// their name has to be typed in first.
+function DeleteCustomerModal({ customer, ticketCount, onConfirm, onClose }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const matches =
+    typed.trim().toLowerCase() === customer.name.trim().toLowerCase();
+
+  async function handleDelete(e) {
+    e.preventDefault();
+    if (!matches || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Delete this customer?"
+      onClose={onClose}
+      onSubmit={handleDelete}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={secondaryButton}>
+            Keep them
+          </button>
+          <button
+            type="submit"
+            disabled={!matches || busy}
+            className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+          >
+            {busy ? "Deleting…" : "Delete for good"}
+          </button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-3 rounded-lg border border-line bg-page p-3 text-sm">
+        <Avatar name={customer.name} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{customer.name}</p>
+          <p className="truncate text-muted">
+            {customer.company ?? "Individual"}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          This deletes the customer
+          {ticketCount > 0 && (
+            <>
+              {" "}
+              and <strong>all {ticketCount} of their tickets</strong>, with
+              every reply, note and attached file
+            </>
+          )}
+          . If they can sign in to the customer portal, that stops too.{" "}
+          <strong>It can't be undone.</strong>
+        </p>
+      </div>
+
+      <label className={labelClass}>
+        <span>
+          Type <strong>{customer.name}</strong> to confirm
+        </span>
+        <input
+          autoFocus
+          autoComplete="off"
+          value={typed}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            setError("");
+          }}
+          placeholder={customer.name}
+          className={inputClass}
+        />
+      </label>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+    </Modal>
+  );
+}
+
 export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tickets, customers, updateCustomer, findCustomerByEmail } = useData();
+  const {
+    me,
+    tickets,
+    customers,
+    updateCustomer,
+    deleteCustomer,
+    findCustomerByEmail,
+  } = useData();
 
   const customer = customers.find((c) => c.id === Number(id));
 
@@ -180,6 +278,7 @@ export default function CustomerDetail() {
   const [company, setCompany] = useState("");
   // A message if saving to the database didn't work
   const [saveError, setSaveError] = useState("");
+  const [deleting, setDeleting] = useState(false); // the "are you sure?" box
 
   if (!customer) {
     return (
@@ -391,14 +490,27 @@ export default function CustomerDetail() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={startEditing}
-              className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
-            >
-              <Pencil className="h-4 w-4" />
-              Edit details
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={startEditing}
+                className="flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97] sm:flex-none"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit details
+              </button>
+              {/* Admins and the Super Admin only; asks before deleting */}
+              {can(me.role, "deleteTickets") && (
+                <button
+                  type="button"
+                  onClick={() => setDeleting(true)}
+                  className="flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-red-200 px-4 text-sm text-red-500 transition hover:bg-red-50 active:scale-[0.97] sm:flex-none"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -484,6 +596,18 @@ export default function CustomerDetail() {
           )}
         </div>
       </div>
+
+      {deleting && (
+        <DeleteCustomerModal
+          customer={customer}
+          ticketCount={theirTickets.length}
+          onConfirm={async () => {
+            await deleteCustomer(customer.id);
+            navigate("/customers", { replace: true });
+          }}
+          onClose={() => setDeleting(false)}
+        />
+      )}
     </div>
   );
 }

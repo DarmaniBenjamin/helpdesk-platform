@@ -12,6 +12,11 @@ import { api } from "../../api";
 //
 // In an iframe, it tells the page around it how tall it is whenever that
 // changes, so the iframe can grow and shrink to fit (no scroll bars).
+//
+// Extras for the address:
+//   theme=dark       dark colours (in an iframe it's light otherwise)
+//   accent=1e5aa8    the button and highlight colour, to match your
+//                    website (a colour code without the #)
 export default function RequestForm() {
   const [params] = useSearchParams();
   const embedded = params.get("embed") === "1";
@@ -45,8 +50,18 @@ export default function RequestForm() {
     if (!embedded) return;
     const dark = params.get("theme") === "dark";
     document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
   }, [embedded, params]);
+
+  // ?accent=1e5aa8: use that colour instead of the helpdesk green
+  useEffect(() => {
+    const accent = params.get("accent") ?? "";
+    if (!/^[0-9a-f]{6}$/i.test(accent)) return;
+    const root = document.documentElement.style;
+    root.setProperty("--color-brand", `#${accent}`);
+    return () => root.removeProperty("--color-brand");
+  }, [params]);
 
   // In an iframe: tell the page around it our height when it changes
   useEffect(() => {
@@ -89,7 +104,7 @@ export default function RequestForm() {
   }
 
   const form = sent ? (
-    <div className="flex flex-col items-center gap-3 py-8 text-center">
+    <div className="animate-rise-in flex flex-col items-center gap-3 py-8 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
         <CircleCheck className="h-7 w-7" />
       </span>
@@ -113,7 +128,10 @@ export default function RequestForm() {
       </button>
     </div>
   ) : (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form
+      onSubmit={handleSubmit}
+      className="animate-fade-in flex flex-col gap-4"
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>
           Your name
@@ -188,7 +206,7 @@ export default function RequestForm() {
       {/* Hidden from people; spam robots fill it in (see requests.js) */}
       <div
         aria-hidden="true"
-        className="absolute left-[-9999px] h-px w-px overflow-hidden"
+        className="absolute -left-[9999px] h-px w-px overflow-hidden"
       >
         <label>
           Leave this empty
@@ -238,7 +256,7 @@ export default function RequestForm() {
     <div className="min-h-dvh bg-page px-4 py-10 sm:py-16">
       <div
         ref={boxRef}
-        className="relative mx-auto max-w-2xl rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-8"
+        className="animate-rise-in relative mx-auto max-w-2xl rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-8"
       >
         {!sent && (
           <div className="mb-6">

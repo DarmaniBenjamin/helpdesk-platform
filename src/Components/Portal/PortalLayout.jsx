@@ -113,7 +113,10 @@ export default function PortalLayout() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        <Outlet />
+        {/* key: each page comes in with a short fade (index.css) */}
+        <div key={location.pathname} className="animate-page-in">
+          <Outlet />
+        </div>
       </main>
 
       <footer className="border-t border-line bg-white">

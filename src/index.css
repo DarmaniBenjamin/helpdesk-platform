@@ -214,3 +214,143 @@ html.theme-switching * {
 .dark .rounded-full.bg-white.shadow {
   background-color: #fff;
 }
+
+/* ============================================================
+   Animations
+   Small and quick (a fifth to a third of a second), and only
+   opacity and movement, which phones and laptops draw smoothly.
+   Anyone who has "reduce motion" switched on in their phone or
+   computer settings gets none of them (see the end).
+   ============================================================ */
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes drift {
+  50% {
+    transform: translate(14px, -10px);
+  }
+}
+
+/* A page coming into view (each page, when you move between them) */
+.animate-page-in {
+  animation: page-in 0.22s ease-out backwards;
+}
+/* Something coming up into place (the sign-in form, "Thanks!") */
+.animate-rise-in {
+  animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.animate-fade-in {
+  animation: fade-in 0.16s ease-out backwards;
+}
+/* Pop-up windows */
+.animate-dialog-in {
+  animation: dialog-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+/* The soft circles on the sign-in page, drifting very slowly */
+.animate-drift {
+  animation: drift 14s ease-in-out infinite;
+}
+.animate-drift-slow {
+  animation: drift 19s ease-in-out infinite reverse;
+}
+/* Wait a moment before starting, to bring things in one after another.
+   ("backwards" everywhere above: the starting look is used while
+   waiting, and nothing is left behind once it's finished, so sticky and
+   pinned parts of the page keep working normally.) */
+.wait-1 {
+  animation-delay: 60ms;
+}
+.wait-2 {
+  animation-delay: 120ms;
+}
+.wait-3 {
+  animation-delay: 180ms;
+}
+.wait-4 {
+  animation-delay: 240ms;
+}
+
+/* Menus that drop down from a button (the bell, your account menu, who's
+   viewing): they pop in from the button. They're the panel right after a
+   button that says it's open (aria-expanded). */
+button[aria-expanded="true"] + div.fixed,
+button[aria-expanded="true"] + div.absolute {
+  animation: pop-in 0.14s ease-out backwards;
+  transform-origin: top right;
+}
+
+/* Lists on every page (tickets, customers, messages, answers...): each
+   row slides in just after the one before it. Only the first 8 wait,
+   so long lists still appear straight away. A row added later (a new
+   ticket or reply arriving) slides in on its own. */
+main li,
+main tbody tr {
+  animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+main li:nth-child(2),
+main tbody tr:nth-child(2) {
+  animation-delay: 25ms;
+}
+main li:nth-child(3),
+main tbody tr:nth-child(3) {
+  animation-delay: 50ms;
+}
+main li:nth-child(4),
+main tbody tr:nth-child(4) {
+  animation-delay: 75ms;
+}
+main li:nth-child(5),
+main tbody tr:nth-child(5) {
+  animation-delay: 100ms;
+}
+main li:nth-child(6),
+main tbody tr:nth-child(6) {
+  animation-delay: 125ms;
+}
+main li:nth-child(7),
+main tbody tr:nth-child(7) {
+  animation-delay: 150ms;
+}
+main li:nth-child(n + 8),
+main tbody tr:nth-child(n + 8) {
+  animation-delay: 175ms;
+}
+
+/* "Reduce motion" is on: no animations or movement at all */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

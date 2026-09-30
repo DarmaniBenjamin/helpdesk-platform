@@ -263,17 +263,20 @@ export default function DataProvider({ children }) {
         break;
       }
       case "customers":
-        // Tickets keep a copy of their customer, so update those too
+        // Tickets keep a copy of their customer, so update those too.
+        // A customer who was deleted takes their tickets and portal
+        // login with them.
         later("customers", () =>
           api("/customers").then((list) => {
             setCustomers(list);
             const byId = new Map(list.map((c) => [c.id, c]));
             setTickets((all) =>
-              all.map((t) =>
-                byId.has(t.customerId)
-                  ? { ...t, requester: byId.get(t.customerId) }
-                  : t,
-              ),
+              all
+                .filter((t) => byId.has(t.customerId))
+                .map((t) => ({ ...t, requester: byId.get(t.customerId) })),
+            );
+            setTeam((all) =>
+              all.filter((m) => !m.customerId || byId.has(m.customerId)),
             );
           }),
         );
@@ -759,6 +762,16 @@ export default function DataProvider({ children }) {
     return result;
   }
 
+  // Deletes a customer for good, with all their tickets and their portal
+  // login (Admins and the Super Admin). Returns how many tickets went.
+  async function deleteCustomer(id) {
+    const result = await api(`/customers/${id}`, { method: "DELETE" });
+    setCustomers((list) => list.filter((c) => c.id !== id));
+    setTickets((list) => list.filter((t) => t.customerId !== id));
+    setTeam((list) => list.filter((m) => m.customerId !== id));
+    return result.tickets;
+  }
+
   // Which customer (if any) uses this email, as their main or an extra email?
   function findCustomerByEmail(email) {
     const wanted = email.trim().toLowerCase();
@@ -887,6 +900,7 @@ export default function DataProvider({ children }) {
         deleteNote,
         addCustomer,
         updateCustomer,
+        deleteCustomer,
         findCustomerByEmail,
         rules,
         addRule,
