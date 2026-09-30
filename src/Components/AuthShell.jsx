@@ -33,7 +33,7 @@ export default function AuthShell({ title, children }) {
 
         <div className="relative flex items-center gap-2">
           {/* bg-[#fff]: stays white in dark mode too */}
-          <div className="h-8 w-8 rounded-full bg-[#fff]" />
+          <div className="h-8 w-8 rounded-full bg-white" />
           <span className="text-lg font-semibold">Ticket Support</span>
         </div>
 
