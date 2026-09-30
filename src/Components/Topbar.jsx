@@ -26,6 +26,7 @@ import { ThemeToggleButton, ThemeSwitchRow } from "./ThemeToggle";
 import { ROLES, can } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
 import { getPageTitle } from "./navLinks";
+import { APP_NAME } from "../brand";
 import { timeAgo } from "../data";
 import useData from "../useData";
 
@@ -84,7 +85,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
 
   // Also show it in the browser tab
   useEffect(() => {
-    document.title = `${pageTitle} · Ticket Support`;
+    document.title = `${pageTitle} · ${APP_NAME}`;
   }, [pageTitle]);
 
   // Mobile search

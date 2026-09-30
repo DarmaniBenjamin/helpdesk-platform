@@ -19,7 +19,7 @@ export function whyNoPush() {
     return "Notifications only work on a secure address: https://…, or localhost on this computer.";
   }
   if (isIphone() && !isInstalled()) {
-    return "On iPhone: tap Share, then Add to Home Screen, and open DeskFlow from your Home Screen.";
+    return "On iPhone: tap Share, then Add to Home Screen, and open Uplink from your Home Screen.";
   }
   if (
     !("serviceWorker" in navigator) ||

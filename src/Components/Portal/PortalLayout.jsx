@@ -6,6 +6,8 @@ import useDismiss from "../useDismiss";
 import useClosing from "../useClosing";
 import { ThemeSwitchRow } from "../ThemeToggle";
 import LoadingScreen from "../LoadingScreen";
+import Logo from "../Logo";
+import { APP_NAME } from "../../brand";
 import PageLoading from "../PageLoading";
 import useData from "../../useData";
 
@@ -22,7 +24,7 @@ export default function PortalLayout() {
   const menuPanel = useClosing(menuOpen);
 
   useEffect(() => {
-    document.title = "Help Center · Ticket Support";
+    document.title = `Help Center · ${APP_NAME}`;
   }, []);
 
   // Still checking with the server whether you're signed in
@@ -44,10 +46,8 @@ export default function PortalLayout() {
       <header className="sticky top-0 z-20 border-b border-line bg-white">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <Link to="/portal" className="flex items-center gap-2">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-brand" />
-            <span className="hidden font-semibold sm:inline">
-              Ticket Support
-            </span>
+            <Logo className="h-8 w-8" />
+            <span className="hidden font-semibold sm:inline">{APP_NAME}</span>
             <span className="rounded-md bg-page px-2 py-0.5 text-xs text-muted">
               Help Center
             </span>
@@ -130,7 +130,7 @@ export default function PortalLayout() {
 
       <footer className="border-t border-line bg-white">
         <p className="mx-auto max-w-5xl px-4 py-4 text-center text-xs text-muted sm:px-6">
-          Ticket Support Help Center
+          {APP_NAME} Help Center
         </p>
       </footer>
     </div>

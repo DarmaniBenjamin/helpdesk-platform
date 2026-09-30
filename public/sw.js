@@ -24,7 +24,7 @@ self.addEventListener("push", (event) => {
     data = { body: event.data?.text() };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "DeskFlow", {
+    self.registration.showNotification(data.title || "Uplink", {
       body: data.body || "",
       tag: data.tag, // a newer one for the same ticket replaces the old one
       data: { url: data.url || "/" },

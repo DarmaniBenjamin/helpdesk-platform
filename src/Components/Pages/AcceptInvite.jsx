@@ -6,6 +6,7 @@ import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
 import { ROLES } from "../teamRoles";
 import { api } from "../../api";
+import { APP_NAME } from "../../brand";
 import useData from "../../useData";
 
 const fullButton =
@@ -121,7 +122,7 @@ export default function AcceptInvite() {
 
   return (
     <AuthShell title="Welcome">
-      <h1 className="text-2xl font-semibold">Welcome to Ticket Support</h1>
+      <h1 className="text-2xl font-semibold">Welcome to {APP_NAME}</h1>
       <p className="mt-1 text-sm text-muted">
         {isCustomer
           ? "You've been invited to the customer portal, where you can send and follow your support requests."

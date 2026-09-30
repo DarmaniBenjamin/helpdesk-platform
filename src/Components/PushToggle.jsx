@@ -59,7 +59,7 @@ export default function PushToggle() {
               ? "On for this browser"
               : status === "blocked"
                 ? "Blocked in this browser's settings"
-                : "Pop-ups even when DeskFlow is closed"}
+                : "Pop-ups even when Uplink is closed"}
           </span>
         </span>
         <button

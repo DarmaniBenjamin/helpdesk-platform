@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Inbox, ShieldCheck, Clock } from "lucide-react";
 import { ThemeToggleButton } from "./ThemeToggle";
+import Logo from "./Logo";
+import { APP_NAME } from "../brand";
 
 const POINTS = [
   { icon: Inbox, text: "Every request in one place" },
@@ -13,7 +15,7 @@ const POINTS = [
 // short animations (index.css).
 export default function AuthShell({ title, children }) {
   useEffect(() => {
-    document.title = `${title} · Ticket Support`;
+    document.title = `${title} · ${APP_NAME}`;
   }, [title]);
 
   return (
@@ -31,10 +33,10 @@ export default function AuthShell({ title, children }) {
         <div className="animate-drift pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/10" />
         <div className="animate-drift-slow pointer-events-none absolute -bottom-32 -left-16 h-80 w-80 rounded-full bg-white/10" />
 
-        <div className="relative flex items-center gap-2">
-          {/* bg-[#fff]: stays white in dark mode too */}
-          <div className="h-8 w-8 rounded-full bg-white" />
-          <span className="text-lg font-semibold">Ticket Support</span>
+        <div className="relative flex items-center gap-2.5">
+          {/* White version of the logo on the green panel */}
+          <Logo light className="h-9 w-9" />
+          <span className="text-lg font-semibold">{APP_NAME}</span>
         </div>
 
         <div className="relative max-w-md">
@@ -57,16 +59,16 @@ export default function AuthShell({ title, children }) {
         </div>
 
         <p className="relative text-sm text-white/70">
-          © {new Date().getFullYear()} Ticket Support
+          © {new Date().getFullYear()} {APP_NAME}
         </p>
       </div>
 
       {/* The form */}
       {/* Phones: starts near the top. Bigger screens: centred. */}
       <div className="flex min-w-0 flex-col items-center px-5 pb-10 pt-12 sm:justify-center sm:px-6 sm:py-10">
-        <div className="mb-8 flex items-center gap-2 lg:hidden">
-          <div className="h-8 w-8 rounded-full bg-brand" />
-          <span className="text-lg font-semibold">Ticket Support</span>
+        <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+          <Logo className="h-9 w-9" />
+          <span className="text-lg font-semibold">{APP_NAME}</span>
         </div>
         {/* The form rises into place */}
         <div className="animate-rise-in w-full max-w-sm">{children}</div>

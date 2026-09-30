@@ -4,6 +4,8 @@ import { ChevronsUpDown, X, User, Settings, LogOut } from "lucide-react";
 import Avatar from "./Avatar";
 import useDismiss from "./useDismiss";
 import useClosing from "./useClosing";
+import Logo from "./Logo";
+import { APP_NAME } from "../brand";
 import { mainLinks, moreLinks, linksFor } from "./navLinks";
 import { ROLES, can } from "./teamRoles";
 import useData from "../useData";
@@ -180,11 +182,11 @@ export default function Sidebar({ open, onClose, collapsed }) {
         <div
           className={`flex h-16 items-center gap-2 px-5 ${collapsed ? "lg:px-6" : ""}`}
         >
-          <div className="h-8 w-8 shrink-0 rounded-full bg-brand"></div>
+          <Logo className="h-8 w-8" />
           <span
             className={`whitespace-nowrap text-lg font-semibold ${collapsed ? "lg:hidden" : ""}`}
           >
-            DeskFlow
+            {APP_NAME}
           </span>
           <button
             aria-label="Close menu"
