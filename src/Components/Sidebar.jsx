@@ -3,6 +3,7 @@ import { NavLink, Link } from "react-router";
 import { ChevronsUpDown, X, User, Settings, LogOut } from "lucide-react";
 import Avatar from "./Avatar";
 import useDismiss from "./useDismiss";
+import useClosing from "./useClosing";
 import { mainLinks, moreLinks, linksFor } from "./navLinks";
 import { ROLES, can } from "./teamRoles";
 import useData from "../useData";
@@ -60,6 +61,8 @@ function AccountMenu({ collapsed, onNavigate }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   useDismiss(menuRef, () => setMenuOpen(false), menuOpen);
+  // It pops up out of the button, and back into it when closing
+  const panel = useClosing(menuOpen);
 
   // Close the menu and (on phones) the sidebar after picking a link
   function go() {
@@ -77,8 +80,12 @@ function AccountMenu({ collapsed, onNavigate }) {
 
   return (
     <div ref={menuRef} className="relative border-t border-line p-3">
-      {menuOpen && (
-        <div className="absolute bottom-full left-3 z-50 mb-2 w-64 rounded-xl border border-line bg-white shadow-xl">
+      {panel.shown && (
+        <div
+          className={`absolute bottom-full left-3 z-50 mb-2 w-64 rounded-xl border border-line bg-white shadow-xl ${
+            panel.closing ? "animate-pop-out-down" : "animate-pop-in-up"
+          }`}
+        >
           {/* Who you are */}
           <Link
             to="/profile"

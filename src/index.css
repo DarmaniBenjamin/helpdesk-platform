@@ -252,6 +252,18 @@ html.theme-switching * {
     transform: translateY(-4px) scale(0.97);
   }
 }
+@keyframes pop-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
+@keyframes pop-out-down {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
 @keyframes fade-out {
   to {
     opacity: 0;
@@ -336,6 +348,18 @@ button[aria-expanded="true"] + div.absolute {
 .animate-pop-out {
   animation: pop-out 0.12s ease-in forwards;
   transform-origin: top right;
+  pointer-events: none;
+}
+
+/* The same for a menu that opens upwards, above its button (the account
+   box at the bottom of the sidebar) */
+.animate-pop-in-up {
+  animation: pop-in-up 0.14s ease-out backwards;
+  transform-origin: bottom left;
+}
+.animate-pop-out-down {
+  animation: pop-out-down 0.12s ease-in forwards;
+  transform-origin: bottom left;
   pointer-events: none;
 }
 
