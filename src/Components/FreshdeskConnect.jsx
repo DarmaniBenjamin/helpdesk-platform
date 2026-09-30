@@ -162,7 +162,7 @@ export default function FreshdeskConnect({ onFetched }) {
               {busy ? "Connecting…" : "Connect"}
             </button>
             <span className="text-center text-xs text-muted sm:text-left">
-              Works while running npm run dev, until the backend is built.
+              Your API key is only used for this import. It's never saved.
             </span>
           </div>
         ) : (

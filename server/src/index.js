@@ -49,6 +49,30 @@ app.use("/api/import", express.json({ limit: "20mb" }));
 app.use("/api/backup/restore", express.json({ limit: "500mb" }));
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
+// ---------- Safety settings for browsers ----------
+// Standard instructions sent with every answer, which tell browsers to
+// be careful with the site:
+//   - never guess a file's type (stops a disguised file running as a page)
+//   - don't tell other websites which page a link was clicked on
+//   - this site never needs the camera, microphone or location
+//   - only this site can show its pages inside a frame, so another
+//     website can't hide it inside theirs to trick people into clicking.
+//     The one exception is the request form (/request), which is made
+//     to be put on your own website.
+//   - on the live site: always use the secure https address
+app.use((req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  });
+  if (!req.path.startsWith("/request"))
+    res.set("Content-Security-Policy", "frame-ancestors 'self'");
+  if (process.env.NODE_ENV === "production")
+    res.set("Strict-Transport-Security", "max-age=31536000");
+  next();
+});
+
 // Work out who is signed in (from their session cookie) on every request
 app.use(loadSession);
 

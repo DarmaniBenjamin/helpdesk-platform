@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import NoAccess from "./Pages/NoAccess";
 import LoadingScreen from "./LoadingScreen";
+import PageLoading from "./PageLoading";
 import { canOpen } from "./navLinks";
 import useData from "../useData";
 
@@ -43,9 +44,12 @@ export default function StaffLayout() {
         <main className="flex-1 p-4 sm:p-6 lg:overflow-y-auto">
           {/* key: each page comes in with a short fade (index.css) when you
               move to it. Pages this person isn't allowed to open show a
-              message instead. */}
+              message instead. A page downloading for the first time shows
+              a small spinner (PageLoading). */}
           <div key={location.pathname} className="animate-page-in">
-            {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
+            <Suspense fallback={<PageLoading />}>
+              {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
+            </Suspense>
           </div>
         </main>
       </div>

@@ -1,5 +1,7 @@
-// Talking to Freshdesk's API (through freshdeskDevProxy.js while you're on
-// `npm run dev`, and through the backend later).
+// Talking to Freshdesk's API. Freshdesk doesn't let web pages call it
+// directly, so requests go through the helpdesk: freshdeskDevProxy.js
+// while you're on `npm run dev`, and server/src/freshdesk.js on the live
+// site.
 // Nothing here writes to Freshdesk. It only reads.
 
 const PER_PAGE = 100; // the most Freshdesk sends per page
@@ -55,11 +57,11 @@ async function get(connection, path, { signal, onWait } = {}) {
       continue;
     }
 
-    // The built website has no helper to talk to, and gets a web page back
+    // A web page came back instead: the helpdesk server isn't answering
     const type = response.headers.get("content-type") ?? "";
     if (type.includes("text/html")) {
       throw new Error(
-        "Connecting only works while running npm run dev on your computer, until the backend is built.",
+        "The helpdesk server didn't answer. Check it's running, then try again.",
       );
     }
     if (!type.includes("json")) {

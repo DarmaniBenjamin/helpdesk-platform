@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { ChevronDown, Inbox, LogOut, Plus, User } from "lucide-react";
 import Avatar from "../Avatar";
@@ -6,6 +6,7 @@ import useDismiss from "../useDismiss";
 import useClosing from "../useClosing";
 import { ThemeSwitchRow } from "../ThemeToggle";
 import LoadingScreen from "../LoadingScreen";
+import PageLoading from "../PageLoading";
 import useData from "../../useData";
 
 // The frame around every customer portal page: a simple top bar with the
@@ -118,9 +119,12 @@ export default function PortalLayout() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        {/* key: each page comes in with a short fade (index.css) */}
+        {/* key: each page comes in with a short fade (index.css). A page
+            downloading for the first time shows a small spinner. */}
         <div key={location.pathname} className="animate-page-in">
-          <Outlet />
+          <Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 
