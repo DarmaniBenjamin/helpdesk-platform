@@ -15,16 +15,18 @@ import { createPortal } from "react-dom";
 // into one blob, like water.
 //
 //   status       "loading", "done" (signed in) or "failed"
-//   onFinished   called once the arrow has left the screen
+//   onFinished   called once the arrow has left the screen (open the app
+//                then: this screen stays up until it's replaced)
 //   onCancelled  called once it has drained away after "failed"
 
 const FORM_TIME = 1150; // ms until the arrow has fully formed
-const SHOOT_TIME = 700; // ms for the shoot-up and fade
+const SHOOT_TIME = 700; // ms for the shoot-up, until the arrow is gone
 
 const styles = `
 .sia { animation: sia-in 0.2s ease-out backwards; }
 .sia.sia-drain { animation: sia-out 0.25s ease-in forwards; }
-.sia.sia-shoot { animation: sia-out 0.3s ease-in 0.42s forwards; }
+/* After lift-off the screen stays covered: the app replaces it the moment
+   the arrow is gone, so the sign-in page is never seen in between */
 .sia svg * { transform-box: fill-box; }
 
 /* 1. The spill: spreads out wide, wobbles, then pulls in as the liquid
@@ -136,7 +138,7 @@ export default function SignInAnimation({ status, onFinished, onCancelled }) {
     <div
       role="status"
       aria-live="polite"
-      className={`sia fixed inset-0 z-[60] flex flex-col items-center justify-center overflow-hidden bg-page ${
+      className={`sia fixed inset-0 z-60 flex flex-col items-center justify-center overflow-hidden bg-page ${
         phase === "shoot" ? "sia-shoot" : ""
       } ${phase === "drain" ? "sia-drain" : ""}`}
     >

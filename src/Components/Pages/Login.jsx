@@ -63,6 +63,10 @@ export default function Login() {
     try {
       const user = await signIn(email, password);
       signedIn.current = user;
+      // Start downloading the first page now, during the animation, so
+      // it's ready the moment the arrow has gone
+      if (user.role === "customer") import("../Portal/PortalHome");
+      else import("./Dashboard");
       if (reduceMotion()) goHome(user.role);
       else setAnimation("done"); // the arrow takes off, then goHome
     } catch (err) {
