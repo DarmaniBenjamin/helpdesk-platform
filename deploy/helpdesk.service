@@ -1,0 +1,34 @@
+# Keeps the helpdesk app running on your own server: starts it when the
+# server boots, and restarts it if it ever stops.
+#
+# Install on the server:
+#   sudo cp deploy/helpdesk.service /etc/systemd/system/helpdesk.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now helpdesk
+# See what it's doing:
+#   sudo systemctl status helpdesk
+#   sudo journalctl -u helpdesk -f
+#
+# It expects the project in /opt/helpdesk-platform, run by a user called
+# helpdesk, with its settings in /opt/helpdesk-platform/server/.env.
+# Change User and WorkingDirectory below if yours are different.
+
+[Unit]
+Description=Helpdesk platform
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=helpdesk
+WorkingDirectory=/opt/helpdesk-platform/server
+Environment=NODE_ENV=production
+# Only reachable from this server (Caddy), never straight from the internet
+Environment=HOST=127.0.0.1
+Environment=PORT=4000
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

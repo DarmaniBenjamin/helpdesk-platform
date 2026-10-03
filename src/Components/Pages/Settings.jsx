@@ -1,7 +1,8 @@
 import { useSearchParams } from "react-router";
-import { ArrowDownToLine, ShieldCheck } from "lucide-react";
+import { ArrowDownToLine, Lock, ShieldCheck } from "lucide-react";
 import FreshdeskImport from "../FreshdeskImport";
 import BackupRestore from "../BackupRestore";
+import DomainSettings from "../DomainSettings";
 
 // The tabs across the top. The open tab is kept in the address
 // (/settings?tab=backup) so refreshing or sharing the link keeps it.
@@ -18,7 +19,20 @@ const TABS = [
     short: "Backup",
     icon: ShieldCheck,
   },
+  {
+    id: "domain",
+    label: "Domain & SSL",
+    short: "Domain",
+    icon: Lock,
+  },
 ];
+
+// What each tab shows
+const PANELS = {
+  import: FreshdeskImport,
+  backup: BackupRestore,
+  domain: DomainSettings,
+};
 
 export default function Settings() {
   const [params, setParams] = useSearchParams();
@@ -26,12 +40,15 @@ export default function Settings() {
     ? params.get("tab")
     : TABS[0].id;
 
+  const Panel = PANELS[tab];
+
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       <div>
         <h1 className="text-2xl font-semibold sm:text-3xl">Settings</h1>
         <p className="mt-1 text-sm text-muted">
-          Bring your data over from Freshdesk, and keep it backed up.
+          Bring your data over from Freshdesk, keep it backed up, and put the
+          site on your own secure domain.
         </p>
       </div>
 
@@ -63,7 +80,7 @@ export default function Settings() {
         })}
       </div>
 
-      {tab === "import" ? <FreshdeskImport /> : <BackupRestore />}
+      <Panel />
     </div>
   );
 }

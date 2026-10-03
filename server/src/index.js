@@ -28,6 +28,7 @@ import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
+import { domainsRouter } from "./domains.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -170,6 +171,7 @@ app.use("/api/attachments", attachmentsRouter); // files on tickets
 app.use("/api/backup", backupRouter); // backups and restoring (Super Admin)
 app.use("/api/sla", slaRouter); // SLA targets (changed by Admins)
 app.use("/api/requests", requestsRouter); // the public request form (no sign-in)
+app.use("/api/domains", domainsRouter); // own domain + SSL (Super Admin; Caddy asks /allowed)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 
 // Anything else under /api that doesn't exist
@@ -214,10 +216,14 @@ app.use((err, req, res, next) => {
 });
 
 // Render tells the server which port to use (PORT). Locally it's 4000.
-// 0.0.0.0 = reachable from outside this computer, which Render needs.
+// HOST: 0.0.0.0 (the default) = reachable from outside this computer,
+// which Render needs. On your own server, set HOST=127.0.0.1 so only
+// Caddy (on the same server) can reach it, and everyone goes through
+// https.
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, "0.0.0.0", () => {
-  console.log(`Server running on port ${port}`);
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () => {
+  console.log(`Server running on ${host}:${port}`);
   // Every 5 minutes: warn about tickets that are due soon or overdue
   startDueTimeChecks();
   // Every hour: clear out files that were uploaded but never sent

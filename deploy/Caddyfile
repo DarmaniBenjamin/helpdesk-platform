@@ -1,0 +1,43 @@
+# Caddy: the web server in front of the helpdesk on your own server
+# (Linode, Google Cloud, Oracle, AWS, your homelab...). It answers on
+# ports 80 and 443, gets a free Let's Encrypt certificate for each of
+# your domains, renews them by itself, sends http:// visitors to
+# https://, and passes everything on to the helpdesk app on port 4000.
+#
+# Install on the server:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo nano /etc/caddy/Caddyfile      (put your email in below)
+#   sudo systemctl restart caddy
+#
+# Which domains get certificates is decided by the helpdesk itself:
+# Settings → Domain & SSL, plus SITE_DOMAIN in server/.env. Caddy asks
+# the app before getting a certificate for a new domain, so nothing in
+# this file needs changing when you add a domain or move servers.
+{
+	# Your email for the Let's Encrypt account (important notices about
+	# it go here). Change it to your own address.
+	email you@example.com
+
+	# Get certificates from Let's Encrypt
+	cert_issuer acme
+
+	# Before getting a certificate for a domain, ask the helpdesk if
+	# it's one of ours. Only domains added in the app get a yes.
+	on_demand_tls {
+		ask http://127.0.0.1:4000/api/domains/allowed
+	}
+}
+
+# Any domain, over https, as long as the helpdesk said yes above
+https:// {
+	tls {
+		on_demand
+	}
+
+	# Smaller downloads
+	encode zstd gzip
+
+	# Everything goes to the helpdesk app. Caddy tells it the visitor's
+	# real address and that the connection was https.
+	reverse_proxy 127.0.0.1:4000
+}
