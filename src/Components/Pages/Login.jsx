@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ArrowLeft, CircleCheck, TriangleAlert } from "lucide-react";
 import AuthShell from "../AuthShell";
+import SignInAnimation from "../SignInAnimation";
 import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
 import useData from "../../useData";
@@ -45,16 +46,29 @@ export default function Login() {
     navigate(fromFits ? from : home, { replace: true });
   }
 
+  // The animation while signing in (SignInAnimation): null when it isn't
+  // showing, otherwise "loading", "done" or "failed". Who signed in is
+  // kept until the arrow has flown off, then the app opens.
+  const [animation, setAnimation] = useState(null);
+  const signedIn = useRef(null);
+  const reduceMotion = () =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   async function handleSignIn(e) {
     e.preventDefault();
     setBusy(true);
     setError("");
+    // With "reduce motion" on, no animation: straight in
+    if (!reduceMotion()) setAnimation("loading");
     try {
       const user = await signIn(email, password);
-      goHome(user.role);
+      signedIn.current = user;
+      if (reduceMotion()) goHome(user.role);
+      else setAnimation("done"); // the arrow takes off, then goHome
     } catch (err) {
       setError(err.message);
       setBusy(false);
+      setAnimation((a) => (a ? "failed" : null)); // drains away
       // A wrong email or password (not "can't reach the server")
       if (err.status === 401) setShowForgot(true);
     }
@@ -186,6 +200,14 @@ export default function Login() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
+
+      {animation && (
+        <SignInAnimation
+          status={animation}
+          onFinished={() => goHome(signedIn.current.role)}
+          onCancelled={() => setAnimation(null)}
+        />
+      )}
     </AuthShell>
   );
 }
