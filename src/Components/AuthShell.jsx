@@ -120,18 +120,44 @@ function Network({ nodes, faint = false, fill = false }) {
 //   Phones and tablets: a shorter green banner across the top with the
 //   same moving network and the logo, and the form on a sheet that
 //   slides up over the bottom of it, like an app.
+// The whole frame is pinned to the screen (fixed), so pulling down on a
+// phone doesn't drag the page around. If the form is taller than the
+// space it has (small phones, the keyboard open), only the form part
+// scrolls, and it doesn't bounce.
 // Things come in with short animations (index.css).
 export default function AuthShell({ title, children }) {
   useEffect(() => {
     document.title = `${title} · ${APP_NAME}`;
   }, [title]);
 
+  // While this page is open, stop the phone's "rubber band" pull on the
+  // page itself, then put things back the way they were when leaving
+  // (the rest of the app scrolls as a whole page on phones).
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const before = {
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverscroll: body.style.overscrollBehavior,
+      bodyOverflow: body.style.overflow,
+    };
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overscrollBehavior = before.htmlOverscroll;
+      body.style.overscrollBehavior = before.bodyOverscroll;
+      body.style.overflow = before.bodyOverflow;
+    };
+  }, []);
+
   return (
-    // grid-cols-1 (not just "grid") stops long text, like an email address,
-    // from stretching the page wider than the phone screen. On phones the
-    // banner and the sheet are two rows, and the sheet grows to fill the
-    // rest of the screen.
-    <div className="relative grid min-h-dvh grid-cols-1 grid-rows-[auto_1fr] bg-page lg:grid-cols-2 lg:grid-rows-1">
+    // fixed inset-0: the frame always fills the screen exactly and never
+    // moves. Phones: a column (banner on top, the sheet takes the rest).
+    // Big screens: two equal halves side by side (grid-cols-2 also stops
+    // long text, like an email address, from stretching things wider
+    // than the screen).
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-page lg:grid lg:grid-cols-2">
       {/* Light / dark switch in the top corner (on a white pill on phones,
           so it shows on the green banner) */}
       <div className="absolute right-3 top-3 z-20 rounded-xl bg-white/90 shadow-sm lg:bg-transparent lg:shadow-none">
@@ -160,8 +186,9 @@ export default function AuthShell({ title, children }) {
       </div>
 
       {/* Phones and tablets: the green banner, with the moving network
-          and the logo and name in the middle */}
-      <div className="relative flex h-[38dvh] min-h-60 items-center justify-center overflow-hidden bg-brand pb-6 text-white lg:hidden">
+          and the logo and name in the middle. shrink-0 keeps it the same
+          height, even when the keyboard is open. */}
+      <div className="relative flex h-[38dvh] min-h-60 shrink-0 items-center justify-center overflow-hidden bg-brand pb-6 text-white lg:hidden">
         <div className="animate-fade-in absolute inset-0">
           <Network nodes={PANEL_NODES} />
         </div>
@@ -177,15 +204,22 @@ export default function AuthShell({ title, children }) {
 
       {/* The form, with a faint green network behind it. Phones: on a
           sheet with rounded top corners that sits over the bottom of the
-          banner. Big screens: centred on its side. */}
-      <div className="relative z-10 -mt-6 flex min-w-0 flex-col items-center overflow-hidden rounded-t-3xl bg-page px-5 pb-10 pt-8 shadow-[0_-8px_24px_rgb(0_0_0/0.08)] sm:px-6 lg:mt-0 lg:justify-center lg:rounded-none lg:py-10 lg:shadow-none">
+          banner. Big screens: centred on its side. The sheet itself
+          never moves; the network stays put behind it and only the
+          inner part scrolls if it has to. */}
+      <div className="relative z-10 -mt-6 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-t-3xl bg-page shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:mt-0 lg:rounded-none lg:shadow-none">
         <div className="animate-fade-in pointer-events-none absolute inset-0 text-brand">
           <Network nodes={FORM_NODES} faint fill />
         </div>
 
-        {/* The form rises into place */}
-        <div className="animate-rise-in wait-2 relative w-full max-w-sm">
-          {children}
+        {/* The scrolling part. overscroll-none: no bounce when you pull
+            past the top or bottom */}
+        <div className="relative flex h-full flex-col items-center overflow-y-auto overscroll-none px-5 pb-10 pt-8 sm:px-6 lg:py-10">
+          {/* The form rises into place (my-auto centres it on big
+              screens but lets it scroll if it's ever too tall) */}
+          <div className="animate-rise-in wait-2 relative w-full max-w-sm lg:my-auto">
+            {children}
+          </div>
         </div>
       </div>
     </div>
