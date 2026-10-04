@@ -12,6 +12,11 @@ const isInstalled = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
   window.navigator.standalone === true;
 
+// An iPhone/iPad in Safari: notifications only work once Uplink is added
+// to the Home Screen and opened from there
+export const needsHomeScreen = () =>
+  window.isSecureContext && isIphone() && !isInstalled();
+
 // Can this browser show notifications here? Returns null if yes, or the
 // reason why not, in words
 export function whyNoPush() {
@@ -49,23 +54,39 @@ function keyToBytes(base64) {
   return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
+// Is this sign-up for the server's current key? (The server makes a new
+// key if it's moved and restored from a backup.)
+function sameKey(subscription, keyBytes) {
+  const current = subscription.options?.applicationServerKey;
+  if (!current) return true; // the browser doesn't say: assume it's fine
+  const bytes = new Uint8Array(current);
+  return (
+    bytes.length === keyBytes.length && bytes.every((b, i) => b === keyBytes[i])
+  );
+}
+
 // Signs this browser up with the browser maker's push service and tells
 // our server where to send notifications
 async function subscribe() {
   const { publicKey } = await api("/push/key");
   if (!publicKey) {
     throw new Error(
-      "The server isn't set up for notifications yet (VAPID keys are missing in server/.env).",
+      "The server couldn't set up notifications just now. Try again in a minute.",
     );
   }
+  const keyBytes = keyToBytes(publicKey);
   const registration = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
-  const subscription =
-    (await registration.pushManager.getSubscription()) ??
-    (await registration.pushManager.subscribe({
-      userVisibleOnly: true, // every message shows a notification
-      applicationServerKey: keyToBytes(publicKey),
-    }));
+  let subscription = await registration.pushManager.getSubscription();
+  // Signed up with an old key: start again with the new one
+  if (subscription && !sameKey(subscription, keyBytes)) {
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+  subscription ??= await registration.pushManager.subscribe({
+    userVisibleOnly: true, // every message shows a notification
+    applicationServerKey: keyBytes,
+  });
   await api("/push/subscribe", { method: "POST", body: subscription.toJSON() });
 }
 

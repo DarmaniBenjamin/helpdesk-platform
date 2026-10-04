@@ -14,8 +14,11 @@
 // connection to any open tab (live.js), and pushed to every browser the
 // person turned notifications on in ("web push").
 //
-// Web push needs a key pair (VAPID keys) in server/.env. Without them
-// the bell still works, just no desktop/phone pop-ups.
+// Web push needs a key pair ("VAPID keys"). It's made by itself the
+// first time it's needed and kept in the settings table, the private
+// half locked with this server's key (secrets.js). Nothing to put in
+// server/.env. (VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in server/.env
+// still work, and win, for anyone who already set them.)
 import { Router } from "express";
 import webpush from "web-push";
 import {
@@ -32,6 +35,7 @@ import { db } from "./db/index.js";
 import {
   notifications,
   pushSubscriptions,
+  settings,
   tickets,
   customers,
   users,
@@ -40,25 +44,74 @@ import { requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
 import { BadInput } from "./validate.js";
 import { sendToUser } from "./live.js";
+import { seal, unseal } from "./secrets.js";
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 
 // ---------- Web push setup ----------
 
-const pushReady = Boolean(
-  process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
-);
-if (pushReady) {
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || "mailto:admin@example.com",
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY,
-  );
-} else {
-  console.log(
-    "Desktop/phone notifications are off: add VAPID keys to server/.env",
-  );
+// The key pair, set up once and then remembered. Returns the public key
+// (browsers need it to sign up), or null if it couldn't be set up.
+let vapid = null;
+function pushKeys() {
+  vapid ??= setUpPushKeys().catch((err) => {
+    vapid = null; // try again next time
+    console.error("Setting up notifications failed:", err.message);
+    return null;
+  });
+  return vapid;
+}
+
+async function setUpPushKeys() {
+  // Who the push services can contact about this server
+  const subject = `mailto:${
+    process.env.VAPID_SUBJECT?.replace(/^mailto:/, "") ||
+    process.env.SUPER_ADMIN_EMAIL ||
+    "admin@example.com"
+  }`;
+
+  // Keys in server/.env (the old way) still work
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      subject,
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY,
+    );
+    return process.env.VAPID_PUBLIC_KEY;
+  }
+
+  // Keys made earlier by this server
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "push"));
+  if (row?.value?.publicKey) {
+    try {
+      const privateKey = unseal(row.value.privateKey);
+      webpush.setVapidDetails(subject, row.value.publicKey, privateKey);
+      return row.value.publicKey;
+    } catch {
+      // Made on another server (a restored backup): make new ones below
+    }
+  }
+
+  // None yet: make a pair. Browsers signed up with an older pair can't
+  // be reached with the new one, so they're forgotten; each signs up
+  // again by itself the next time Uplink is opened there.
+  const keys = webpush.generateVAPIDKeys();
+  const value = {
+    publicKey: keys.publicKey,
+    privateKey: seal(keys.privateKey),
+  };
+  await db
+    .insert(settings)
+    .values({ key: "push", value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  await db.delete(pushSubscriptions);
+  webpush.setVapidDetails(subject, keys.publicKey, keys.privateKey);
+  console.log("Desktop/phone notifications are set up.");
+  return keys.publicKey;
 }
 
 // ---------- Sending ----------
@@ -80,7 +133,7 @@ function publicNotification(n) {
 // notifications on in. Browsers that were switched off or uninstalled
 // answer "gone", and are forgotten.
 async function pushTo(userIds, rows) {
-  if (!pushReady) return;
+  if (!(await pushKeys())) return;
   const subs = await db
     .select()
     .from(pushSubscriptions)
@@ -369,8 +422,8 @@ notificationsRouter.post(
 export const pushRouter = Router();
 
 // The public half of the key pair: browsers need it to sign up
-pushRouter.get("/key", requireRole(...STAFF), (req, res) => {
-  res.json({ publicKey: pushReady ? process.env.VAPID_PUBLIC_KEY : null });
+pushRouter.get("/key", requireRole(...STAFF), async (req, res) => {
+  res.json({ publicKey: await pushKeys() });
 });
 
 // This browser said yes: remember where to send its notifications.
