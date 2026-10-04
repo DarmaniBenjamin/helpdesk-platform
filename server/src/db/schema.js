@@ -329,6 +329,61 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   createdAt: createdAt(),
 });
 
+// ---------- Email (Integrations → Email) ----------
+
+// A mailbox the helpdesk reads new emails from (they become tickets) and
+// sends agents' replies with. Connected by signing in with Microsoft or
+// Google, or with an email address and password (any other provider).
+export const mailboxes = pgTable("mailboxes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  address: text("address").notNull().unique(),
+  name: text("name").notNull().default(""), // the sender name on automatic replies
+  provider: text("provider").notNull(), // microsoft, google or imap
+  // Where its mail is read (IMAP) and sent from (SMTP)
+  imapHost: text("imap_host").notNull(),
+  imapPort: integer("imap_port").notNull(),
+  smtpHost: text("smtp_host").notNull(),
+  smtpPort: integer("smtp_port").notNull(),
+  username: text("username").notNull(),
+  // The password, or for Microsoft/Google the sign-in's refresh token,
+  // locked with this server's secret key (see secrets.js)
+  secret: text("secret").notNull(),
+  // New tickets from this mailbox go to this agent and/or team
+  assigneeId: text("assignee_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  departmentId: text("department_id").references(() => departments.id, {
+    onDelete: "set null",
+  }),
+  enabled: boolean("enabled").notNull().default(true),
+  // Where reading got to: emails after this one are new
+  uidValidity: text("uid_validity"),
+  lastUid: bigint("last_uid", { mode: "number" }).notNull().default(0),
+  lastCheckedAt: time("last_checked_at"),
+  lastError: text("last_error"),
+  createdAt: createdAt(),
+});
+
+// Every email in or out of a ticket, by its Message-ID, so a customer's
+// reply (which points back at an earlier email) lands on the right
+// ticket, and the same email is never turned into a ticket twice
+export const emailMessages = pgTable(
+  "email_messages",
+  {
+    messageId: text("message_id").primaryKey(),
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    mailboxId: integer("mailbox_id").references(() => mailboxes.id, {
+      onDelete: "set null",
+    }),
+    direction: text("direction").notNull(), // "in" or "out"
+    address: text("address").notNull().default(""), // the customer's address
+    createdAt: createdAt(),
+  },
+  (t) => [index("email_messages_ticket_idx").on(t.ticketId)],
+);
+
 // ---------- Settings, sign-in sessions and invites ----------
 
 // App settings, one row per section, e.g. "backup" or "freshdesk"

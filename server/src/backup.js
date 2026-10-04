@@ -4,10 +4,12 @@
 // departments, customers, the team (with their scrambled passwords, so
 // everyone can still sign in after a restore), tickets with their whole
 // conversation and history, file records, the Knowledge Base, rules,
-// automations and settings (including the SLA targets). It doesn't hold
-// sign-in sessions or notifications (those don't matter after a
-// restore), or the attached files themselves (those are in the uploads
-// folder: back that up too).
+// automations and settings (including the SLA targets), and the email
+// mailboxes (their passwords stay locked with this server's key, see
+// secrets.js, so on another server they need signing in again). It
+// doesn't hold sign-in sessions or notifications (those don't matter
+// after a restore), or the attached files themselves (those are in the
+// uploads folder: back that up too).
 //
 // Keep backup files somewhere safe: they hold everything, including
 // customers' details.
@@ -50,9 +52,11 @@ const TABLES = [
   "customers",
   "users",
   "user_departments",
+  "mailboxes",
   "tickets",
   "messages",
   "attachments",
+  "email_messages",
   "answers",
   "rules",
   "automations",
@@ -62,6 +66,7 @@ const TABLES = [
 // Tables whose "id" counts up by itself: after a restore, the counter
 // carries on after the highest one
 const COUNTED = [
+  "mailboxes",
   "customers",
   "tickets",
   "messages",

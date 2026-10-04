@@ -30,6 +30,7 @@ import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
 import { domainsRouter, seedSiteDomains } from "./domains.js";
 import { startCaddySync } from "./caddy.js";
+import { emailRouter, startEmailChecks } from "./email.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -173,6 +174,7 @@ app.use("/api/backup", backupRouter); // backups and restoring (Super Admin)
 app.use("/api/sla", slaRouter); // SLA targets (changed by Admins)
 app.use("/api/requests", requestsRouter); // the public request form (no sign-in)
 app.use("/api/domains", domainsRouter); // own domain + SSL (Super Admin; Caddy asks /allowed)
+app.use("/api/email", emailRouter); // Integrations → Email (Admins)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 
 // Anything else under /api that doesn't exist
@@ -237,4 +239,6 @@ app.listen(port, host, () => {
   // if Caddy is installed on this computer, give it the https settings
   seedSiteDomains();
   startCaddySync();
+  // Every minute: new emails in the connected mailboxes become tickets
+  startEmailChecks();
 });

@@ -4,33 +4,34 @@ import {
   Copy,
   ExternalLink,
   Globe,
-  Mail,
   MessageCircle,
   PhoneCall,
 } from "lucide-react";
 import { copyText } from "../copyText";
+import EmailIntegration from "../EmailIntegration";
 import { inputClass, labelClass, secondaryButton } from "../formStyles";
 
 // Integrations: every way customers can reach the helpdesk, in one
 // place. Each one turns what comes in (a form, an email, a WhatsApp
 // message, a phone call) into tickets in the same Inbox.
 //
-// The website form works today. The others are shown with what they'll
-// do, so the page already explains where the helpdesk is going.
+// The website form and email work today (email: EmailIntegration.jsx).
+// The others are shown with what they'll do, so the page already
+// explains where the helpdesk is going.
 
 // Coming next, in the order they'll be built
 const COMING = [
   {
-    id: "email",
-    name: "Email",
-    icon: Mail,
-    tint: "bg-sky-500/15 text-sky-500",
+    id: "phone",
+    name: "Phone (PBX)",
+    icon: PhoneCall,
+    tint: "bg-violet-500/15 text-violet-500",
     blurb:
-      "Emails sent to your support address become tickets, and replies go back to the customer by email.",
+      "When an agent can't pick up, the call goes to your phone system (3CX, FreePBX...) and the caller leaves a voicemail, which becomes a ticket for that agent.",
     points: [
-      "Connect Microsoft 365, Google Workspace or any mailbox",
-      "Replies stay in the same email thread",
-      "Attachments come through with the ticket",
+      "The recording attached to the ticket",
+      "A written transcript, made on your own server",
+      "The caller matched to the customer by phone number",
     ],
   },
   {
@@ -39,24 +40,11 @@ const COMING = [
     icon: MessageCircle,
     tint: "bg-emerald-500/15 text-emerald-500",
     blurb:
-      "Chat with customers on WhatsApp Business. Each conversation becomes a ticket you can answer from here.",
+      "Messages and voice notes sent to each agent's WhatsApp Business number become tickets for that agent. Free: the helpdesk only reads, it never sends.",
     points: [
+      "Each agent's company number, connected once",
+      "Voice notes attached, with a written transcript",
       "Uses the official WhatsApp Business Platform",
-      "Customers are matched to their phone number",
-      "Photos and voice notes arrive as attachments",
-    ],
-  },
-  {
-    id: "phone",
-    name: "Phone (PBX)",
-    icon: PhoneCall,
-    tint: "bg-violet-500/15 text-violet-500",
-    blurb:
-      "Connect your phone system, like 3CX or FreePBX, so calls show up on the customer and missed calls become tickets.",
-    points: [
-      "Who's calling, from your customer list",
-      "Missed calls and voicemails open a ticket",
-      "Every call is logged on the customer",
     ],
   },
 ];
@@ -270,13 +258,14 @@ export default function Integrations() {
       </div>
 
       <WebsiteForm />
+      <EmailIntegration />
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
           Coming next
         </h2>
       </div>
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         {COMING.map((item) => (
           <ComingCard key={item.id} item={item} />
         ))}
