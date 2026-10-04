@@ -12,7 +12,7 @@
 //    itself (caddy.js). When someone opens a domain Caddy has no
 //    certificate for yet, Caddy first asks this app
 //    "is this one of ours?" (GET /api/domains/allowed?domain=...). Only
-//    domains added here (or in SITE_DOMAIN) get a yes, so nobody can make
+//    domains on the list here get a yes, so nobody can make
 //    Caddy request certificates for domains that aren't yours. Caddy
 //    then gets the certificate from Let's Encrypt in a few seconds, keeps
 //    it, and renews it well before it runs out.
@@ -26,9 +26,11 @@
 //
 // Server environment variables (server/.env on a VM):
 //   SITE_DOMAIN     optional. The site's main domain(s), comma-separated,
-//                   e.g. helpdesk.darmani.com. Always allowed, so the
-//                   site is secure from the very first start, before
-//                   anyone has signed in to add it here.
+//                   e.g. helpdesk.darmani.com. Added to the list once,
+//                   when the server starts, so the site is secure from
+//                   the very first start, before anyone has signed in.
+//                   After that it's an ordinary domain on the list: it
+//                   can be removed in Settings, and isn't added back.
 //   SERVER_IP       optional. This server's public IP, shown as what the
 //                   A record should point to. Found by itself if empty.
 //   SSL_MODE        optional. "server" or "render", to override the
@@ -192,26 +194,35 @@ function statusOf(dnsVerified, certificate) {
 // 1. Your own server, with Caddy in front
 // ============================================================
 
-// The domains added here, kept in the settings table (so they're in
-// backups too): { list: [{ name, addedAt }] }
-async function savedDomains() {
+// The domains on the list, kept in the settings table (so they're in
+// backups too): { list: [{ name, addedAt }], seeded: [names] }
+// "seeded" remembers which SITE_DOMAIN names were already added once,
+// so one that was removed in Settings doesn't come back on a restart.
+async function loadDomains() {
   const [row] = await db
     .select()
     .from(settings)
     .where(eq(settings.key, "domains"));
-  return row?.value?.list ?? [];
+  return {
+    list: row?.value?.list ?? [],
+    seeded: row?.value?.seeded ?? [],
+  };
 }
 
-async function saveDomains(list) {
-  const value = { list };
+async function saveDomains(value) {
   await db
     .insert(settings)
     .values({ key: "domains", value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
 }
 
-// The ones in SITE_DOMAIN, which are always allowed
-function fixedDomains() {
+async function savedDomains() {
+  await seedSiteDomains();
+  return (await loadDomains()).list;
+}
+
+// The names in SITE_DOMAIN
+function siteDomains() {
   return (process.env.SITE_DOMAIN ?? "")
     .split(",")
     .map((d) => d.trim())
@@ -227,8 +238,30 @@ function fixedDomains() {
     .filter(Boolean);
 }
 
+// Adds SITE_DOMAIN's names to the list, each only once ever. Runs when
+// the server starts (index.js) and before the list is read, so the main
+// domain is allowed even before anyone has signed in.
+let seeding = null;
+export function seedSiteDomains() {
+  seeding ??= (async () => {
+    const names = siteDomains();
+    if (!names.length) return;
+    const value = await loadDomains();
+    const fresh = names.filter((n) => !value.seeded.includes(n));
+    if (!fresh.length) return;
+    for (const name of fresh)
+      if (!value.list.some((d) => d.name === name))
+        value.list.push({ name, addedAt: Date.now() });
+    value.seeded.push(...fresh);
+    await saveDomains(value);
+  })().catch((err) => {
+    seeding = null; // try again next time
+    console.warn("Couldn't add SITE_DOMAIN to the domain list:", err.message);
+  });
+  return seeding;
+}
+
 async function isAllowed(name) {
-  if (fixedDomains().includes(name)) return true;
   return (await savedDomains()).some((d) => d.name === name);
 }
 
@@ -256,7 +289,7 @@ async function serverIp() {
   return null;
 }
 
-async function describeOwn({ name, addedAt, fixed }, ip) {
+async function describeOwn({ name, addedAt }, ip) {
   const found = await currentDns(name);
   const ipv4 = found.filter((r) => r.type === "A").map((r) => r.value);
   const certificate = await checkCertificate(name, ipv4[0]);
@@ -267,7 +300,6 @@ async function describeOwn({ name, addedAt, fixed }, ip) {
     type: host === "@" ? "root" : "subdomain",
     redirectsTo: null,
     addedAt: addedAt ?? null,
-    fixed: Boolean(fixed),
     dnsVerified,
     records: [{ type: "A", host, value: ip ?? "this server's public IP" }],
     found,
@@ -283,12 +315,7 @@ async function listOwn() {
     syncCaddy(), // also gives a newly installed Caddy its settings
     savedDomains(),
   ]);
-  const fixed = fixedDomains();
-  const all = [
-    ...fixed.map((name) => ({ name, fixed: true })),
-    ...saved.filter((d) => !fixed.includes(d.name)),
-  ];
-  const domains = await Promise.all(all.map((d) => describeOwn(d, ip)));
+  const domains = await Promise.all(saved.map((d) => describeOwn(d, ip)));
   return {
     mode: "server",
     connected: true,
@@ -301,23 +328,23 @@ async function listOwn() {
 }
 
 async function addOwn(name) {
-  if (fixedDomains().includes(name))
-    throw new BadInput("That domain is already set in SITE_DOMAIN.");
-  const list = await savedDomains();
-  if (list.some((d) => d.name === name))
+  await seedSiteDomains();
+  const value = await loadDomains();
+  if (value.list.some((d) => d.name === name))
     throw new BadInput("That domain is already added.");
-  if (list.length >= 20)
+  if (value.list.length >= 20)
     throw new BadInput("That's the most domains this page can hold (20).");
-  await saveDomains([...list, { name, addedAt: Date.now() }]);
+  value.list.push({ name, addedAt: Date.now() });
+  await saveDomains(value);
 }
 
+// Caddy stops getting certificates for it: the one it already has keeps
+// working until it's due for renewal, then the domain stops working.
 async function removeOwn(name) {
-  if (fixedDomains().includes(name))
-    throw new BadInput(
-      "That domain is set in SITE_DOMAIN on the server. Remove it there.",
-    );
-  const list = await savedDomains();
-  await saveDomains(list.filter((d) => d.name !== name));
+  await seedSiteDomains();
+  const value = await loadDomains();
+  value.list = value.list.filter((d) => d.name !== name);
+  await saveDomains(value);
 }
 
 // ============================================================
@@ -420,7 +447,6 @@ async function describeRender(domain, target) {
     // sends visitors on to example.com
     redirectsTo: domain.redirectForName || null,
     addedAt: domain.createdAt ? Date.parse(domain.createdAt) : null,
-    fixed: false,
     dnsVerified,
     records: apex
       ? [{ type: "A", host, value: RENDER_IP }]

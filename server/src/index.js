@@ -28,7 +28,7 @@ import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
-import { domainsRouter } from "./domains.js";
+import { domainsRouter, seedSiteDomains } from "./domains.js";
 import { startCaddySync } from "./caddy.js";
 import {
   notificationsRouter,
@@ -233,6 +233,8 @@ app.listen(port, host, () => {
   startAutomations();
   // Every hour: an automatic backup, if one is due
   startAutomaticBackups();
-  // If Caddy is installed on this computer: give it the https settings
+  // The site's main domain (SITE_DOMAIN) on the Domain & SSL list, then,
+  // if Caddy is installed on this computer, give it the https settings
+  seedSiteDomains();
   startCaddySync();
 });

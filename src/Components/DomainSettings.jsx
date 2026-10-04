@@ -183,7 +183,6 @@ function DomainCard({ domain, mode, onCheck, onRemove, checking }) {
               : domain.type === "root"
                 ? "Root domain"
                 : "Subdomain"}
-            {domain.fixed && " · the site's main domain (SITE_DOMAIN)"}
             {domain.addedAt && ` · added ${formatDate(domain.addedAt)}`}
           </p>
         </div>
@@ -261,16 +260,14 @@ function DomainCard({ domain, mode, onCheck, onRemove, checking }) {
             {checking ? "Checking…" : "Check now"}
           </button>
         )}
-        {!domain.fixed && (
-          <button
-            type="button"
-            onClick={() => onRemove(domain)}
-            className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm text-red-500 transition hover:border-red-300 hover:bg-red-50 active:scale-[0.97] sm:flex-none"
-          >
-            <Trash2 className="h-4 w-4" />
-            Remove
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => onRemove(domain)}
+          className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm text-red-500 transition hover:border-red-300 hover:bg-red-50 active:scale-[0.97] sm:flex-none"
+        >
+          <Trash2 className="h-4 w-4" />
+          Remove
+        </button>
       </div>
     </div>
   );
@@ -400,9 +397,11 @@ function ConnectRender({ missing, onRender }) {
   );
 }
 
-function ConfirmRemove({ domain, onConfirm, onClose }) {
+function ConfirmRemove({ domain, others, onConfirm, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Removing the address this page is open on
+  const inUse = window.location.hostname === domain.name;
 
   async function handleRemove(e) {
     e.preventDefault();
@@ -443,10 +442,30 @@ function ConfirmRemove({ domain, onConfirm, onClose }) {
       }
     >
       <p className="text-sm">
-        <strong className="break-all">{domain.name}</strong> stops opening the
-        helpdesk, and its certificate stops being renewed. The site keeps
-        working on its other addresses. You can add it back any time.
+        <strong className="break-all">{domain.name}</strong> stops getting SSL
+        certificates. The one it has now keeps working until it's due for
+        renewal, then the address stops working. You can add it back any time.
       </p>
+      {inUse && (
+        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            You're using this address right now.{" "}
+            {others.length > 0 ? (
+              <>
+                Afterwards, open the helpdesk on{" "}
+                <strong className="break-all">{others[0]}</strong> instead.
+              </>
+            ) : (
+              <>
+                It's the only domain on the list, so once its certificate runs
+                out you won't be able to open the helpdesk on a domain. Add the
+                new domain first and check it shows Secure.
+              </>
+            )}
+          </p>
+        </div>
+      )}
       {error && <p className="text-sm text-red-500">{error}</p>}
     </Modal>
   );
@@ -601,7 +620,9 @@ export default function DomainSettings() {
             <p className="text-xs text-muted">
               {info.mode === "server"
                 ? "Want www.yourcompany.com to work too? Add it as well."
-                : "A root domain (yourcompany.com) gets www.yourcompany.com added too, which sends visitors to the main one."}
+                : "A root domain (yourcompany.com) gets www.yourcompany.com added too, which sends visitors to the main one."}{" "}
+              Changing domains? Add the new one, wait until it shows Secure,
+              then remove the old one.
             </p>
           </form>
         </Card>
@@ -645,6 +666,9 @@ export default function DomainSettings() {
       {removing && (
         <ConfirmRemove
           domain={removing}
+          others={info.domains
+            .filter((d) => d.name !== removing.name && d.status === "secure")
+            .map((d) => d.name)}
           onConfirm={handleRemove}
           onClose={() => setRemoving(null)}
         />
