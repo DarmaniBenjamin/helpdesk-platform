@@ -15,7 +15,8 @@
 //    domains on the list here get a yes, so nobody can make
 //    Caddy request certificates for domains that aren't yours. Caddy
 //    then gets the certificate from Let's Encrypt in a few seconds, keeps
-//    it, and renews it well before it runs out.
+//    it, and renews it well before it runs out. Caddy also only answers
+//    for the domains on the list, so a removed one stops working at once.
 //    Moving to another provider: install Caddy there, point the A record
 //    at the new server's IP, done.
 //
@@ -55,7 +56,7 @@ import { settings } from "./db/schema.js";
 import { eq } from "drizzle-orm";
 import { requireRole } from "./auth.js";
 import { BadInput } from "./validate.js";
-import { syncCaddy, caddyStatus } from "./caddy.js";
+import { syncCaddy, caddyStatus, setDomainSource } from "./caddy.js";
 
 export const domainsRouter = Router();
 
@@ -261,6 +262,42 @@ export function seedSiteDomains() {
   return seeding;
 }
 
+// Which domains had a working certificate at the last check. Caddy
+// uses it to decide whether the site may also open on the server's IP
+// (only while none works yet; see caddy.js).
+const secureNow = new Set();
+let lastFullCheck = 0;
+
+// Checks every domain's certificate and updates secureNow
+async function checkAllCertificates(names) {
+  await Promise.all(
+    names.map(async (name) => {
+      const ip = (await currentDns(name)).find((r) => r.type === "A")?.value;
+      const { secure } = await checkCertificate(name, ip);
+      if (secure) secureNow.add(name);
+      else secureNow.delete(name);
+    }),
+  );
+  lastFullCheck = Date.now();
+}
+
+// Caddy only answers for the domains on the list (caddy.js). While none
+// is known to work, they're checked each time Caddy's settings are (every
+// 30 seconds); once one works, every 10 minutes.
+if (MODE === "server")
+  setDomainSource(async () => {
+    const names = (await savedDomains()).map((d) => d.name);
+    for (const name of secureNow)
+      if (!names.includes(name)) secureNow.delete(name);
+    const noneWorks = !names.some((n) => secureNow.has(n));
+    if (
+      names.length &&
+      (noneWorks || Date.now() - lastFullCheck > 10 * 60 * 1000)
+    )
+      await checkAllCertificates(names);
+    return { names, secure: names.filter((n) => secureNow.has(n)) };
+  });
+
 async function isAllowed(name) {
   return (await savedDomains()).some((d) => d.name === name);
 }
@@ -293,6 +330,8 @@ async function describeOwn({ name, addedAt }, ip) {
   const found = await currentDns(name);
   const ipv4 = found.filter((r) => r.type === "A").map((r) => r.value);
   const certificate = await checkCertificate(name, ipv4[0]);
+  if (certificate.secure) secureNow.add(name);
+  else secureNow.delete(name);
   const dnsVerified = ip ? ipv4.includes(ip) : ipv4.length > 0;
   const host = hostPart(name);
   return {
@@ -310,18 +349,19 @@ async function describeOwn({ name, addedAt }, ip) {
 }
 
 async function listOwn() {
-  const [ip, , saved] = await Promise.all([
-    serverIp(),
-    syncCaddy(), // also gives a newly installed Caddy its settings
-    savedDomains(),
-  ]);
+  const [ip, saved] = await Promise.all([serverIp(), savedDomains()]);
   const domains = await Promise.all(saved.map((d) => describeOwn(d, ip)));
+  // After the checks above, so Caddy gets settings that match them
+  // (this also gives a newly installed Caddy its settings)
+  await syncCaddy();
   return {
     mode: "server",
     connected: true,
     missing: [],
     serverIp: ip,
     caddy: caddyStatus(),
+    // While no domain works, the site also opens on http://<IP>
+    ipAccess: !domains.some((d) => d.certificate.secure),
     target: null,
     domains,
   };
@@ -338,8 +378,10 @@ async function addOwn(name) {
   await saveDomains(value);
 }
 
-// Caddy stops getting certificates for it: the one it already has keeps
-// working until it's due for renewal, then the domain stops working.
+// Caddy stops answering for it straight away, and stops getting
+// certificates for it. (With no working domain left, the site opens on
+// the server's IP over http instead, so a new one can be added:
+// caddy.js.)
 async function removeOwn(name) {
   await seedSiteDomains();
   const value = await loadDomains();

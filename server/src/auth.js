@@ -19,7 +19,10 @@ import { users, sessions, userDepartments } from "./db/schema.js";
 
 const SESSION_COOKIE = "helpdesk_session";
 const SESSION_DAYS = 30;
-// On the real site (https), cookies are only ever sent over https
+// On the real site, the sign-in cookie is only ever sent over https.
+// The one exception is signing in on the server's IP over plain http,
+// which only works while no domain works yet (see caddy.js), so a site
+// without a working domain can still be reached to add or fix one.
 const secureCookies = process.env.NODE_ENV === "production";
 
 // ---------- Helpers ----------
@@ -40,7 +43,7 @@ function setSessionCookie(res, token, expires) {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true, // the page's JavaScript can't read it
     sameSite: "lax", // not sent when another website tries to use it
-    secure: secureCookies,
+    secure: secureCookies && res.req.secure,
     path: "/",
     expires,
   });

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Card from "./Card";
 import Modal from "./Modal";
-import { inputClass, secondaryButton } from "./formStyles";
+import { inputClass, labelClass, secondaryButton } from "./formStyles";
 import { copyText } from "./copyText";
 import { api } from "../api";
 
@@ -340,6 +340,50 @@ function SetUpServer({ caddy, serverIp }) {
   );
 }
 
+// While no domain works, the helpdesk also opens on the server's IP over
+// plain http (so nobody gets locked out). This says so, and once a domain
+// works, tells someone who's on the IP to switch to it, because the IP
+// stops working then.
+function IpAccessNotice({ info }) {
+  if (info.mode !== "server" || !info.caddy?.configured || !info.serverIp)
+    return null;
+  const onIp = window.location.hostname === info.serverIp;
+  const working = info.domains.find((d) => d.status === "secure");
+
+  if (onIp && working)
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-brand/30 bg-brand/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="flex items-start gap-2 text-brand">
+          <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong className="break-all">{working.name}</strong> is secure.
+            This IP address stops working now, so carry on there.
+          </span>
+        </p>
+        <a
+          href={`https://${working.name}/settings?tab=domain`}
+          className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open {working.name}
+        </a>
+      </div>
+    );
+
+  if (!info.ipAccess) return null;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+      <p>
+        No domain works yet, so the helpdesk also opens on{" "}
+        <strong className="break-all font-mono">http://{info.serverIp}</strong>.
+        It isn't encrypted, and switches off by itself as soon as a domain shows
+        Secure.
+      </p>
+    </div>
+  );
+}
+
 // Render only: shown until RENDER_API_KEY and RENDER_SERVICE_ID are on
 // the server
 function ConnectRender({ missing, onRender }) {
@@ -397,24 +441,107 @@ function ConnectRender({ missing, onRender }) {
   );
 }
 
-function ConfirmRemove({ domain, others, onConfirm, onClose }) {
+// Removing a domain: a warning, then the domain has to be typed in
+// before Remove works. Afterwards, if this page was open on that domain,
+// it says where the helpdesk can be opened now: another working domain,
+// or, with none left, the server's IP (see server/src/caddy.js).
+function ConfirmRemove({ domain, others, mode, onConfirm, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [typed, setTyped] = useState("");
+  const [done, setDone] = useState(null); // what the server said after
   // Removing the address this page is open on
   const inUse = window.location.hostname === domain.name;
+  // No other domain works, so this was the last way in on a domain
+  const last = others.length === 0;
+  const matches = typed.trim().toLowerCase() === domain.name;
 
   async function handleRemove(e) {
     e.preventDefault();
+    if (!matches || busy) return;
     setBusy(true);
     setError("");
     try {
-      await onConfirm();
+      setDone(await onConfirm());
     } catch (err) {
       setError(err.message);
-      setBusy(false);
     }
+    setBusy(false);
   }
 
+  // ---- After removing ----
+  if (done) {
+    const ipLink =
+      mode === "server" && done.ipAccess && done.serverIp
+        ? `http://${done.serverIp}`
+        : null;
+    const nextDomain = others[0] ? `https://${others[0]}` : null;
+    const goTo = inUse ? (nextDomain ?? ipLink) : null;
+
+    return (
+      <Modal
+        title="Domain removed"
+        onClose={onClose}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (goTo) window.location.href = goTo;
+          else onClose();
+        }}
+        footer={
+          goTo ? (
+            <button
+              type="submit"
+              className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] sm:w-auto"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open {goTo.replace(/^https?:\/\//, "")}
+            </button>
+          ) : (
+            <button type="submit" className={secondaryButton}>
+              Close
+            </button>
+          )
+        }
+      >
+        <p className="flex items-start gap-2 text-sm">
+          <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+          <span>
+            <strong className="break-all">{domain.name}</strong> doesn't open
+            the helpdesk anymore.
+          </span>
+        </p>
+        {inUse && nextDomain && (
+          <p className="text-sm">
+            This page was open on that address, so it'll stop working. Carry on
+            at <strong className="break-all">{nextDomain}</strong>. You may need
+            to sign in again there.
+          </p>
+        )}
+        {inUse && !nextDomain && ipLink && (
+          <div className="flex flex-col gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+            <p>
+              No domain works now, so until one does, the helpdesk opens on the
+              server's own address:{" "}
+              <strong className="break-all font-mono">{ipLink}</strong>
+            </p>
+            <p>
+              Open it, sign in again, and add a domain in Settings → Domain &
+              SSL. It isn't encrypted, so only use it for that: it switches off
+              by itself as soon as a domain shows Secure.
+            </p>
+          </div>
+        )}
+        {!inUse && done.ipAccess && ipLink && (
+          <p className="text-sm text-muted">
+            No domain works right now, so the helpdesk also opens on{" "}
+            <span className="font-mono">{ipLink}</span> until one does.
+          </p>
+        )}
+      </Modal>
+    );
+  }
+
+  // ---- Before removing ----
   return (
     <Modal
       title="Remove this domain?"
@@ -432,8 +559,8 @@ function ConfirmRemove({ domain, others, onConfirm, onClose }) {
           </button>
           <button
             type="submit"
-            disabled={busy}
-            className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-60 sm:flex-none"
+            disabled={busy || !matches}
+            className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
             {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {busy ? "Removing…" : "Remove"}
@@ -441,31 +568,61 @@ function ConfirmRemove({ domain, others, onConfirm, onClose }) {
         </>
       }
     >
+      {/* Add the new one first */}
+      <div
+        className={`flex items-start gap-3 rounded-lg p-3 text-sm ${
+          last ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"
+        }`}
+      >
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          {last ? (
+            <>
+              <strong>This is the only working domain.</strong> Add the new
+              domain first and wait until it shows Secure, then remove this one.
+              {inUse &&
+                " If you remove it now, you'll have to use the server's IP address to get back in."}
+            </>
+          ) : (
+            <>
+              Changing domains? Add the new one first and wait until it shows
+              Secure, then remove the old one.
+            </>
+          )}
+        </p>
+      </div>
+
       <p className="text-sm">
-        <strong className="break-all">{domain.name}</strong> stops getting SSL
-        certificates. The one it has now keeps working until it's due for
-        renewal, then the address stops working. You can add it back any time.
+        <strong className="break-all">{domain.name}</strong> stops opening the
+        helpdesk straight away, and stops getting SSL certificates. You can add
+        it back any time.
       </p>
-      {inUse && (
-        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            You're using this address right now.{" "}
-            {others.length > 0 ? (
-              <>
-                Afterwards, open the helpdesk on{" "}
-                <strong className="break-all">{others[0]}</strong> instead.
-              </>
-            ) : (
-              <>
-                It's the only domain on the list, so once its certificate runs
-                out you won't be able to open the helpdesk on a domain. Add the
-                new domain first and check it shows Secure.
-              </>
-            )}
-          </p>
-        </div>
+      {inUse && !last && (
+        <p className="text-sm">
+          You're using this address right now. Afterwards, carry on at{" "}
+          <strong className="break-all">{others[0]}</strong>.
+        </p>
       )}
+
+      <label className={labelClass}>
+        <span>
+          To confirm, type{" "}
+          <strong className="break-all font-mono">{domain.name}</strong>
+        </span>
+        <input
+          value={typed}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            setError("");
+          }}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck="false"
+          autoComplete="off"
+          aria-label="Type the domain to confirm"
+          className={inputClass}
+        />
+      </label>
       {error && <p className="text-sm text-red-500">{error}</p>}
     </Modal>
   );
@@ -481,7 +638,9 @@ export default function DomainSettings() {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [checking, setChecking] = useState(null); // the domain being checked
-  const [removing, setRemoving] = useState(null); // the domain to confirm
+  // The domain to confirm removing, and the other working domains when
+  // the dialog opened (the list changes once it's removed)
+  const [removing, setRemoving] = useState(null); // { domain, others }
 
   const load = useCallback(async () => {
     try {
@@ -537,12 +696,14 @@ export default function DomainSettings() {
     }
   }
 
+  // The dialog stays open afterwards to say where to carry on
   async function handleRemove() {
-    const result = await api(`/domains/${encodeURIComponent(removing.name)}`, {
-      method: "DELETE",
-    });
+    const result = await api(
+      `/domains/${encodeURIComponent(removing.domain.name)}`,
+      { method: "DELETE" },
+    );
     setInfo(result);
-    setRemoving(null);
+    return result;
   }
 
   if (!info) {
@@ -568,6 +729,8 @@ export default function DomainSettings() {
       {info.mode === "server" && !info.caddy?.configured && (
         <SetUpServer caddy={info.caddy} serverIp={info.serverIp} />
       )}
+
+      <IpAccessNotice info={info} />
 
       {!info.connected ? (
         <ConnectRender missing={info.missing} onRender={info.onRender} />
@@ -647,7 +810,14 @@ export default function DomainSettings() {
               mode={info.mode}
               checking={checking === domain.name}
               onCheck={handleCheck}
-              onRemove={setRemoving}
+              onRemove={(d) =>
+                setRemoving({
+                  domain: d,
+                  others: info.domains
+                    .filter((x) => x.name !== d.name && x.status === "secure")
+                    .map((x) => x.name),
+                })
+              }
             />
           ))}
         </div>
@@ -668,10 +838,9 @@ export default function DomainSettings() {
 
       {removing && (
         <ConfirmRemove
-          domain={removing}
-          others={info.domains
-            .filter((d) => d.name !== removing.name && d.status === "secure")
-            .map((d) => d.name)}
+          domain={removing.domain}
+          others={removing.others}
+          mode={info.mode}
           onConfirm={handleRemove}
           onClose={() => setRemoving(null)}
         />
