@@ -86,7 +86,11 @@ export const PERMISSIONS = [
     label: "Reports and Performance & Feedback",
     roles: ADMINS_UP,
   },
-  { key: "email", label: "Email Integration", roles: ADMINS_UP },
+  {
+    key: "integrations",
+    label: "Integrations: website form, email, WhatsApp and phone",
+    roles: ADMINS_UP,
+  },
   { key: "admins", label: "Make, change or remove Admins", roles: SUPER_ADMIN },
   {
     key: "settings",

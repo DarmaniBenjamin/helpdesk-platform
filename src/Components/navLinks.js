@@ -8,7 +8,7 @@ import {
   Zap,
   MessageSquareText,
   Users,
-  Mail,
+  Blocks,
   ChartColumn,
   Settings,
 } from "lucide-react";
@@ -47,10 +47,10 @@ export const moreLinks = [
   { label: "Knowledge Base", path: "/knowledge-base", icon: MessageSquareText },
   { label: "Team", path: "/team", icon: Users, permission: "team" },
   {
-    label: "Email Integration",
-    path: "/email",
-    icon: Mail,
-    permission: "email",
+    label: "Integrations",
+    path: "/integrations",
+    icon: Blocks,
+    permission: "integrations",
   },
   {
     label: "Report and Statistics",

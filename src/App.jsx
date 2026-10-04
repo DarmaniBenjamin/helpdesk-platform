@@ -34,6 +34,7 @@ const PortalNewRequest = lazy(
   () => import("./Components/Portal/PortalNewRequest"),
 );
 const PortalTicket = lazy(() => import("./Components/Portal/PortalTicket"));
+const Integrations = lazy(() => import("./Components/Pages/Integrations"));
 const ComingSoon = lazy(() => import("./Components/Pages/ComingSoon"));
 
 // Three parts:
@@ -73,9 +74,11 @@ export default function App() {
             <Route path="/automation" element={<Automation />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="/team" element={<Team />} />
+            <Route path="/integrations" element={<Integrations />} />
+            {/* The old address of this page */}
             <Route
               path="/email"
-              element={<ComingSoon title="Email Integration" />}
+              element={<Navigate to="/integrations" replace />}
             />
             <Route path="/reports" element={<Reports />} />
             <Route path="/profile" element={<Profile />} />
