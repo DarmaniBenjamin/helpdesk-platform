@@ -146,7 +146,10 @@ const CERT_PROBLEMS = {
 // checks the certificate is real and for this name. That's the honest
 // answer to "is it secure?". With Caddy, this also nudges it: the first
 // visit to a new domain is what makes Caddy fetch its certificate.
-function checkCertificate(name) {
+// ip: the address public DNS gives for the domain (what visitors get).
+// It's used instead of this server's own DNS, which can keep an old
+// answer for an hour or more after the A record changes.
+function checkCertificate(name, ip) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (result) => {
@@ -156,7 +159,7 @@ function checkCertificate(name) {
       resolve(result);
     };
     const socket = tls.connect(
-      { host: name, port: 443, servername: name, timeout: 10000 },
+      { host: ip || name, port: 443, servername: name, timeout: 10000 },
       () => {
         const cert = socket.getPeerCertificate();
         finish({
@@ -254,11 +257,9 @@ async function serverIp() {
 }
 
 async function describeOwn({ name, addedAt, fixed }, ip) {
-  const [found, certificate] = await Promise.all([
-    currentDns(name),
-    checkCertificate(name),
-  ]);
+  const found = await currentDns(name);
   const ipv4 = found.filter((r) => r.type === "A").map((r) => r.value);
+  const certificate = await checkCertificate(name, ipv4[0]);
   const dnsVerified = ip ? ipv4.includes(ip) : ipv4.length > 0;
   const host = hostPart(name);
   return {
@@ -408,10 +409,9 @@ function unwrapList(data) {
 async function describeRender(domain, target) {
   const apex = domain.domainType === "apex";
   const dnsVerified = domain.verificationStatus === "verified";
-  const [found, certificate] = await Promise.all([
-    currentDns(domain.name),
-    checkCertificate(domain.name),
-  ]);
+  const found = await currentDns(domain.name);
+  const firstIp = found.find((r) => r.type === "A")?.value;
+  const certificate = await checkCertificate(domain.name, firstIp);
   const host = apex ? "@" : hostPart(domain.name, domain.publicSuffix);
   return {
     name: domain.name,
