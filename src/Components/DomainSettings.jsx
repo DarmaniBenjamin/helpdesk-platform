@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Card from "./Card";
 import Modal from "./Modal";
-import { inputClass, primaryButton, secondaryButton } from "./formStyles";
+import { inputClass, secondaryButton } from "./formStyles";
 import { copyText } from "./copyText";
 import { api } from "../api";
 
@@ -580,6 +580,9 @@ export default function DomainSettings() {
               a free SSL certificate (https and the padlock) from Let's Encrypt
               as soon as the DNS points here, and it renews by itself.
             </p>
+            {/* Phones: the field, then a full-width button under it.
+                Bigger screens: side by side. (The button doesn't use
+                primaryButton: its flex-1 squashes it flat in a column.) */}
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 value={name}
@@ -598,7 +601,7 @@ export default function DomainSettings() {
               <button
                 type="submit"
                 disabled={adding || !name.trim()}
-                className={`${primaryButton} flex shrink-0 items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {adding ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
