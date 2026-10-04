@@ -142,7 +142,7 @@ function Alert({ tone = "error", children }) {
       className={`flex items-start gap-2 rounded-lg p-3 text-sm ${styles[tone]}`}
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="min-w-0 break-words">{children}</div>
+      <div className="min-w-0 wrap-break-word">{children}</div>
     </div>
   );
 }
