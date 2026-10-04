@@ -29,6 +29,7 @@ import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
 import { domainsRouter } from "./domains.js";
+import { startCaddySync } from "./caddy.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -232,4 +233,6 @@ app.listen(port, host, () => {
   startAutomations();
   // Every hour: an automatic backup, if one is due
   startAutomaticBackups();
+  // If Caddy is installed on this computer: give it the https settings
+  startCaddySync();
 });

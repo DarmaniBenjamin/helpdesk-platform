@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   Lock,
   RefreshCw,
+  Server,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -117,7 +118,7 @@ function Steps({ domain }) {
 }
 
 // The DNS records to add, each with copy buttons
-function DnsRecords({ domain }) {
+function DnsRecords({ domain, mode }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm">
@@ -147,11 +148,12 @@ function DnsRecords({ domain }) {
       ))}
       <p className="text-xs text-muted">
         {domain.type === "root"
-          ? "Remove any other A records and all AAAA records on @ first. "
+          ? "Remove any other A records on @ first. "
           : `Some DNS pages want the full name instead (${domain.name}). `}
+        {mode === "server" &&
+          "If you ever move to another server or provider, just change this A record to the new server's IP. "}
         DNS changes usually show up within minutes, but can take up to 24 hours.
-        If you use Cloudflare, leave the cloud grey (DNS only) until the site
-        shows Secure.
+        If you use Cloudflare, leave the cloud grey (DNS only).
       </p>
       {domain.found.length > 0 && (
         <p className="text-xs text-muted">
@@ -165,7 +167,7 @@ function DnsRecords({ domain }) {
   );
 }
 
-function DomainCard({ domain, onCheck, onRemove, checking }) {
+function DomainCard({ domain, mode, onCheck, onRemove, checking }) {
   const secure = domain.certificate.secure;
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-white p-4 transition hover:border-brand/30 sm:p-5">
@@ -181,6 +183,7 @@ function DomainCard({ domain, onCheck, onRemove, checking }) {
               : domain.type === "root"
                 ? "Root domain"
                 : "Subdomain"}
+            {domain.fixed && " · the site's main domain (SITE_DOMAIN)"}
             {domain.addedAt && ` · added ${formatDate(domain.addedAt)}`}
           </p>
         </div>
@@ -208,19 +211,23 @@ function DomainCard({ domain, onCheck, onRemove, checking }) {
             <div className="flex items-start gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                This domain has an <strong>AAAA</strong> record. Delete it in
-                your DNS settings, or the certificate can't be made.
+                This domain has an <strong>AAAA</strong> (IPv6) record.{" "}
+                {mode === "server"
+                  ? "Unless it's this server's own IPv6 address, delete it in your DNS settings, or the certificate can't be made."
+                  : "Delete it in your DNS settings, or the certificate can't be made."}
               </p>
             </div>
           )}
           {domain.dnsVerified ? (
             <p className="flex items-start gap-2 text-sm text-muted">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              The DNS is right. The certificate is being made now, which usually
-              takes a few minutes. This page checks again by itself.
+              {mode === "server"
+                ? "The DNS is right. The certificate is made the first time the domain is opened, usually within a minute. If it stays like this, check that ports 80 and 443 are open in the server's firewall."
+                : "The DNS is right. The certificate is being made now, which usually takes a few minutes."}{" "}
+              This page checks again by itself.
             </p>
           ) : (
-            <DnsRecords domain={domain} />
+            <DnsRecords domain={domain} mode={mode} />
           )}
           {domain.certificate.problem && (
             <p className="text-xs text-muted">
@@ -254,20 +261,90 @@ function DomainCard({ domain, onCheck, onRemove, checking }) {
             {checking ? "Checking…" : "Check now"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => onRemove(domain)}
-          className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm text-red-500 transition hover:border-red-300 hover:bg-red-50 active:scale-[0.97] sm:flex-none"
-        >
-          <Trash2 className="h-4 w-4" />
-          Remove
-        </button>
+        {!domain.fixed && (
+          <button
+            type="button"
+            onClick={() => onRemove(domain)}
+            className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm text-red-500 transition hover:border-red-300 hover:bg-red-50 active:scale-[0.97] sm:flex-none"
+          >
+            <Trash2 className="h-4 w-4" />
+            Remove
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// Shown until RENDER_API_KEY and RENDER_SERVICE_ID are on the server
+// On your own server: shown until Caddy (which handles https and the
+// Let's Encrypt certificates) is installed and has the helpdesk's
+// settings. Domains can still be added meanwhile.
+function SetUpServer({ caddy, serverIp }) {
+  let title = "Install Caddy on this server";
+  let body = (
+    <>
+      <p className="text-muted">
+        Caddy is the small web server that gets and renews the Let's Encrypt
+        certificates. From the project folder on this server, run:
+      </p>
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-line bg-page p-3">
+        <code className="min-w-0 truncate font-mono text-sm">
+          sudo bash deploy/install-caddy.sh
+        </code>
+        <CopyButton value="sudo bash deploy/install-caddy.sh" label="command" />
+      </div>
+      <p className="text-muted">
+        It installs Caddy and opens ports 80 and 443. The helpdesk then sets
+        Caddy up by itself within 30 seconds, and this message goes away.
+      </p>
+    </>
+  );
+  if (!caddy.managed) {
+    title = "Caddy is turned off for the helpdesk";
+    body = (
+      <p className="text-muted">
+        CADDY_ADMIN is set to off in server/.env, so the helpdesk doesn't set
+        Caddy up. Remove that line and restart the server to turn it on.
+      </p>
+    );
+  } else if (caddy.reachable && caddy.error) {
+    title = "Caddy didn't take the helpdesk's settings";
+    body = (
+      <>
+        <p className="text-muted">Caddy is installed, but answered:</p>
+        <pre className="overflow-x-auto rounded-lg border border-line bg-page p-3 text-xs">
+          {caddy.error}
+        </pre>
+      </>
+    );
+  }
+
+  return (
+    <Card title={title}>
+      <div className="flex flex-col gap-3 text-sm">
+        {body}
+        <p className="flex items-start gap-2 text-xs text-muted">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          If your cloud provider has its own firewall (Linode Cloud Firewall,
+          Google Cloud, Oracle Security List, AWS Security Group), open ports 80
+          and 443 there too.
+        </p>
+        {serverIp && (
+          <p className="flex items-center gap-2 rounded-lg border border-line bg-page p-3">
+            <Server className="h-4 w-4 shrink-0 text-muted" />
+            <span>
+              This server's public IP:{" "}
+              <span className="font-mono font-medium">{serverIp}</span>
+            </span>
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Render only: shown until RENDER_API_KEY and RENDER_SERVICE_ID are on
+// the server
 function ConnectRender({ missing, onRender }) {
   const steps = [
     {
@@ -293,9 +370,9 @@ function ConnectRender({ missing, onRender }) {
     <Card title="Connect to Render">
       <div className="flex flex-col gap-4 text-sm">
         <p className="text-muted">
-          The site runs on Render, and Render is what puts the SSL certificate
-          on your domain. Connect it once, and adding a domain here does the
-          rest.
+          The site is running on Render, and Render is what puts the SSL
+          certificate on your domain. Connect it once, and adding a domain here
+          does the rest.
         </p>
         <ol className="flex flex-col gap-3">
           {steps.map((step, i) => (
@@ -376,7 +453,8 @@ function ConfirmRemove({ domain, onConfirm, onClose }) {
 }
 
 // Settings → Domain & SSL: type in a domain, point its DNS here, and it
-// gets a free SSL certificate that renews by itself (server/src/domains.js)
+// gets a free Let's Encrypt certificate that renews by itself. On your own
+// server Caddy does it; on Render, Render does (server/src/domains.js).
 export default function DomainSettings() {
   const [info, setInfo] = useState(null); // null = loading
   const [loadError, setLoadError] = useState("");
@@ -468,15 +546,20 @@ export default function DomainSettings() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      {info.mode === "server" && !info.caddy?.configured && (
+        <SetUpServer caddy={info.caddy} serverIp={info.serverIp} />
+      )}
+
       {!info.connected ? (
         <ConnectRender missing={info.missing} onRender={info.onRender} />
       ) : (
         <Card title="Use your own domain">
           <form onSubmit={handleAdd} className="flex flex-col gap-3">
             <p className="text-sm text-muted">
-              Type the address the helpdesk should open on. It gets a free SSL
-              certificate (https and the padlock) from Let's Encrypt as soon as
-              its DNS points here, and it renews by itself.
+              Type the address the helpdesk should open on, then point its DNS
+              at {info.mode === "server" ? "this server" : "the site"}. It gets
+              a free SSL certificate (https and the padlock) from Let's Encrypt
+              as soon as the DNS points here, and it renews by itself.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -516,8 +599,9 @@ export default function DomainSettings() {
               </p>
             )}
             <p className="text-xs text-muted">
-              A root domain (yourcompany.com) gets www.yourcompany.com added
-              too, which sends visitors to the main one.
+              {info.mode === "server"
+                ? "Want www.yourcompany.com to work too? Add it as well."
+                : "A root domain (yourcompany.com) gets www.yourcompany.com added too, which sends visitors to the main one."}
             </p>
           </form>
         </Card>
@@ -536,6 +620,7 @@ export default function DomainSettings() {
             <DomainCard
               key={domain.name}
               domain={domain}
+              mode={info.mode}
               checking={checking === domain.name}
               onCheck={handleCheck}
               onRemove={setRemoving}
@@ -544,10 +629,16 @@ export default function DomainSettings() {
         </div>
       )}
 
-      {info.connected && info.target && (
+      {info.mode === "render" && info.target && (
         <p className="text-xs text-muted">
           The site also always works on{" "}
           <span className="font-mono">https://{info.target}</span>.
+        </p>
+      )}
+      {info.mode === "server" && info.caddy?.configured && info.serverIp && (
+        <p className="text-xs text-muted">
+          This server's public IP:{" "}
+          <span className="font-mono">{info.serverIp}</span>
         </p>
       )}
 

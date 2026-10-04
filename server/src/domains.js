@@ -8,15 +8,16 @@
 // 1. Your own server (a VM on Linode, Google Cloud, Oracle, AWS, your
 //    homelab...). This is the normal way. Caddy (a small web server)
 //    sits in front of this app on ports 80 and 443 and handles https.
-//    It's set up once with deploy/Caddyfile. When someone opens a
-//    domain Caddy has no certificate for yet, Caddy first asks this app
+//    deploy/install-caddy.sh installs it, and this app sets it up by
+//    itself (caddy.js). When someone opens a domain Caddy has no
+//    certificate for yet, Caddy first asks this app
 //    "is this one of ours?" (GET /api/domains/allowed?domain=...). Only
 //    domains added here (or in SITE_DOMAIN) get a yes, so nobody can make
 //    Caddy request certificates for domains that aren't yours. Caddy
 //    then gets the certificate from Let's Encrypt in a few seconds, keeps
 //    it, and renews it well before it runs out.
-//    Moving to another provider: same Caddyfile, point the A record at
-//    the new server's IP, done.
+//    Moving to another provider: install Caddy there, point the A record
+//    at the new server's IP, done.
 //
 // 2. Render (for testing). Render handles https itself in front of the
 //    app, so instead this asks Render's API to add the domain, and Render
@@ -52,6 +53,7 @@ import { settings } from "./db/schema.js";
 import { eq } from "drizzle-orm";
 import { requireRole } from "./auth.js";
 import { BadInput } from "./validate.js";
+import { syncCaddy, caddyStatus } from "./caddy.js";
 
 export const domainsRouter = Router();
 
@@ -251,23 +253,6 @@ async function serverIp() {
   return null;
 }
 
-// Is something (Caddy) listening for https on this server?
-function proxyRunning() {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: "127.0.0.1", port: 443 });
-    socket.setTimeout(1500);
-    socket.on("connect", () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.on("timeout", () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.on("error", () => resolve(false));
-  });
-}
-
 async function describeOwn({ name, addedAt, fixed }, ip) {
   const [found, certificate] = await Promise.all([
     currentDns(name),
@@ -292,9 +277,9 @@ async function describeOwn({ name, addedAt, fixed }, ip) {
 }
 
 async function listOwn() {
-  const [ip, running, saved] = await Promise.all([
+  const [ip, , saved] = await Promise.all([
     serverIp(),
-    proxyRunning(),
+    syncCaddy(), // also gives a newly installed Caddy its settings
     savedDomains(),
   ]);
   const fixed = fixedDomains();
@@ -308,7 +293,7 @@ async function listOwn() {
     connected: true,
     missing: [],
     serverIp: ip,
-    proxyRunning: running,
+    caddy: caddyStatus(),
     target: null,
     domains,
   };
@@ -461,7 +446,7 @@ async function listRender() {
     missing,
     onRender: Boolean(process.env.RENDER),
     serverIp: null,
-    proxyRunning: true,
+    caddy: null,
     target: null,
     domains: [],
   };
