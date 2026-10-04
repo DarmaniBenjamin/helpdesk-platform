@@ -50,6 +50,13 @@
       "when": 1791124124907,
       "tag": "0006_email_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791144936902,
+      "tag": "0007_message_channel",
+      "breakpoints": true
     }
   ]
 }

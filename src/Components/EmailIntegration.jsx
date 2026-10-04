@@ -868,6 +868,42 @@ export default function EmailIntegration() {
             </div>
           )}
 
+          {/* The company mailbox: replies by email from agents who don't
+              have their own mailbox go out from it */}
+          {info.mailboxes.length > 0 && (
+            <label className={labelClass}>
+              <span>
+                Company mailbox{" "}
+                <span className="font-normal text-muted">
+                  (agents without their own mailbox email customers from this)
+                </span>
+              </span>
+              <select
+                value={info.defaultMailboxId ?? ""}
+                onChange={async (e) => {
+                  try {
+                    setInfo(
+                      await api("/email/default", {
+                        method: "PUT",
+                        body: { mailboxId: e.target.value || null },
+                      }),
+                    );
+                  } catch (err) {
+                    setSignInError(err.message);
+                  }
+                }}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">None</option>
+                {info.mailboxes.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.address}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {/* Add a mailbox */}
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium">

@@ -184,6 +184,11 @@ export const messages = pgTable(
     // For history lines: what kind of change it was, e.g. "assigned" or
     // "status:closed" (see activity.js for which show in the ticket)
     eventType: text("event_type"),
+    // For replies and notes: how it reached the customer. Replies:
+    // "email" or "whatsapp". Notes: "call", "whatsapp", "onsite" or
+    // "other" (what the agent did, e.g. "Called, fixed it"). Empty for
+    // older ones and customers' own messages.
+    channel: text("channel"),
     createdAt: createdAt(),
   },
   (t) => [index("messages_ticket_idx").on(t.ticketId)],

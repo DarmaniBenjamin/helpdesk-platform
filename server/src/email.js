@@ -26,12 +26,18 @@
 //   - skipped: automatic replies ("Out of office"), mailing lists, and
 //     emails from the helpdesk's own mailboxes (so they can't loop)
 //
-// Sending: every few seconds, new replies to the customer on tickets
-// that came in by email (an agent's reply, or an automation's automatic
-// reply) are emailed to them from the same mailbox, as a reply in the
-// same email thread, with the ticket number in the subject: "Re: Printer
-// won't print [#123]". Internal notes are never emailed. (Done from here,
-// by looking for new replies, so tickets.js doesn't need to know.)
+// Sending: every few seconds, new replies to the customer are emailed
+// (done from here, by looking for new replies, so tickets.js doesn't need
+// to know). Internal notes are never emailed, and nor are replies the
+// agent sent on WhatsApp instead.
+//   - A ticket that came in by email: replies go back from the same
+//     mailbox, in the same email thread, with the ticket number in the
+//     subject: "Re: Printer won't print [#123]". Automatic replies too.
+//   - Any other ticket: only replies the agent chose to send by email,
+//     to the customer's email address, from the agent's own mailbox (the
+//     one whose new tickets go to them) or else the company's mailbox
+//     (picked in Integrations → Email). The customer's reply to that
+//     email lands back on the ticket.
 //
 //   GET    /api/email                       apps, mailboxes, agents
 //   PUT    /api/email/apps/:provider        save a sign-in app
@@ -39,6 +45,7 @@
 //   GET    /api/email/oauth/callback        where Microsoft/Google return
 //   POST   /api/email/mailboxes             add an "Other" mailbox
 //   PATCH  /api/email/mailboxes/:id         name, agent, team, on/off, password
+//   PUT    /api/email/default               { mailboxId } the company mailbox
 //   DELETE /api/email/mailboxes/:id
 //   POST   /api/email/mailboxes/:id/check   check for new emails now
 //   POST   /api/email/mailboxes/:id/test    send yourself a test email
@@ -767,11 +774,60 @@ async function newTicket({
 // Sending replies
 // ============================================================
 
+// The company mailbox (Integrations → Email: "Send other emails from")
+async function defaultMailboxId() {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "emailDefault"));
+  return row?.value?.mailboxId ?? null;
+}
+
+// Which mailbox an agent's email goes out from: their own (the switched-
+// on mailbox whose new tickets go to them), or else the company mailbox
+async function senderFor(userId) {
+  if (userId) {
+    const [own] = await db
+      .select()
+      .from(mailboxes)
+      .where(and(eq(mailboxes.assigneeId, userId), eq(mailboxes.enabled, true)))
+      .orderBy(asc(mailboxes.id))
+      .limit(1);
+    if (own) return own;
+  }
+  const id = await defaultMailboxId();
+  if (!id) return null;
+  const [box] = await db
+    .select()
+    .from(mailboxes)
+    .where(and(eq(mailboxes.id, id), eq(mailboxes.enabled, true)));
+  return box ?? null;
+}
+
+// Can this person email a customer from the helpdesk? (The ticket page
+// asks, to offer "Reply by email" on tickets that didn't come by email.)
+export async function canSendEmail(user) {
+  return Boolean(await senderFor(user.id));
+}
+
 // Emails a reply (or automatic reply) on a ticket to the customer, if
 // the ticket came in by email (see sendNewReplies below). Never throws:
 // a problem shows in the bell of the people on the ticket instead.
 async function emailReply(ticketId, messageId) {
   try {
+    const [ticket] = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, ticketId));
+    const [msg] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId));
+    if (!ticket || !msg) return;
+    // Sent on WhatsApp instead: nothing to email
+    if (msg.channel === "whatsapp") return;
+
+    // The customer's latest email on this ticket, if it came by email
     const [last] = await db
       .select()
       .from(emailMessages)
@@ -783,17 +839,11 @@ async function emailReply(ticketId, messageId) {
       )
       .orderBy(desc(emailMessages.createdAt))
       .limit(1);
-    if (!last) return; // not an email ticket
-
-    const [ticket] = await db
-      .select()
-      .from(tickets)
-      .where(eq(tickets.id, ticketId));
-    const [msg] = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.id, messageId));
-    if (!ticket || !msg) return;
+    if (!last) {
+      // Not an email ticket: only if the agent chose "by email"
+      if (msg.channel === "email") await emailFresh(ticket, msg);
+      return;
+    }
 
     const fail = (why) =>
       recordEvent({
@@ -858,6 +908,68 @@ async function emailReply(ticketId, messageId) {
   }
 }
 
+// A reply by email on a ticket that didn't come by email: a new email to
+// the customer's address, from the agent's mailbox or the company's.
+// Their reply to it comes back to this ticket (its Message-ID is kept).
+async function emailFresh(ticket, msg) {
+  const fail = (why) =>
+    recordEvent({
+      ticket,
+      actor: { id: null, name: "Email" },
+      type: "emailFailed",
+      body: `couldn't send this reply by email: ${why}`,
+    });
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, ticket.customerId));
+  const to = customer?.email;
+  if (!to) return fail("the customer has no email address.");
+  const box = await senderFor(msg.authorId);
+  if (!box)
+    return fail(
+      "there's no mailbox to send from. Connect one in Integrations → Email.",
+    );
+
+  const domain = box.address.split("@")[1] || "helpdesk";
+  const newId = `<ticket-${ticket.id}-${msg.id}-${crypto.randomBytes(4).toString("hex")}@${domain}>`;
+  // Earlier emails we sent on this ticket, so it stays one conversation
+  const thread = (
+    await db
+      .select({ id: emailMessages.messageId })
+      .from(emailMessages)
+      .where(eq(emailMessages.ticketId, ticket.id))
+      .orderBy(asc(emailMessages.createdAt))
+  ).map((r) => r.id);
+  const subject = `${thread.length ? "Re: " : ""}${ticket.subject.replace(/\s*\[#\d+\]\s*$/, "")} [#${ticket.id}]`;
+  try {
+    const auth = await authFor(box);
+    await smtpTransport(box, auth).sendMail({
+      from: {
+        name: msg.authorId ? msg.authorName : box.name || box.address,
+        address: box.address,
+      },
+      to,
+      subject,
+      text: msg.body,
+      messageId: newId,
+      ...(thread.length
+        ? { inReplyTo: thread.at(-1), references: thread.slice(-10) }
+        : {}),
+      attachments: await filesToSend(msg.id),
+    });
+  } catch (err) {
+    return fail(explain(err, box));
+  }
+  await db.insert(emailMessages).values({
+    messageId: newId,
+    ticketId: ticket.id,
+    mailboxId: box.id,
+    direction: "out",
+    address: to,
+  });
+}
+
 // New replies to email: looks for agents' (and automations') replies
 // saved since last time, on tickets that came in by email, and emails
 // them. Where it got to is kept in the settings table, so a restart
@@ -885,7 +997,9 @@ async function sendNewReplies() {
         and(
           eq(messages.kind, "agent"),
           sql`${messages.id} > ${after}`,
-          sql`exists (select 1 from ${emailMessages} where ${emailMessages.ticketId} = ${messages.ticketId} and ${emailMessages.direction} = 'in')`,
+          // Chosen "by email", or on a ticket that came by email (and not
+          // sent on WhatsApp instead)
+          sql`(${messages.channel} = 'email' or (${messages.channel} is null and exists (select 1 from ${emailMessages} where ${emailMessages.ticketId} = ${messages.ticketId} and ${emailMessages.direction} = 'in')))`,
         ),
       )
       .orderBy(asc(messages.id))
@@ -1051,6 +1165,7 @@ async function overview() {
       },
     },
     mailboxes: boxes.map(publicMailbox),
+    defaultMailboxId: await defaultMailboxId(),
     agents,
     teams,
   };
@@ -1168,6 +1283,19 @@ emailRouter.post("/oauth/start", async (req, res) => {
     ...PROVIDERS[provider].extra,
   });
   res.json({ url: url.toString() });
+});
+
+// The company mailbox: emails that aren't from a particular agent's own
+// mailbox go out from it (replies by email, and later invites etc.)
+emailRouter.put("/default", async (req, res) => {
+  const id = req.body?.mailboxId ? Number(req.body.mailboxId) : null;
+  if (id) await findMailbox(id);
+  const value = { mailboxId: id };
+  await db
+    .insert(settings)
+    .values({ key: "emailDefault", value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  res.json(await overview());
 });
 
 // Add an "Other" mailbox: email address and password

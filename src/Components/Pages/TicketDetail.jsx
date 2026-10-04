@@ -18,6 +18,8 @@ import {
   Tag,
   LoaderCircle,
   MonitorSmartphone,
+  MessageCircle,
+  MapPin,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -63,8 +65,21 @@ function answerLink(answer) {
 const SOURCES = {
   email: "Email",
   portal: "Customer portal",
+  website: "Website form",
   phone: "Phone",
   agent: "Created by an agent",
+};
+
+// How a reply or note reached the customer (see "channel" on messages)
+const AGENT_CHANNEL_LABEL = {
+  email: "Emailed",
+  whatsapp: "Sent on WhatsApp",
+};
+const NOTE_CHANNEL_LABEL = {
+  call: "Called",
+  whatsapp: "On WhatsApp",
+  onsite: "On site",
+  other: "Other",
 };
 
 // One entry in the conversation. `onDelete` is only given for internal
@@ -102,8 +117,8 @@ function Message({ message, onDelete }) {
             {message.kind === "customer"
               ? "Customer"
               : message.kind === "agent"
-                ? "Replied"
-                : "Internal note"}
+                ? (AGENT_CHANNEL_LABEL[message.channel] ?? "Replied")
+                : `Internal note${NOTE_CHANNEL_LABEL[message.channel] ? ` · ${NOTE_CHANNEL_LABEL[message.channel]}` : ""}`}
             {" · "}
             <span title={formatDate(message.at)}>{timeAgo(message.at)}</span>
           </p>
@@ -168,42 +183,104 @@ function Message({ message, onDelete }) {
   );
 }
 
-// One line above the reply box saying where it goes: by email, in the
-// customer portal, or (when neither) that the customer won't see it yet.
-// Notes: only the team.
-function ReplyGoesTo({ ticket, isNote }) {
-  const first = ticket.requester.name.split(" ")[0];
-  let tone = "text-muted";
-  let Icon = Lock;
-  let text = "Only your team sees notes.";
-  if (!isNote) {
-    if (ticket.emailTo) {
-      Icon = Mail;
-      text = `Emailed to ${ticket.emailTo}, in the same email thread.`;
-    } else if (ticket.portalAccess) {
-      Icon = MonitorSmartphone;
-      text = `Shows in ${first}'s customer portal.`;
-    } else if (ticket.messages) {
-      Icon = TriangleAlert;
-      tone = "text-amber-700";
-      text = `${first} won't see this yet: they don't have a portal account and this ticket didn't come by email. Call them, or invite them to the portal from their customer page.`;
-    } else {
-      return null; // still loading
-    }
-  }
+// WhatsApp's free "click to chat" link for a phone number. Numbers are
+// kept as typed (e.g. "473-555-1234" or "+1 473 555 1234"); WhatsApp
+// wants the full international number, digits only. Grenada numbers
+// typed without the country code (7 digits, or 10 starting 473) get
+// "1 473" added.
+function whatsappLink(phone, text = "") {
+  let digits = String(phone ?? "").replace(/\D/g, "");
+  if (digits.length === 7) digits = `1473${digits}`;
+  else if (digits.length === 10 && digits.startsWith("473"))
+    digits = `1${digits}`;
+  if (digits.length < 8) return null;
+  return `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+}
+
+// The ways to answer, in the reply box
+const REPLY_WAYS = {
+  email: { label: "Email", icon: Mail },
+  whatsapp: { label: "WhatsApp", icon: MessageCircle },
+  portal: { label: "Portal", icon: MonitorSmartphone },
+  note: { label: "Note", icon: Lock },
+};
+
+// For notes: what the agent did (shown on the note)
+const NOTE_CHANNELS = [
+  { id: "call", label: "Call", icon: Phone },
+  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { id: "onsite", label: "On site", icon: MapPin },
+  { id: "", label: "Just a note", icon: Lock },
+];
+
+// Which ways can reach this customer, and which to start on: how the
+// ticket came in (email), else WhatsApp (how customers usually reach
+// you), else email, else a note
+function replyWays(ticket) {
+  const customer = ticket.requester;
+  const email =
+    Boolean(ticket.emailTo) || Boolean(customer.email && ticket.emailReady);
+  const whatsapp = Boolean(whatsappLink(customer.phone));
+  const ways = { email, whatsapp, portal: false, note: true };
+  // Only a portal login to reach them: replies show there
+  if (!email && !whatsapp && ticket.portalAccess) ways.portal = true;
+  const start = ticket.emailTo
+    ? "email"
+    : whatsapp
+      ? "whatsapp"
+      : email
+        ? "email"
+        : ways.portal
+          ? "portal"
+          : "note";
+  return { ways, start };
+}
+
+// Why a way can't be used, for its tooltip
+function whyNot(way, ticket) {
+  const customer = ticket.requester;
+  if (way === "email")
+    return customer.email
+      ? "No mailbox to send from yet: connect one in Integrations → Email."
+      : "No email address on this customer.";
+  if (way === "whatsapp") return "No phone number on this customer.";
+  return "";
+}
+
+// One line above the reply box saying where it goes
+function ReplyGoesTo({ ticket, way }) {
+  const customer = ticket.requester;
+  const first = customer.name.split(" ")[0];
+  const lines = {
+    email: ticket.emailTo
+      ? `Emailed to ${ticket.emailTo}, in the same email thread.`
+      : `Emailed to ${customer.email}. Their reply comes back to this ticket.`,
+    whatsapp: `Opens WhatsApp with this ready to send to ${customer.phone}. Tap send there.`,
+    portal: `Shows in ${first}'s customer portal.`,
+    note: "Only your team sees notes. Say how you reached them, if you did.",
+  };
+  const Icon = REPLY_WAYS[way].icon;
   return (
-    <p
-      className={`flex items-start gap-2 border-b border-line px-4 py-2 text-xs ${tone}`}
-    >
+    <p className="flex items-start gap-2 border-b border-line px-4 py-2 text-xs text-muted">
       <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span>{text}</span>
+      <span>
+        {lines[way]}
+        {way !== "note" &&
+          way !== "portal" &&
+          ticket.portalAccess &&
+          " It also shows in their customer portal."}
+      </span>
     </p>
   );
 }
 
-// The box at the bottom for writing a reply or a note
+// The box at the bottom for answering the customer or writing a note
 function Composer({ ticket, onSend }) {
-  const [kind, setKind] = useState("agent"); // "agent" = reply to customer, "note" = internal
+  const { ways, start } = replyWays(ticket);
+  // null = the best way for this ticket (worked out above)
+  const [chosen, setChosen] = useState(null);
+  const way = chosen && ways[chosen] ? chosen : start;
+  const [noteChannel, setNoteChannel] = useState("");
   const [body, setBody] = useState("");
   const [thenStatus, setThenStatus] = useState(""); // "" = keep the current status
 
@@ -222,23 +299,35 @@ function Composer({ ticket, onSend }) {
   const canSend =
     (body.trim() || attach.files.length > 0) && !attach.uploading && !sending;
 
+  const isNote = way === "note";
+
   // Saves to the database. What you wrote is only cleared once it's
   // saved, so nothing is lost if it doesn't go through.
   async function send() {
     if (!canSend) return;
     setSending(true);
     setSendError("");
+    // WhatsApp: open it now, straight from the click (browsers block
+    // pop-ups that open later), with the message ready to send
+    if (way === "whatsapp")
+      window.open(
+        whatsappLink(ticket.requester.phone, body.trim()),
+        "_blank",
+        "noopener",
+      );
     try {
       await onSend(
-        kind,
+        isNote ? "note" : "agent",
         body.trim(),
         thenStatus || null,
-        kind === "note" && saveToAnswers && Boolean(body.trim()),
+        isNote && saveToAnswers && Boolean(body.trim()),
         attach.ids,
+        isNote ? noteChannel || null : way === "portal" ? null : way,
       );
       setBody("");
       setThenStatus("");
       setSaveChoice(null);
+      setNoteChannel("");
       attach.clear();
     } catch (err) {
       setSendError(err.message);
@@ -247,34 +336,67 @@ function Composer({ ticket, onSend }) {
     }
   }
 
-  const isNote = kind === "note";
+  const sendLabel = {
+    email: "Send email",
+    whatsapp: "Send on WhatsApp",
+    portal: "Send reply",
+    note: "Add note",
+  }[way];
 
   return (
     <div
       className={`rounded-xl border bg-white ${isNote ? "border-amber-300" : "border-line"}`}
     >
-      <div className="flex border-b border-line text-sm">
-        {[
-          { id: "agent", label: "Reply to customer" },
-          { id: "note", label: "Internal note" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setKind(tab.id)}
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 px-4 py-3 transition sm:flex-none ${
-              kind === tab.id
-                ? `border-b-2 font-medium ${tab.id === "note" ? "border-amber-500 text-amber-700" : "border-brand text-brand"}`
-                : "text-muted hover:text-ink"
-            }`}
-          >
-            {tab.id === "note" && <Lock className="h-3.5 w-3.5" />}
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 text-sm">
+        <span className="hidden shrink-0 px-2 text-xs text-muted sm:inline">
+          Reply by
+        </span>
+        {Object.entries(REPLY_WAYS)
+          .filter(([id]) => id !== "portal" || ways.portal)
+          .map(([id, { label, icon: Icon }]) => {
+            const active = way === id;
+            const usable = ways[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => usable && setChosen(id)}
+                disabled={!usable}
+                title={usable ? "" : whyNot(id, ticket)}
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 px-3 py-3 transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  active
+                    ? `border-b-2 font-medium ${id === "note" ? "border-amber-500 text-amber-700" : "border-brand text-brand"}`
+                    : "border-b-2 border-transparent text-muted hover:text-ink"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
       </div>
 
-      <ReplyGoesTo ticket={ticket} isNote={isNote} />
+      <ReplyGoesTo ticket={ticket} way={way} />
+
+      {isNote && (
+        <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-2">
+          {NOTE_CHANNELS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id || "none"}
+              type="button"
+              onClick={() => setNoteChannel(id)}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition active:scale-[0.97] ${
+                noteChannel === id
+                  ? "border-amber-400 bg-amber-100 font-medium text-amber-800"
+                  : "border-line text-muted hover:border-amber-300 hover:text-ink"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <textarea
         value={body}
@@ -304,7 +426,11 @@ function Composer({ ticket, onSend }) {
         rows={4}
         placeholder={
           isNote
-            ? "Write a note for your team. The customer won't see it."
+            ? noteChannel === "call"
+              ? "What was said on the call?"
+              : noteChannel === "onsite"
+                ? "What was done on site?"
+                : "Write a note for your team. The customer won't see it."
             : `Write your reply to ${ticket.requester.name.split(" ")[0]}...`
         }
         className={`block w-full resize-y border-0 px-4 py-3 text-base placeholder:text-muted focus:outline-none sm:text-sm ${
@@ -315,6 +441,12 @@ function Composer({ ticket, onSend }) {
       {(attach.files.length > 0 || attach.uploading > 0 || attach.error) && (
         <div className="border-t border-line px-4 py-3">
           <AttachmentChips attach={attach} />
+          {way === "whatsapp" && attach.files.length > 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              Files can't go through the WhatsApp link: they're saved on the
+              ticket, so attach them in WhatsApp too.
+            </p>
+          )}
         </div>
       )}
 
@@ -359,7 +491,7 @@ function Composer({ ticket, onSend }) {
           }`}
         >
           <Send className="h-4 w-4" />
-          {sending ? "Sending…" : isNote ? "Add note" : "Send reply"}
+          {sending ? "Sending…" : sendLabel}
         </button>
       </div>
       {sendError && (
@@ -372,7 +504,7 @@ function Composer({ ticket, onSend }) {
 }
 
 // Who the ticket is for, in one line under the title: their name (opens
-// their page), business, buttons to call or email them, and how many
+// their page), business, buttons to call, WhatsApp or email them, and how many
 // other tickets of theirs are still open (also opens their page, where
 // they're listed)
 function CustomerLine({ customer, otherOpen }) {
@@ -404,6 +536,18 @@ function CustomerLine({ customer, otherOpen }) {
             className={iconLink}
           >
             <Phone className="h-4 w-4" />
+          </a>
+        )}
+        {whatsappLink(customer.phone) && (
+          <a
+            href={whatsappLink(customer.phone)}
+            target="_blank"
+            rel="noreferrer"
+            title={`WhatsApp ${customer.phone}`}
+            aria-label={`WhatsApp ${customer.name}`}
+            className={iconLink}
+          >
+            <MessageCircle className="h-4 w-4" />
           </a>
         )}
         {customer.email ? (
@@ -725,8 +869,15 @@ export default function TicketDetail() {
 
   // Sends a reply or note to the server (throws if it doesn't save, so
   // the reply box can keep what was written)
-  async function handleSend(kind, body, status, saveToAnswers, attachmentIds) {
-    await addMessage(ticket.id, kind, body, status, attachmentIds);
+  async function handleSend(
+    kind,
+    body,
+    status,
+    saveToAnswers,
+    attachmentIds,
+    channel,
+  ) {
+    await addMessage(ticket.id, kind, body, status, attachmentIds, channel);
     if (saveToAnswers) {
       // The ticket's subject becomes the title, the ticket's description the problem,
       // and the note the fix. Keywords are picked from all three.

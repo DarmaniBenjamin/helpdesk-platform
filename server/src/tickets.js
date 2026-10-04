@@ -36,6 +36,7 @@ import {
   filesOfMessage,
   removeFiles,
 } from "./attachments.js";
+import { canSendEmail } from "./email.js";
 
 export const ticketsRouter = Router();
 
@@ -139,6 +140,7 @@ async function loadTickets(where, viewer, { withMessages = true } = {}) {
       // Who wrote it (staff only), so the page knows who can delete a note
       ...(isStaff(viewer) ? { authorId: m.authorId } : {}),
       body: m.body,
+      channel: m.channel ?? null,
       at: ms(m.createdAt),
       attachments: files[m.id] ?? [],
     });
@@ -180,6 +182,8 @@ async function loadTickets(where, viewer, { withMessages = true } = {}) {
       );
     portalAccess = new Set(portalUsers.map((u) => u.customerId));
   }
+  // Is there a mailbox to email replies from? (email.js)
+  const emailReady = isStaff(viewer) ? await canSendEmail(viewer) : false;
 
   return rows.map((row) => ({
     ...shapeTicket(row),
@@ -188,6 +192,7 @@ async function loadTickets(where, viewer, { withMessages = true } = {}) {
       ? {
           emailTo: emailTo[row.ticket.id] ?? null,
           portalAccess: portalAccess.has(row.ticket.customerId),
+          emailReady: emailReady || Boolean(emailTo[row.ticket.id]),
         }
       : {}),
   }));
@@ -555,6 +560,20 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
   res.json(await loadTicket(ticket.id, req.user));
 });
 
+// How a reply or note reached the customer. Replies: "email" (emailed
+// by email.js) or "whatsapp" (the agent sent it from WhatsApp); empty =
+// shown in the customer portal only. Notes: what the agent did.
+const CHANNELS = {
+  agent: ["email", "whatsapp"],
+  note: ["call", "whatsapp", "onsite", "other"],
+};
+function cleanChannel(kind, value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (!CHANNELS[kind]?.includes(value))
+    throw new BadInput("That way of reaching the customer isn't valid.");
+  return value;
+}
+
 // Add to the conversation: a reply to the customer ("agent") or an
 // internal note ("note") from staff, or a reply from the customer.
 // Staff can change the status at the same time ("Then set status").
@@ -572,6 +591,8 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const kind = staff ? String(req.body?.kind) : "customer";
   if (staff && kind !== "agent" && kind !== "note")
     throw new BadInput("That kind of message isn't valid.");
+  // How it reached the customer (see "channel" in db/schema.js)
+  const channel = staff ? cleanChannel(kind, req.body?.channel) : null;
   if (!staff && ticket.status === "closed")
     throw new BadInput("This request is closed. Send a new one instead.");
 
@@ -600,6 +621,7 @@ ticketsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       authorId: req.user.id,
       authorName: req.user.name,
       body,
+      channel,
       createdAt: now,
     },
   ];

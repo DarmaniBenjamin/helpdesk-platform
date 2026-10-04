@@ -860,11 +860,27 @@ export default function DataProvider({ children }) {
   // Add a reply ("agent") or internal note ("note"), and optionally change
   // the status at the same time. Customers' replies are always "customer".
   // attachmentIds: files already uploaded (see useAttachments.js)
-  async function addMessage(id, kind, body, newStatus, attachmentIds = []) {
+  // channel: how it reached the customer (staff only): "email" or
+  // "whatsapp" for replies; "call", "whatsapp", "onsite" or "other" for
+  // notes. See server/src/tickets.js.
+  async function addMessage(
+    id,
+    kind,
+    body,
+    newStatus,
+    attachmentIds = [],
+    channel = null,
+  ) {
     return showTicket(
       await api(`/tickets/${id}/messages`, {
         method: "POST",
-        body: { kind, body, status: newStatus || undefined, attachmentIds },
+        body: {
+          kind,
+          body,
+          status: newStatus || undefined,
+          attachmentIds,
+          channel: channel || undefined,
+        },
       }),
     );
   }
