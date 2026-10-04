@@ -79,7 +79,7 @@ export default function DataProvider({ children }) {
     setTeam(teamList);
     setDepartments(departmentList);
     setCustomers(customerList);
-    setTickets(ticketList);
+    takeTicketList(ticketList);
     setAnswers(answerList);
     setRules(ruleList);
     setAutomations(automationList);
@@ -187,7 +187,7 @@ export default function DataProvider({ children }) {
             .then(setNotifications)
             .catch(() => {});
         api("/tickets")
-          .then(setTickets)
+          .then(takeTicketList)
           .catch(() => {});
       }
       connectedBefore = true;
@@ -258,7 +258,7 @@ export default function DataProvider({ children }) {
               }),
           );
         } else {
-          later("tickets", () => api("/tickets").then(setTickets));
+          later("tickets", () => api("/tickets").then(takeTicketList));
         }
         break;
       }
@@ -286,7 +286,7 @@ export default function DataProvider({ children }) {
           Promise.all([api("/customers"), api("/tickets")]).then(
             ([customerList, ticketList]) => {
               setCustomers(customerList);
-              setTickets(ticketList);
+              takeTicketList(ticketList);
             },
           ),
         );
@@ -552,7 +552,7 @@ export default function DataProvider({ children }) {
       api("/tickets"),
     ]);
     setCustomers(customerList);
-    setTickets(ticketList);
+    takeTicketList(ticketList);
     return totals;
   }
 
@@ -617,7 +617,7 @@ export default function DataProvider({ children }) {
     await api(`/team/${id}`, { method: "DELETE" });
     setTeam((list) => list.filter((m) => m.id !== id));
     if (member?.status === "active" && member.role !== "customer") {
-      setTickets(await api("/tickets"));
+      takeTicketList(await api("/tickets"));
     }
   }
 
@@ -785,6 +785,30 @@ export default function DataProvider({ children }) {
   // whole updated ticket to show. If the server says no, these throw an
   // error with its message.
 
+  // The list of every ticket, from the server. For staff it has no
+  // conversations (they come when a ticket is opened, see
+  // loadConversation), so a conversation already loaded is kept if the
+  // ticket hasn't changed since.
+  function takeTicketList(list) {
+    setTickets((before) => {
+      const loaded = new Map(
+        before.filter((t) => t.messages).map((t) => [t.id, t]),
+      );
+      return list.map((t) => {
+        const old = loaded.get(t.id);
+        return !t.messages && old?.updatedAt === t.updatedAt
+          ? { ...t, ...old }
+          : t;
+      });
+    });
+  }
+
+  // Loads one ticket with its whole conversation (the ticket page asks
+  // for it when it's opened)
+  function loadConversation(id) {
+    return api(`/tickets/${id}`).then(showTicket);
+  }
+
   // Puts the server's copy of a ticket on screen
   function showTicket(ticket) {
     setTickets(
@@ -892,6 +916,7 @@ export default function DataProvider({ children }) {
     <DataContext.Provider
       value={{
         tickets,
+        loadConversation,
         customers,
         addTicket,
         updateTicket,

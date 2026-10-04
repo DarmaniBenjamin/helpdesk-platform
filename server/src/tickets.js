@@ -15,6 +15,7 @@ import {
   customers,
   departments,
   users,
+  emailMessages,
 } from "./db/schema.js";
 import { requireAuth, requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
@@ -71,7 +72,15 @@ function publicCustomer(c) {
 
 // Loads tickets with their customer, conversation and reviewer, shaped
 // the way the pages expect. Customers never get notes or history lines.
-async function loadTickets(where, viewer) {
+//
+// withMessages: false is for the staff's list of every ticket. With
+// thousands of tickets (e.g. after the Freshdesk import), sending every
+// conversation each time the app opens would be far too much, so the
+// list has no conversations ("messages: null") and a shortened
+// description; a ticket's conversation comes when it's opened
+// (GET /api/tickets/:id). Instead, each ticket in the list says who
+// finished it (Ticket Review uses that).
+async function loadTickets(where, viewer, { withMessages = true } = {}) {
   const rows = await db
     .select({ ticket: tickets, customer: customers, reviewer: users.name })
     .from(tickets)
@@ -80,16 +89,38 @@ async function loadTickets(where, viewer) {
     .where(where)
     .orderBy(desc(tickets.createdAt));
   if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.ticket.id);
+
+  if (!withMessages) {
+    // Who last set each ticket to Resolved or Closed (history lines)
+    const finished = await db
+      .select({ ticketId: messages.ticketId, author: messages.authorName })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.kind, "event"),
+          inArray(messages.eventType, ["status:resolved", "status:closed"]),
+        ),
+      )
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const closedBy = {};
+    for (const f of finished) closedBy[f.ticketId] = f.author;
+    return rows.map((row) => ({
+      ...shapeTicket(row),
+      // Long ones (e.g. a whole email) are cut short in the list
+      description:
+        row.ticket.description.length > 1000
+          ? `${row.ticket.description.slice(0, 1000)}…`
+          : row.ticket.description,
+      messages: null,
+      closedBy: closedBy[row.ticket.id] ?? null,
+    }));
+  }
 
   const allMessages = await db
     .select()
     .from(messages)
-    .where(
-      inArray(
-        messages.ticketId,
-        rows.map((r) => r.ticket.id),
-      ),
-    )
+    .where(inArray(messages.ticketId, ids))
     .orderBy(asc(messages.createdAt), asc(messages.id));
   // Customers never see notes or history lines. Staff get the history
   // too (Ticket Review uses it), but the ticket page doesn't show it:
@@ -113,7 +144,58 @@ async function loadTickets(where, viewer) {
     });
   }
 
-  return rows.map(({ ticket: t, customer, reviewer }) => ({
+  // For staff: where a reply to the customer goes, so the reply box can
+  // say so. emailTo = the address their latest email came from (replies
+  // are emailed there, see email.js); portalAccess = they can sign in to
+  // the customer portal and see it there.
+  const emailTo = {};
+  let portalAccess = new Set();
+  if (isStaff(viewer)) {
+    const emails = await db
+      .select({
+        ticketId: emailMessages.ticketId,
+        address: emailMessages.address,
+      })
+      .from(emailMessages)
+      .where(
+        and(
+          inArray(emailMessages.ticketId, ids),
+          eq(emailMessages.direction, "in"),
+        ),
+      )
+      .orderBy(asc(emailMessages.createdAt));
+    for (const e of emails) emailTo[e.ticketId] = e.address;
+    const portalUsers = await db
+      .select({ customerId: users.customerId })
+      .from(users)
+      .where(
+        and(
+          inArray(
+            users.customerId,
+            rows.map((r) => r.ticket.customerId),
+          ),
+          eq(users.role, "customer"),
+          eq(users.status, "active"),
+        ),
+      );
+    portalAccess = new Set(portalUsers.map((u) => u.customerId));
+  }
+
+  return rows.map((row) => ({
+    ...shapeTicket(row),
+    messages: byTicket[row.ticket.id] ?? [],
+    ...(isStaff(viewer)
+      ? {
+          emailTo: emailTo[row.ticket.id] ?? null,
+          portalAccess: portalAccess.has(row.ticket.customerId),
+        }
+      : {}),
+  }));
+}
+
+// One ticket row, shaped the way the pages expect (no conversation)
+function shapeTicket({ ticket: t, customer, reviewer }) {
+  return {
     id: t.id,
     subject: t.subject,
     description: t.description,
@@ -140,8 +222,7 @@ async function loadTickets(where, viewer) {
         }
       : null,
     review: t.reviewedAt ? { by: reviewer ?? "", at: ms(t.reviewedAt) } : null,
-    messages: byTicket[t.id] ?? [],
-  }));
+  };
 }
 
 async function loadTicket(id, viewer) {
@@ -282,7 +363,9 @@ async function cleanAssignee(value) {
 // Every ticket for staff; only their own for a customer
 ticketsRouter.get("/", requireAuth, async (req, res) => {
   if (isStaff(req.user))
-    return res.json(await loadTickets(undefined, req.user));
+    return res.json(
+      await loadTickets(undefined, req.user, { withMessages: false }),
+    );
   if (!req.user.customerId) return res.json([]);
   res.json(
     await loadTickets(eq(tickets.customerId, req.user.customerId), req.user),

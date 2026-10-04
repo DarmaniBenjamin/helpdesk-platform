@@ -47,15 +47,22 @@ function formatDuration(ms) {
 
 // Who finished the ticket: whoever last set it to Resolved or Closed,
 // or else the person it was assigned to
+// (The list of tickets says who, as closedBy. A ticket that's been
+// opened also has its conversation, with the history lines in it.)
 function closedBy(ticket) {
-  const event = [...ticket.messages]
+  const event = [...(ticket.messages ?? [])]
     .reverse()
     .find(
       (m) =>
         m.kind === "event" &&
         /changed status to (Resolved|Closed)/.test(m.body),
     );
-  return event?.author ?? findAgent(ticket.assignee)?.name ?? "Unknown";
+  return (
+    event?.author ??
+    ticket.closedBy ??
+    findAgent(ticket.assignee)?.name ??
+    "Unknown"
+  );
 }
 
 function isStale(ticket, now) {

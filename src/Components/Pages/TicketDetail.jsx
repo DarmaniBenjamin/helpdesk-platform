@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
@@ -16,6 +16,8 @@ import {
   Trash2,
   Hand,
   Tag,
+  LoaderCircle,
+  MonitorSmartphone,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -166,6 +168,39 @@ function Message({ message, onDelete }) {
   );
 }
 
+// One line above the reply box saying where it goes: by email, in the
+// customer portal, or (when neither) that the customer won't see it yet.
+// Notes: only the team.
+function ReplyGoesTo({ ticket, isNote }) {
+  const first = ticket.requester.name.split(" ")[0];
+  let tone = "text-muted";
+  let Icon = Lock;
+  let text = "Only your team sees notes.";
+  if (!isNote) {
+    if (ticket.emailTo) {
+      Icon = Mail;
+      text = `Emailed to ${ticket.emailTo}, in the same email thread.`;
+    } else if (ticket.portalAccess) {
+      Icon = MonitorSmartphone;
+      text = `Shows in ${first}'s customer portal.`;
+    } else if (ticket.messages) {
+      Icon = TriangleAlert;
+      tone = "text-amber-700";
+      text = `${first} won't see this yet: they don't have a portal account and this ticket didn't come by email. Call them, or invite them to the portal from their customer page.`;
+    } else {
+      return null; // still loading
+    }
+  }
+  return (
+    <p
+      className={`flex items-start gap-2 border-b border-line px-4 py-2 text-xs ${tone}`}
+    >
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{text}</span>
+    </p>
+  );
+}
+
 // The box at the bottom for writing a reply or a note
 function Composer({ ticket, onSend }) {
   const [kind, setKind] = useState("agent"); // "agent" = reply to customer, "note" = internal
@@ -238,6 +273,8 @@ function Composer({ ticket, onSend }) {
           </button>
         ))}
       </div>
+
+      <ReplyGoesTo ticket={ticket} isNote={isNote} />
 
       <textarea
         value={body}
@@ -618,6 +655,7 @@ export default function TicketDetail() {
     deleteNote,
     answers,
     addAnswer,
+    loadConversation,
   } = useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
   // A message if a change (status, assignee...) didn't save
@@ -626,6 +664,23 @@ export default function TicketDetail() {
   const [deleting, setDeleting] = useState(false); // the "are you sure?" box
 
   const ticket = tickets.find((t) => t.id === Number(id));
+  // The list of tickets has no conversations (too much to send for
+  // thousands of tickets), so it's loaded when the ticket is opened
+  const needsConversation = Boolean(ticket) && !ticket.messages;
+  const [loadError, setLoadError] = useState("");
+  // Which ticket it was asked for, so it's only asked once
+  const asked = useRef(null);
+  useEffect(() => {
+    // Loaded: forget, so it's asked again if the list ever drops it
+    // (e.g. reloaded after reconnecting, with the ticket changed)
+    if (!needsConversation) {
+      asked.current = null;
+      return;
+    }
+    if (asked.current === id) return;
+    asked.current = id;
+    loadConversation(Number(id)).catch((err) => setLoadError(err.message));
+  }, [needsConversation, id, loadConversation]);
 
   // Go back to wherever you came from (Inbox, a customer, the dashboard...)
   function goBack() {
@@ -820,8 +875,20 @@ export default function TicketDetail() {
         <section className="flex min-w-0 flex-col gap-4 lg:order-1">
           {/* Only the messages and notes. Changes (status, assigned,
               priority...) aren't shown here: they go to the bell. */}
+          {!ticket.messages && (
+            <p className="flex items-center gap-2 rounded-xl border border-line bg-white p-4 text-sm text-muted">
+              {loadError ? (
+                <span className="text-red-500">{loadError}</span>
+              ) : (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Loading the conversation…
+                </>
+              )}
+            </p>
+          )}
           <ul className="flex flex-col gap-3">
-            {ticket.messages
+            {(ticket.messages ?? [])
               .filter((m) => m.kind !== "event")
               .map((m) => (
                 <Message
