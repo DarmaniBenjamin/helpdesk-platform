@@ -21,10 +21,20 @@
 //     added to that ticket, which reopens if it was waiting/resolved
 //     (a closed ticket gets a new one instead, like the portal)
 //   - otherwise: a new ticket (source "email") for the customer with that
-//     address (made if new), given to the mailbox's agent and/or team
+//     address, given to the mailbox's agent and/or team. But first, not
+//     every email should be a ticket ("we've updated our terms"):
+//       - from a sender or domain on the "always ignore" list: dropped
+//       - looks like a newsletter or automatic notice (mailing-list
+//         headers, noreply@ senders...): waits in Email review
+//       - from someone who isn't a customer on file, when the mailbox
+//         only takes customers (the default): waits in Email review
+//       - from a sender or domain on the "always allow" list: always a
+//         ticket (e.g. the phone system's voicemail emails)
+//     Email review (the review routes below) lists what's waiting: make
+//     tickets of the right ones, ignore the rest, many at once.
 //   - attachments come too (photos, documents, voicemail audio...)
-//   - skipped: automatic replies ("Out of office"), mailing lists, and
-//     emails from the helpdesk's own mailboxes (so they can't loop)
+//   - skipped: automatic replies ("Out of office"), and emails from the
+//     helpdesk's own mailboxes (so they can't loop)
 //
 // Sending: every few seconds, new replies to the customer are emailed
 // (done from here, by looking for new replies, so tickets.js doesn't need
@@ -51,6 +61,11 @@
 //   DELETE /api/email/mailboxes/:id
 //   POST   /api/email/mailboxes/:id/check   check for new emails now
 //   POST   /api/email/mailboxes/:id/test    send yourself a test email
+//   PUT    /api/email/filters               the always ignore/allow lists
+// And Email review, for all staff:
+//   GET    /api/email-review                emails waiting for a decision
+//   POST   /api/email-review/accept         { ids } make them tickets
+//   POST   /api/email-review/ignore         { ids, always } drop them
 // All for Admins and the Super Admin (the "integrations" permission).
 import { Router } from "express";
 import crypto from "node:crypto";
@@ -66,6 +81,7 @@ import {
   customers,
   departments,
   emailMessages,
+  heldEmails,
   mailboxes,
   messages,
   settings,
@@ -73,6 +89,7 @@ import {
   users,
 } from "./db/schema.js";
 import { requireRole } from "./auth.js";
+import { STAFF } from "./permissions.js";
 import { BadInput } from "./validate.js";
 import { seal, unseal, LockedSecret } from "./secrets.js";
 import { UPLOAD_DIR, MAX_FILE_SIZE } from "./attachments.js";
@@ -87,6 +104,7 @@ import {
 import { sendToEveryone } from "./live.js";
 
 export const emailRouter = Router();
+export const reviewRouter = Router();
 
 const HOUR = 60 * 60 * 1000;
 const CHECK_EVERY = 60 * 1000;
@@ -329,6 +347,7 @@ async function checkAll() {
       .where(eq(mailboxes.enabled, true))
       .orderBy(asc(mailboxes.id));
     for (const box of boxes) await checkMailbox(box);
+    await clearOldHeld();
   } finally {
     checking = false;
   }
@@ -410,21 +429,111 @@ async function checkMailboxNow(id) {
   }
 }
 
-// Automatic emails that shouldn't become tickets
-function isAutomatic(parsed) {
+// Automatic replies ("Out of office"): never wanted, not even in review
+function isAutoReply(parsed) {
   const h = parsed.headers;
   const autoSubmitted = String(h.get("auto-submitted") ?? "").toLowerCase();
   const precedence = String(h.get("precedence") ?? "").toLowerCase();
   return (
     autoSubmitted === "auto-replied" ||
-    ["bulk", "list", "junk", "auto_reply"].includes(precedence) ||
+    precedence === "auto_reply" ||
     h.has("x-autoreply") ||
     h.has("x-autorespond") ||
-    h.has("list-unsubscribe") ||
     /^(auto(matic)? ?reply|out of (the )?office|automatische antwort)/i.test(
       parsed.subject ?? "",
     )
   );
+}
+
+// Newsletters, marketing and automatic notices ("We've updated our
+// terms", "Your invoice is ready"): sent to many people by a system,
+// which shows in their headers or sender
+const BULK_HEADERS = [
+  "list-unsubscribe",
+  "list-id",
+  "feedback-id",
+  "x-campaign",
+  "x-campaign-id",
+  "x-mailchimp-campaign",
+  "x-mc-user",
+  "x-sg-eid",
+  "x-ses-outgoing",
+  "x-mailgun-sid",
+  "x-marketo-id",
+  "x-hubspot-email",
+  "x-sfmc-stack",
+  "x-mailer-sid",
+];
+function looksBulk(parsed, address) {
+  const h = parsed.headers;
+  const autoSubmitted = String(h.get("auto-submitted") ?? "no").toLowerCase();
+  const precedence = String(h.get("precedence") ?? "").toLowerCase();
+  return (
+    autoSubmitted !== "no" ||
+    ["bulk", "list", "junk"].includes(precedence) ||
+    BULK_HEADERS.some((name) => h.has(name)) ||
+    // mailparser gathers the List-* headers (List-Unsubscribe, List-Id)
+    // into one "list" header
+    h.has("list") ||
+    /^(no-?reply|do-?not-?reply|notifications?|notify|newsletters?|news|marketing|info|updates?|alerts?|mailer-daemon|postmaster|bounces?)[@+.-]/i.test(
+      address,
+    )
+  );
+}
+
+// The "always ignore" and "always allow" lists (Integrations → Email):
+// { ignore: { senders: [], domains: [] }, allow: { senders: [], domains: [] } }
+async function emailFilters() {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "emailFilters"));
+  const v = row?.value ?? {};
+  return {
+    ignore: { senders: [], domains: [], ...v.ignore },
+    allow: { senders: [], domains: [], ...v.allow },
+  };
+}
+const onList = (list, address) =>
+  list.senders.includes(address) ||
+  list.domains.includes(address.split("@")[1] ?? "");
+
+// The customer with this email (main or extra), or nobody
+async function findCustomer(address) {
+  const [found] = await db
+    .select()
+    .from(customers)
+    .where(
+      or(
+        eq(customers.email, address),
+        sql`${address} = any(${customers.extraEmails})`,
+      ),
+    )
+    .limit(1);
+  return found ?? null;
+}
+
+// Puts an email in Email review instead of making a ticket of it
+async function holdEmail(box, source, parsed, { messageId, address, reason }) {
+  const folder = path.join(UPLOAD_DIR, "held");
+  await fs.promises.mkdir(folder, { recursive: true });
+  const rawFile = `${crypto.randomUUID()}.eml`;
+  await fs.promises.writeFile(path.join(folder, rawFile), source);
+  await db
+    .insert(heldEmails)
+    .values({
+      mailboxId: box.id,
+      messageId,
+      fromAddress: address,
+      fromName: (parsed.from?.value?.[0]?.name ?? "").slice(0, 100),
+      subject: (parsed.subject || "(no subject)").slice(0, 200),
+      snippet: (parsed.text || "").replace(/\s+/g, " ").trim().slice(0, 200),
+      reason,
+      rawFile,
+      receivedAt: parsed.date ?? new Date(),
+    })
+    .onConflictDoNothing();
+  sendToEveryone("changed", { resource: "heldEmails" });
 }
 
 // Only the new part of a reply: the quoted earlier email is cut off
@@ -449,8 +558,9 @@ const idsIn = (value) =>
     .map((v) => String(v).trim())
     .filter(Boolean);
 
-// One email that arrived in a mailbox
-async function receiveEmail(box, source) {
+// One email that arrived in a mailbox. force: make it a ticket even if
+// it would wait in Email review (someone chose "Make ticket" there).
+async function receiveEmail(box, source, { force = false } = {}) {
   const parsed = await simpleParser(source);
   const from = parsed.from?.value?.[0];
   const address = String(from?.address ?? "")
@@ -466,13 +576,20 @@ async function receiveEmail(box, source) {
     .from(emailMessages)
     .where(eq(emailMessages.messageId, messageId));
   if (seen) return;
+  if (!force) {
+    const [held] = await db
+      .select({ id: heldEmails.id })
+      .from(heldEmails)
+      .where(eq(heldEmails.messageId, messageId));
+    if (held) return; // already waiting in Email review
+  }
 
-  // From one of our own mailboxes, or automatic: skip
+  // From one of our own mailboxes, or an automatic reply: skip
   const ours = await db
     .select({ address: mailboxes.address })
     .from(mailboxes)
     .where(eq(mailboxes.address, address));
-  if (ours.length || isAutomatic(parsed)) return;
+  if (ours.length || isAutoReply(parsed)) return;
 
   const name = (from.name || address.split("@")[0]).trim().slice(0, 100);
   const subject = (parsed.subject || "(no subject)").trim().slice(0, 200);
@@ -491,8 +608,8 @@ async function receiveEmail(box, source) {
       .limit(1);
     ticket = row?.ticket ?? null;
   }
-  const customer = await customerFor(address, name);
-  if (!ticket) {
+  let customer = await findCustomer(address);
+  if (!ticket && customer) {
     // [#123] in the subject, from that ticket's own customer
     const number = Number(subject.match(/\[#(\d+)\]/)?.[1]);
     if (number) {
@@ -506,6 +623,22 @@ async function receiveEmail(box, source) {
     }
   }
   if (ticket?.status === "closed") ticket = null; // like the portal: a new one
+
+  // A new ticket: is this an email that should be one? (see the top)
+  if (!ticket && !force) {
+    const filters = await emailFilters();
+    if (onList(filters.ignore, address)) return;
+    if (!onList(filters.allow, address)) {
+      const reason = looksBulk(parsed, address)
+        ? "bulk"
+        : box.newTicketsFrom !== "anyone" && !customer
+          ? "unknown"
+          : null;
+      if (reason)
+        return holdEmail(box, source, parsed, { messageId, address, reason });
+    }
+  }
+  customer ??= await customerFor(address, name);
 
   const now = new Date();
   if (ticket) {
@@ -1289,6 +1422,7 @@ function publicMailbox(b) {
     assigneeId: b.assigneeId,
     departmentId: b.departmentId,
     enabled: b.enabled,
+    newTicketsFrom: b.newTicketsFrom,
     lastCheckedAt: b.lastCheckedAt ? b.lastCheckedAt.getTime() : null,
     lastError: b.lastError,
   };
@@ -1329,6 +1463,7 @@ async function overview() {
     feedbackEmail: (await feedbackSetting())?.enabled !== false,
     // Which new tickets get a "we got your request" email
     confirmations: await confirmSettings(),
+    filters: await emailFilters(),
     agents,
     teams,
   };
@@ -1456,6 +1591,38 @@ async function feedbackSetting() {
   return row?.value;
 }
 
+// The always ignore / always allow lists: email addresses ("senders")
+// and whole domains ("domains"), e.g. { ignore: { senders: [...],
+// domains: [...] }, allow: {...} }
+emailRouter.put("/filters", async (req, res) => {
+  const clean = (list) =>
+    [
+      ...new Set(
+        (Array.isArray(list) ? list : [])
+          .map((v) =>
+            String(v ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/^@/, ""),
+          )
+          .filter((v) => /^[^\s@]+(@[^\s@]+)?$/.test(v) && v.length <= 254),
+      ),
+    ].slice(0, 500);
+  const pick = (part) => ({
+    senders: clean(part?.senders).filter((v) => v.includes("@")),
+    domains: clean(part?.domains).filter((v) => !v.includes("@")),
+  });
+  const value = {
+    ignore: pick(req.body?.ignore),
+    allow: pick(req.body?.allow),
+  };
+  await db
+    .insert(settings)
+    .values({ key: "emailFilters", value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  res.json(await overview());
+});
+
 // Which new tickets get a "we got your request" email, by how they came
 // in: { email, portal, website } (all on to start with)
 emailRouter.put("/confirmations", async (req, res) => {
@@ -1537,6 +1704,8 @@ emailRouter.patch("/mailboxes/:id", async (req, res) => {
       .trim()
       .slice(0, 100);
   if ("enabled" in b) changes.enabled = Boolean(b.enabled);
+  if ("newTicketsFrom" in b)
+    changes.newTicketsFrom = b.newTicketsFrom === "anyone" ? "anyone" : "known";
   if ("assigneeId" in b) {
     changes.assigneeId = b.assigneeId || null;
     if (changes.assigneeId) {
@@ -1602,6 +1771,123 @@ emailRouter.post("/mailboxes/:id/test", async (req, res) => {
     throw new BadInput(`Sending didn't work: ${explain(err, box)}`);
   }
   res.json({ ok: true, to: req.user.email });
+});
+
+// ============================================================
+// Email review: emails waiting for someone to decide (all staff)
+// ============================================================
+
+reviewRouter.use(requireRole(...STAFF));
+
+const HELD_DIR = () => path.join(UPLOAD_DIR, "held");
+
+async function heldList() {
+  const rows = await db
+    .select()
+    .from(heldEmails)
+    .orderBy(desc(heldEmails.receivedAt))
+    .limit(500);
+  return rows.map((h) => ({
+    id: h.id,
+    from: h.fromAddress,
+    name: h.fromName,
+    subject: h.subject,
+    snippet: h.snippet,
+    reason: h.reason,
+    at: h.receivedAt.getTime(),
+  }));
+}
+
+async function forgetHeld(rows) {
+  if (!rows.length) return;
+  await db.delete(heldEmails).where(
+    inArray(
+      heldEmails.id,
+      rows.map((r) => r.id),
+    ),
+  );
+  for (const r of rows)
+    await fs.promises.unlink(path.join(HELD_DIR(), r.rawFile)).catch(() => {});
+  sendToEveryone("changed", { resource: "heldEmails" });
+}
+
+// After 30 days, waiting emails are cleared out (checked every minute
+// with the mailboxes)
+async function clearOldHeld() {
+  const old = await db
+    .select()
+    .from(heldEmails)
+    .where(sql`${heldEmails.receivedAt} < now() - interval '30 days'`)
+    .limit(200);
+  await forgetHeld(old);
+}
+
+const cleanIds = (ids) =>
+  (Array.isArray(ids) ? ids : [])
+    .map(Number)
+    .filter(Number.isInteger)
+    .slice(0, 500);
+
+reviewRouter.get("/", async (req, res) => {
+  res.json(await heldList());
+});
+
+// Make tickets of them, exactly as if they'd come in normally (with
+// their attachments, assigned by their mailbox's settings)
+reviewRouter.post("/accept", async (req, res) => {
+  const ids = cleanIds(req.body?.ids);
+  const rows = ids.length
+    ? await db.select().from(heldEmails).where(inArray(heldEmails.id, ids))
+    : [];
+  let made = 0;
+  const done = [];
+  for (const row of rows) {
+    let [box] = row.mailboxId
+      ? await db.select().from(mailboxes).where(eq(mailboxes.id, row.mailboxId))
+      : [];
+    box ??= (await db.select().from(mailboxes).limit(1))[0];
+    try {
+      const source = await fs.promises.readFile(
+        path.join(HELD_DIR(), row.rawFile),
+      );
+      if (box) {
+        await receiveEmail(box, source, { force: true });
+        made++;
+      }
+    } catch (err) {
+      console.error(`Email review #${row.id}:`, err.message);
+    }
+    done.push(row);
+  }
+  await forgetHeld(done);
+  res.json({ made, held: await heldList() });
+});
+
+// Drop them. always: "sender" or "domain" also puts those senders (or
+// their whole domains) on the always-ignore list, and drops anything
+// else waiting from them
+reviewRouter.post("/ignore", async (req, res) => {
+  const ids = cleanIds(req.body?.ids);
+  let rows = ids.length
+    ? await db.select().from(heldEmails).where(inArray(heldEmails.id, ids))
+    : [];
+  const always = req.body?.always;
+  if (always === "sender" || always === "domain") {
+    const filters = await emailFilters();
+    const key = always === "sender" ? "senders" : "domains";
+    const values = rows.map((r) =>
+      always === "sender" ? r.fromAddress : r.fromAddress.split("@")[1],
+    );
+    filters.ignore[key] = [...new Set([...filters.ignore[key], ...values])];
+    await db
+      .insert(settings)
+      .values({ key: "emailFilters", value: filters })
+      .onConflictDoUpdate({ target: settings.key, set: { value: filters } });
+    const all = await db.select().from(heldEmails);
+    rows = all.filter((r) => onList(filters.ignore, r.fromAddress));
+  }
+  await forgetHeld(rows);
+  res.json({ held: await heldList() });
 });
 
 // ============================================================

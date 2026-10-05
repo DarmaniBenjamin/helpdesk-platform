@@ -7,7 +7,7 @@
 //   history lines. They can send requests, reply, mark a ticket fixed,
 //   and rate it once it's finished.
 import { Router } from "express";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import {
   tickets,
@@ -791,8 +791,19 @@ ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
   const fileKeys = await filesOfTicket(ticket.id);
   await db.delete(tickets).where(eq(tickets.id, ticket.id));
   removeFiles(fileKeys);
+  await resetTicketNumbers();
   res.json({ ok: true });
 });
+
+// After deleting tickets: the next new ticket gets the number after the
+// highest one left. Deleting the newest ticket (#3) means the next one is
+// #3 again. A number in the middle (#2 of #1-#3) isn't reused, so no
+// customer's old emails or links ever point at someone else's ticket.
+export async function resetTicketNumbers() {
+  await db.execute(
+    sql`select setval(pg_get_serial_sequence('tickets', 'id'), coalesce((select max(id) from tickets), 0) + 1, false)`,
+  );
+}
 
 // Used when someone leaves the team: their unfinished tickets become
 // unassigned, with a record on each saying why

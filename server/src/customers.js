@@ -234,5 +234,9 @@ customersRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
     await tx.delete(customers).where(eq(customers.id, customer.id));
   });
   removeFiles(fileKeys);
+  // The next new ticket number follows the highest one left (tickets.js)
+  await db.execute(
+    sql`select setval(pg_get_serial_sequence('tickets', 'id'), coalesce((select max(id) from tickets), 0) + 1, false)`,
+  );
   res.json({ ok: true, tickets: theirTickets.length });
 });

@@ -5,12 +5,12 @@ import {
   ChevronDown,
   CircleCheck,
   Copy,
-  LoaderCircle,
   Mail,
   RefreshCw,
   Send,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import Modal from "./Modal";
 import { copyText } from "./copyText";
@@ -21,6 +21,7 @@ import {
   secondaryButton,
 } from "./formStyles";
 import { api } from "../api";
+import Droplets from "./Droplets";
 
 // Integrations → Email: connect mailboxes, so customers' emails become
 // tickets and replies go back by email (server/src/email.js).
@@ -264,6 +265,21 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
             className={inputClass}
           />
         </label>
+        <label className={`${labelClass} sm:col-span-3`}>
+          <span>Who can open a new ticket by emailing</span>
+          <select
+            value={box.newTicketsFrom ?? "known"}
+            onChange={(e) => save({ newTicketsFrom: e.target.value })}
+            className={selectClass}
+          >
+            <option value="known">
+              Customers already on file (anyone else waits in Email review)
+            </option>
+            <option value="anyone">
+              Anyone (newsletters and notices still wait in Email review)
+            </option>
+          </select>
+        </label>
       </div>
 
       {message && <Alert tone={message.tone}>{message.text}</Alert>}
@@ -287,9 +303,11 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
           }
           className={`${secondaryButton} flex items-center justify-center gap-2 disabled:opacity-60`}
         >
-          <RefreshCw
-            className={`h-4 w-4 ${busy === "check" ? "animate-spin" : ""}`}
-          />
+          {busy === "check" ? (
+            <Droplets className="h-4 w-4" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
           Check now
         </button>
         <button
@@ -306,7 +324,7 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
           className={`${secondaryButton} flex items-center justify-center gap-2 disabled:opacity-60`}
         >
           {busy === "test" ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <Droplets className="h-4 w-4" />
           ) : (
             <Send className="h-4 w-4" />
           )}
@@ -488,7 +506,7 @@ function OtherMailbox({ onClose, onAdded }) {
             }
             className={`${primaryButton} flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy && <Droplets className="h-4 w-4" />}
             {busy ? "Connecting…" : "Connect"}
           </button>
         </>
@@ -756,6 +774,124 @@ function AppSetup({ provider, app, redirectUri, onSaved }) {
   );
 }
 
+// ---------- Always ignore / always allow ----------
+
+// Email addresses and whole domains: "Always ignore" never makes tickets
+// (or even shows them in Email review); "Always allow" always makes
+// tickets, skipping the checks (e.g. the phone system's voicemail emails)
+function EmailFilters({ filters, onSaved }) {
+  const [adding, setAdding] = useState({ ignore: "", allow: "" });
+  const [error, setError] = useState("");
+
+  async function save(next) {
+    setError("");
+    try {
+      onSaved(await api("/email/filters", { method: "PUT", body: next }));
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  }
+
+  function add(list) {
+    const value = adding[list].trim().toLowerCase().replace(/^@/, "");
+    if (!value) return;
+    const key = value.includes("@") ? "senders" : "domains";
+    const next = structuredClone(filters);
+    next[list][key] = [...new Set([...next[list][key], value])];
+    save(next).then((ok) => ok && setAdding((a) => ({ ...a, [list]: "" })));
+  }
+
+  function remove(list, key, value) {
+    const next = structuredClone(filters);
+    next[list][key] = next[list][key].filter((v) => v !== value);
+    save(next);
+  }
+
+  const lists = [
+    {
+      id: "ignore",
+      title: "Always ignore",
+      hint: "Never a ticket, and not shown in Email review.",
+    },
+    {
+      id: "allow",
+      title: "Always allow",
+      hint: "Always a ticket, even if it looks automatic (e.g. voicemail emails from your phone system).",
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-line p-3 text-sm">
+      <p>
+        <span className="font-medium">Email filters</span>
+        <span className="block text-muted">
+          New emails that look like newsletters or notices, or come from someone
+          who isn't a customer, wait in Email review (a banner in the Inbox).
+          These lists decide for good: an email address, or a whole domain like
+          example.com.
+        </span>
+      </p>
+      {lists.map(({ id, title, hint }) => {
+        const entries = [
+          ...filters[id].senders.map((v) => ["senders", v]),
+          ...filters[id].domains.map((v) => ["domains", v]),
+        ];
+        return (
+          <div key={id} className="flex flex-col gap-2">
+            <p className="font-medium">
+              {title} <span className="font-normal text-muted">· {hint}</span>
+            </p>
+            {entries.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {entries.map(([key, value]) => (
+                  <span
+                    key={value}
+                    className="inline-flex items-center gap-1 rounded-full border border-line bg-page py-0.5 pl-2.5 pr-1 text-xs"
+                  >
+                    {key === "domains" ? `@${value}` : value}
+                    <button
+                      type="button"
+                      onClick={() => remove(id, key, value)}
+                      aria-label={`Remove ${value}`}
+                      className="cursor-pointer rounded-full p-0.5 text-muted hover:bg-line hover:text-ink"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                add(id);
+              }}
+              className="flex gap-2"
+            >
+              <input
+                value={adding[id]}
+                onChange={(e) =>
+                  setAdding((a) => ({ ...a, [id]: e.target.value }))
+                }
+                placeholder="name@company.com or company.com"
+                autoCapitalize="none"
+                spellCheck="false"
+                className={inputClass}
+              />
+              <button type="submit" className={secondaryButton}>
+                Add
+              </button>
+            </form>
+          </div>
+        );
+      })}
+      {error && <p className="text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 // ---------- The whole section ----------
 
 export default function EmailIntegration() {
@@ -846,7 +982,7 @@ export default function EmailIntegration() {
       {loadError && <Alert>{loadError}</Alert>}
       {!info && !loadError && (
         <p className="flex items-center gap-2 text-sm text-muted">
-          <LoaderCircle className="h-4 w-4 animate-spin" />
+          <Droplets className="h-4 w-4" />
           Loading…
         </p>
       )}
@@ -902,6 +1038,11 @@ export default function EmailIntegration() {
                 ))}
               </select>
             </label>
+          )}
+
+          {/* Always ignore / always allow (server/src/email.js) */}
+          {info.mailboxes.length > 0 && (
+            <EmailFilters filters={info.filters} onSaved={setInfo} />
           )}
 
           {/* "We got your request" when a ticket is created (email.js) */}
@@ -1004,9 +1145,7 @@ export default function EmailIntegration() {
                   }
                   className={`${secondaryButton} flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  {starting === provider && (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  )}
+                  {starting === provider && <Droplets className="h-4 w-4" />}
                   Sign in with {PROVIDER_LABEL[provider]}
                 </button>
               ))}

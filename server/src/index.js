@@ -31,7 +31,7 @@ import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
 import { domainsRouter, seedSiteDomains } from "./domains.js";
 import { startCaddySync } from "./caddy.js";
-import { emailRouter, startEmailChecks } from "./email.js";
+import { emailRouter, reviewRouter, startEmailChecks } from "./email.js";
 import {
   feedbackRouter,
   passwordRouter,
@@ -190,6 +190,7 @@ app.use("/api/sla", slaRouter); // SLA targets (changed by Admins)
 app.use("/api/requests", requestsRouter); // the public request form (no sign-in)
 app.use("/api/domains", domainsRouter); // own domain + SSL (Super Admin; Caddy asks /allowed)
 app.use("/api/email", emailRouter); // Integrations → Email (Admins)
+app.use("/api/email-review", reviewRouter); // emails waiting for a decision (staff)
 app.use("/api/password", passwordRouter); // "forgot password" (no sign-in)
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)

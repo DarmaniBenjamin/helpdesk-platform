@@ -197,18 +197,20 @@ export async function rememberSite(req) {
 }
 
 // The link in the email: the ticket number and a signature, so it only
-// works for that ticket (secrets.js)
-const feedbackToken = (ticketId) =>
-  `${ticketId}.${sign(`feedback:${ticketId}`)}`;
+// works for that ticket (secrets.js). The signature includes when the
+// ticket was made, so if a deleted ticket's number is used again, old
+// links don't open the new ticket.
+const signFor = (ticket) =>
+  sign(`feedback:${ticket.id}:${ticket.createdAt.getTime()}`);
+const feedbackToken = (ticket) => `${ticket.id}.${signFor(ticket)}`;
 
-function ticketFromToken(token) {
-  const [id, signature = ""] = String(token).split(".");
-  const expected = sign(`feedback:${Number(id)}`);
+function checkToken(token, ticket) {
+  const signature = String(token).split(".")[1] ?? "";
+  const expected = signFor(ticket);
   const ok =
     signature.length === expected.length &&
     crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  if (!ok || !Number(id)) throw new BadInput("This link doesn't work.", 404);
-  return Number(id);
+  if (!ok) throw new BadInput("This link doesn't work.", 404);
 }
 
 // Every minute: tickets resolved (or closed) since feedback emails were
@@ -260,7 +262,7 @@ async function askForFeedback() {
           `Your request #${ticket.id} ("${ticket.subject}") has been resolved.`,
           "",
           "How did we do? Rating us takes a few seconds:",
-          `${site}/feedback/${feedbackToken(ticket.id)}`,
+          `${site}/feedback/${feedbackToken(ticket)}`,
           "",
           "Still not fixed? Just reply to this email and we'll pick it up again.",
         ].join("\n"),
@@ -292,13 +294,16 @@ export function startFeedbackEmails() {
 export const feedbackRouter = Router();
 
 async function ticketForFeedback(token) {
-  const id = ticketFromToken(token);
+  const id = Number(String(token).split(".")[0]);
+  if (!Number.isInteger(id) || id < 1)
+    throw new BadInput("This link doesn't work.", 404);
   const [row] = await db
     .select({ ticket: tickets, customer: customers })
     .from(tickets)
     .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(eq(tickets.id, id));
   if (!row) throw new BadInput("This link doesn't work.", 404);
+  checkToken(token, row.ticket);
   return row;
 }
 

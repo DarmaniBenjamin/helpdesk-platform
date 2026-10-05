@@ -53,6 +53,7 @@ const TABLES = [
   "users",
   "user_departments",
   "mailboxes",
+  "held_emails",
   "tickets",
   "messages",
   "attachments",
@@ -67,6 +68,7 @@ const TABLES = [
 // carries on after the highest one
 const COUNTED = [
   "mailboxes",
+  "held_emails",
   "customers",
   "tickets",
   "messages",

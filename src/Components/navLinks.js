@@ -85,6 +85,7 @@ export function getPageTitle(pathname) {
     return `Ticket #${pathname.split("/")[2]}`;
   if (pathname.startsWith("/customers/")) return "Customer";
   if (pathname === "/profile") return "My profile";
+  if (pathname === "/email-review") return "Email review";
   if (pathname === "/login") return "Login";
   return "Page not found";
 }

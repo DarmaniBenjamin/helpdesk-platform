@@ -364,6 +364,9 @@ export const mailboxes = pgTable("mailboxes", {
     onDelete: "set null",
   }),
   enabled: boolean("enabled").notNull().default(true),
+  // Who can open a new ticket by emailing it: "known" = only customers
+  // already on file (anyone else waits in Email review), "anyone"
+  newTicketsFrom: text("new_tickets_from").notNull().default("known"),
   // Where reading got to: emails after this one are new
   uidValidity: text("uid_validity"),
   lastUid: bigint("last_uid", { mode: "number" }).notNull().default(0),
@@ -390,6 +393,32 @@ export const emailMessages = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("email_messages_ticket_idx").on(t.ticketId)],
+);
+
+// Emails that would have opened a new ticket but look like they shouldn't
+// (a newsletter, an automatic notice, or someone who isn't a customer):
+// they wait in Email review until someone makes them a ticket or ignores
+// them. The email itself is kept as a file (rawFile, in the uploads
+// folder's "held" folder) so it can still become a ticket with its
+// attachments. Cleared after 30 days.
+export const heldEmails = pgTable(
+  "held_emails",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    mailboxId: integer("mailbox_id").references(() => mailboxes.id, {
+      onDelete: "cascade",
+    }),
+    messageId: text("message_id").notNull().unique(),
+    fromAddress: text("from_address").notNull(),
+    fromName: text("from_name").notNull().default(""),
+    subject: text("subject").notNull().default(""),
+    snippet: text("snippet").notNull().default(""),
+    reason: text("reason").notNull(), // "unknown" (not a customer) or "bulk"
+    rawFile: text("raw_file").notNull(),
+    receivedAt: time("received_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("held_emails_received_idx").on(t.receivedAt)],
 );
 
 // ---------- Settings, sign-in sessions and invites ----------

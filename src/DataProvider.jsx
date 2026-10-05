@@ -38,6 +38,8 @@ export default function DataProvider({ children }) {
   const [departments, setDepartments] = useState([]);
   // The bell: your latest notifications, newest first (staff only)
   const [notifications, setNotifications] = useState([]);
+  // How many emails wait in Email review (server/src/email.js)
+  const [heldCount, setHeldCount] = useState(0);
   // Who's on which page right now: [{ userId, path, since }]
   const [presence, setPresence] = useState([]);
   // SLA targets per priority, in hours (from the server)
@@ -160,6 +162,16 @@ export default function DataProvider({ children }) {
   const navigate = useNavigate();
   const connectionId = useRef(null);
   const isStaff = Boolean(me && me.role !== "customer");
+
+  // Emails waiting in Email review: counted for the Inbox's banner
+  function loadHeldCount() {
+    return api("/email-review")
+      .then((list) => setHeldCount(list.length))
+      .catch(() => {});
+  }
+  useEffect(() => {
+    if (isStaff) loadHeldCount();
+  }, [isStaff, me?.id]);
 
   // Tell the server which page this tab is on
   function reportPage(path) {
@@ -315,6 +327,9 @@ export default function DataProvider({ children }) {
       case "settings":
         if (role === "owner")
           later("settings", () => api("/settings").then(setSettings));
+        break;
+      case "heldEmails":
+        if (role !== "customer") later("heldEmails", loadHeldCount);
         break;
       case "backup":
         // A restore replaced everything: start fresh
@@ -948,6 +963,8 @@ export default function DataProvider({ children }) {
       value={{
         tickets,
         loadConversation,
+        heldCount,
+        setHeldCount,
         customers,
         addTicket,
         updateTicket,

@@ -1,6 +1,12 @@
 import { useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { Search, SlidersHorizontal, X, Inbox as InboxIcon } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import {
+  Search,
+  SlidersHorizontal,
+  X,
+  Inbox as InboxIcon,
+  MailQuestion,
+} from "lucide-react";
 import StatusBadge from "../StatusBadge";
 import PriorityBadge from "../PriorityBadge";
 import DueLabel from "../DueLabel";
@@ -87,7 +93,7 @@ function AssigneeLabel({ id }) {
 
 export default function Inbox() {
   const navigate = useNavigate();
-  const { tickets } = useData();
+  const { tickets, heldCount } = useData();
 
   // The search lives in the URL (?search=...), so the top bar search can send you here
   const [searchParams, setSearchParams] = useSearchParams();
@@ -172,6 +178,24 @@ export default function Inbox() {
           )}
         </p>
       </div>
+
+      {/* Emails that didn't become tickets by themselves (EmailReview.jsx) */}
+      {heldCount > 0 && (
+        <Link
+          to="/email-review"
+          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 transition hover:bg-amber-100"
+        >
+          <MailQuestion className="h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            <strong>
+              {heldCount} email{heldCount === 1 ? "" : "s"}
+            </strong>{" "}
+            waiting for review: newsletters, notices, or people who aren't
+            customers yet. Make tickets of the right ones.
+          </span>
+          <span className="shrink-0 font-medium">Review</span>
+        </Link>
+      )}
 
       {/* Status tabs: scroll sideways on small screens */}
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
