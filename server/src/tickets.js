@@ -36,7 +36,8 @@ import {
   filesOfMessage,
   removeFiles,
 } from "./attachments.js";
-import { canSendEmail } from "./email.js";
+import { canSendEmail, confirmNewTicket } from "./email.js";
+import { siteAddress } from "./notices.js";
 
 export const ticketsRouter = Router();
 
@@ -475,7 +476,26 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
   // Assignment rules and "A new ticket is created" automations
   await afterTicketEvent(created.id, "created");
   onTicketCreated(created, authorName, req.user);
-  res.status(201).json(await loadTicket(created.id, req.user));
+  // "We got your request #123" to the customer (email.js). From the
+  // portal: when switched on in Integrations → Email. Made by the team:
+  // only if "Email them a confirmation" was ticked in Add Ticket.
+  const source = req.user.role === "customer" ? "portal" : "agent";
+  let confirmation = null;
+  if (source === "portal" || req.body?.confirm) {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, created.customerId));
+    confirmation = await confirmNewTicket({
+      ticket: created,
+      customer,
+      source,
+      site: siteAddress(req),
+    });
+  }
+  res
+    .status(201)
+    .json({ ...(await loadTicket(created.id, req.user)), confirmation });
 });
 
 // Change a ticket's status, priority, department, assignee or due date.

@@ -904,6 +904,52 @@ export default function EmailIntegration() {
             </label>
           )}
 
+          {/* "We got your request" when a ticket is created (email.js) */}
+          {info.mailboxes.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-line p-3 text-sm">
+              <p>
+                <span className="font-medium">
+                  Email customers when a ticket is created
+                </span>
+                <span className="block text-muted">
+                  "We got your request #123", from the company mailbox (or, for
+                  emails, from the mailbox it came in on). Their reply comes
+                  back to the ticket. Tickets the team creates have their own
+                  tick box in Add Ticket.
+                </span>
+              </p>
+              {[
+                ["email", "When they email in (a reply in their thread)"],
+                ["portal", "When they send a request in the customer portal"],
+                ["website", "When they use the website form"],
+              ].map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-start gap-3"
+                >
+                  <input
+                    type="checkbox"
+                    checked={info.confirmations[key]}
+                    onChange={async (e) => {
+                      try {
+                        setInfo(
+                          await api("/email/confirmations", {
+                            method: "PUT",
+                            body: { [key]: e.target.checked },
+                          }),
+                        );
+                      } catch (err) {
+                        setSignInError(err.message);
+                      }
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
           {/* "How did we do?" emails (server/src/notices.js) */}
           {info.mailboxes.length > 0 && (
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3 text-sm">

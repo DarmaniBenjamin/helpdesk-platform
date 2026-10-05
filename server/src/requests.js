@@ -24,7 +24,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import { customers, messages, tickets } from "./db/schema.js";
 import { BadInput, cleanEmail, cleanText } from "./validate.js";
-import { emailRequestReceived } from "./notices.js";
+import { confirmNewTicket } from "./email.js";
 import { getSla } from "./sla.js";
 import { recordEvent } from "./activity.js";
 import { afterTicketEvent } from "./automation.js";
@@ -162,13 +162,8 @@ requestsRouter.post("/", async (req, res) => {
   });
 
   // "We got your request #123" to them, from the company mailbox (if
-  // there is one; see notices.js). Their reply to it lands on the ticket.
-  emailRequestReceived(req, {
-    name,
-    email,
-    ticketId: ticket.id,
-    subject: ticket.subject,
-  }).catch(() => {});
+  // there is one; see email.js). Their reply to it lands on the ticket.
+  confirmNewTicket({ ticket, customer, source: "website" }).catch(() => {});
 
   res.status(201).json({ ok: true, ticketId: ticket.id });
 });

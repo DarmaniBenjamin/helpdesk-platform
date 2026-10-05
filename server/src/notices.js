@@ -2,7 +2,7 @@
 // (Integrations → Email, see email.js):
 //   - invites: to new team members and to customers given the portal
 //   - "forgot password": a link to choose a new password
-//   - "we got your request": to whoever sends the website form
+//   ("we got your request" when a ticket is created: email.js)
 //   - "how did we do?": when a ticket is resolved, a link to rate it
 //     with 1-5 stars, no sign-in needed (can be switched off in
 //     Integrations → Email)
@@ -64,25 +64,6 @@ export function emailInvite(req, user, token) {
       link,
       "",
       "The link works once, for 7 days.",
-    ].join("\n"),
-  });
-}
-
-// ---------- Website form: "we got your request" ----------
-
-export function emailRequestReceived(req, { name, email, ticketId, subject }) {
-  return sendSystemEmail({
-    to: email,
-    ticketId,
-    subject: `We got your request: ${subject} [#${ticketId}]`,
-    text: [
-      `Hi ${name.split(" ")[0]},`,
-      "",
-      `Thanks for getting in touch. Your request is number #${ticketId}, and our team will get back to you soon.`,
-      "",
-      `Your request: ${subject}`,
-      "",
-      "If you need to add anything, just reply to this email.",
     ].join("\n"),
   });
 }

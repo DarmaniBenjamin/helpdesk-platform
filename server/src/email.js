@@ -47,6 +47,7 @@
 //   PATCH  /api/email/mailboxes/:id         name, agent, team, on/off, password
 //   PUT    /api/email/default               { mailboxId } the company mailbox
 //   PUT    /api/email/feedback              { enabled } "how did we do?" emails
+//   PUT    /api/email/confirmations         which new tickets get "we got it"
 //   DELETE /api/email/mailboxes/:id
 //   POST   /api/email/mailboxes/:id/check   check for new emails now
 //   POST   /api/email/mailboxes/:id/test    send yourself a test email
@@ -764,6 +765,15 @@ async function newTicket({
   onTicketCreated(ticket, name, { id: null });
   if (assigneeId)
     onTicketAssigned(ticket, assigneeId, { id: null, name: box.address });
+  // "We got your email, it's request #123", in the same email thread
+  // (only for real customer emails: automatic ones were skipped above)
+  confirmNewTicket({
+    ticket,
+    customer,
+    source: "email",
+    inReplyTo: parsed.messageId,
+    mailbox: box,
+  }).catch(() => {});
   sendToEveryone("changed", {
     resource: "tickets",
     id: ticket.id,
@@ -816,8 +826,20 @@ export async function canSendEmail(user) {
 // returns { sent: true }, or { sent: false, why } in plain words, so the
 // page can say so and fall back (e.g. show the invite link to copy).
 // ticketId: the email is about this ticket, so a reply to it lands there
-export async function sendSystemEmail({ to, subject, text, ticketId }) {
-  const id = await defaultMailboxId();
+// inReplyTo: the Message-ID of the email it answers (same thread)
+// automatic: marks it as an automatic reply, so other systems' automatic
+// replies ("Out of office") don't answer it back (no email loops)
+// mailbox: send from this mailbox instead of the company one
+export async function sendSystemEmail({
+  to,
+  subject,
+  text,
+  ticketId,
+  inReplyTo,
+  automatic = false,
+  mailbox,
+}) {
+  const id = mailbox?.id ?? (await defaultMailboxId());
   const [box] = id
     ? await db
         .select()
@@ -839,6 +861,8 @@ export async function sendSystemEmail({ to, subject, text, ticketId }) {
       subject,
       text,
       messageId,
+      ...(inReplyTo ? { inReplyTo, references: [inReplyTo] } : {}),
+      ...(automatic ? { headers: { "Auto-Submitted": "auto-replied" } } : {}),
     });
     if (ticketId)
       await db.insert(emailMessages).values({
@@ -852,6 +876,97 @@ export async function sendSystemEmail({ to, subject, text, ticketId }) {
   } catch (err) {
     return { sent: false, why: explain(err, box) };
   }
+}
+
+// ---------- "We got your request" when a ticket is created ----------
+
+// Which new tickets get a confirmation email (Integrations → Email), by
+// how they came in. Tickets the team makes (e.g. from a phone call) are
+// chosen one by one instead, with a tick box in Add Ticket.
+const CONFIRM_DEFAULTS = { email: true, portal: true, website: true };
+async function confirmSettings() {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "ticketConfirmations"));
+  return { ...CONFIRM_DEFAULTS, ...row?.value };
+}
+
+// No more than 3 confirmations to the same address an hour, in case some
+// other system keeps emailing (and getting confirmations back)
+const confirmed = new Map();
+function confirmedTooOften(address) {
+  const now = Date.now();
+  const recent = (confirmed.get(address) ?? []).filter(
+    (t) => now - t < 60 * 60 * 1000,
+  );
+  recent.push(now);
+  confirmed.set(address, recent);
+  return recent.length > 3;
+}
+
+// Emails the customer that their ticket was created, worded for how it
+// came in. Never throws; returns { sent, why } like sendSystemEmail.
+//   source: "email", "portal", "website" or "agent"
+//   inReplyTo: for email tickets, their email's Message-ID (same thread)
+//   site: the site's address, for the portal link
+//   mailbox: for email tickets, the mailbox it came in on (replies from it)
+export async function confirmNewTicket({
+  ticket,
+  customer,
+  source,
+  inReplyTo,
+  site,
+  mailbox,
+}) {
+  const to = customer.email;
+  if (!to) return { sent: false, why: "The customer has no email address." };
+  if (source !== "agent" && !(await confirmSettings())[source])
+    return { sent: false, why: "Turned off in Integrations → Email." };
+  if (confirmedTooOften(to))
+    return { sent: false, why: "Several sent to them in the last hour." };
+
+  const first = customer.name.split(" ")[0];
+  const number = `#${ticket.id}`;
+  const lines = {
+    email: [
+      `We got your email and opened request ${number}. Our team will get back to you soon.`,
+      "",
+      "To add anything, just reply to this email.",
+    ],
+    portal: [
+      `We got your request ${number}: ${ticket.subject}. Our team will get back to you soon.`,
+      "",
+      site
+        ? `You can follow it in the customer portal: ${site}/portal/tickets/${ticket.id}`
+        : "You can follow it in the customer portal.",
+    ],
+    website: [
+      `Thanks for getting in touch. Your request is number ${number}, and our team will get back to you soon.`,
+      "",
+      `Your request: ${ticket.subject}`,
+      "",
+      "If you need to add anything, just reply to this email.",
+    ],
+    agent: [
+      `We've logged your request ${number}: ${ticket.subject}. Our team is on it, and we'll keep you updated.`,
+      "",
+      "If you need to add anything, just reply to this email.",
+    ],
+  }[source];
+
+  return sendSystemEmail({
+    to,
+    ticketId: ticket.id,
+    inReplyTo,
+    mailbox,
+    automatic: source === "email",
+    subject:
+      source === "email"
+        ? `Re: ${ticket.subject.replace(/^(re|fw|fwd):\s*/i, "")} [${number}]`
+        : `We got your request: ${ticket.subject} [${number}]`,
+    text: [`Hi ${first},`, "", ...lines].join("\n"),
+  });
 }
 
 // Emails a reply (or automatic reply) on a ticket to the customer, if
@@ -1212,6 +1327,8 @@ async function overview() {
     defaultMailboxId: await defaultMailboxId(),
     // "How did we do?" emails when tickets are resolved (notices.js)
     feedbackEmail: (await feedbackSetting())?.enabled !== false,
+    // Which new tickets get a "we got your request" email
+    confirmations: await confirmSettings(),
     agents,
     teams,
   };
@@ -1338,6 +1455,21 @@ async function feedbackSetting() {
     .where(eq(settings.key, "feedbackEmail"));
   return row?.value;
 }
+
+// Which new tickets get a "we got your request" email, by how they came
+// in: { email, portal, website } (all on to start with)
+emailRouter.put("/confirmations", async (req, res) => {
+  const value = {};
+  for (const key of Object.keys(CONFIRM_DEFAULTS))
+    if (key in (req.body ?? {})) value[key] = Boolean(req.body[key]);
+  const current = await confirmSettings();
+  const merged = { ...current, ...value };
+  await db
+    .insert(settings)
+    .values({ key: "ticketConfirmations", value: merged })
+    .onConflictDoUpdate({ target: settings.key, set: { value: merged } });
+  res.json(await overview());
+});
 
 // Turn the "how did we do?" emails on or off (they're on to start with)
 emailRouter.put("/feedback", async (req, res) => {

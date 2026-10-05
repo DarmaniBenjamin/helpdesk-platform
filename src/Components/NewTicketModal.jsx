@@ -44,6 +44,16 @@ export default function NewTicketModal({ onClose }) {
   const [customerError, setCustomerError] = useState("");
   const [duplicate, setDuplicate] = useState(null); // existing customer with the same email
 
+  // Email the customer "we've logged your request #123"? (only if they
+  // have an email; see server/src/email.js)
+  const [confirm, setConfirm] = useState(true);
+  const customerEmail =
+    customerMode === "existing" ? selectedCustomer?.email : newCustomer.email;
+  const customerFirstName = (
+    (customerMode === "existing" ? selectedCustomer?.name : newCustomer.name) ||
+    "the customer"
+  ).split(" ")[0];
+
   // After submitting: the new ticket, and whether the customer was new
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -112,6 +122,7 @@ export default function NewTicketModal({ onClose }) {
         description: form.get("description").trim(),
         priority,
         dueBy: new Date(dueBy).getTime(),
+        confirm: confirm && Boolean(customer.email),
       });
       document.activeElement?.blur();
       setResult({ ticket, isNew });
@@ -173,6 +184,17 @@ export default function NewTicketModal({ onClose }) {
               They were also added to your customers.
             </p>
           )}
+          {result.ticket.confirmation &&
+            (result.ticket.confirmation.sent ? (
+              <p className="text-sm text-muted">
+                We emailed {result.ticket.requester.email} that it's logged.
+              </p>
+            ) : (
+              <p className="text-sm text-amber-700">
+                The confirmation email wasn't sent:{" "}
+                {result.ticket.confirmation.why}
+              </p>
+            ))}
           <p className="text-xs text-muted">
             It's now at the top of your Inbox.
           </p>
@@ -335,6 +357,25 @@ export default function NewTicketModal({ onClose }) {
           className={`${inputClass} h-auto shrink-0 py-2.5`}
         />
       </label>
+
+      {/* "We've logged your request #123" (server/src/email.js) */}
+      {customerEmail && (
+        <label className="flex cursor-pointer items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={confirm}
+            onChange={(e) => setConfirm(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+          />
+          <span>
+            Email {customerFirstName} that we've logged it
+            <span className="block text-xs text-muted">
+              Sent to {customerEmail}, with the ticket number. Their reply comes
+              back to this ticket.
+            </span>
+          </span>
+        </label>
+      )}
     </Modal>
   );
 }

@@ -843,7 +843,10 @@ export default function DataProvider({ children }) {
     dueBy,
     description,
     attachmentIds = [],
+    confirm = false,
   }) {
+    // confirm: email the customer "we got your request" (Add Ticket).
+    // The answer says whether it went: ticket.confirmation { sent, why }
     return showTicket(
       await api("/tickets", {
         method: "POST",
@@ -855,6 +858,7 @@ export default function DataProvider({ children }) {
           dueBy,
           description,
           attachmentIds,
+          confirm,
         },
       }),
     );
