@@ -16,7 +16,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const KEY_FILE = path.resolve(process.env.SECRET_KEY_FILE || ".secret-key");
+export const KEY_FILE = path.resolve(
+  process.env.SECRET_KEY_FILE || ".secret-key",
+);
 
 let key = null;
 function getKey() {
@@ -31,6 +33,21 @@ function getKey() {
     fs.writeFileSync(KEY_FILE, key.toString("base64"), { mode: 0o600 });
   }
   return key;
+}
+
+// Puts back the key from an off-site backup (offsite.js), so everything
+// locked on the old server unlocks here too
+export function replaceKey(base64) {
+  const next = Buffer.from(String(base64).trim(), "base64");
+  if (next.length !== 32) throw new Error("That key isn't valid.");
+  fs.writeFileSync(KEY_FILE, next.toString("base64"), { mode: 0o600 });
+  key = next;
+}
+
+// The key itself, for off-site backups (offsite.js). It goes inside the
+// backup's encryption, never anywhere on its own.
+export function currentKey() {
+  return getKey().toString("base64");
 }
 
 // A short signature for some text, made with the same key, e.g. for the

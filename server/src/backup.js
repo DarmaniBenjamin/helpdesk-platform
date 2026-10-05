@@ -121,6 +121,13 @@ function savedBackups() {
     .sort((a, b) => b.at - a.at);
 }
 
+// Something to do after each backup is saved on the server: offsite.js
+// sends a copy to the cloud. Set with afterBackupSaved(fn).
+let afterSave = null;
+export function afterBackupSaved(fn) {
+  afterSave = fn;
+}
+
 // Saves a backup in the backups folder and deletes the oldest ones, so
 // only the newest `keep` are left
 async function saveBackup(keep) {
@@ -136,6 +143,11 @@ async function saveBackup(keep) {
   for (const old of savedBackups().slice(keep))
     await fs.promises.unlink(path.join(BACKUP_DIR, old.name)).catch(() => {});
   await rememberBackupTime(backup.exportedAt);
+  // A copy to the cloud too, if that's set up (in the background)
+  if (afterSave)
+    afterSave(path.join(BACKUP_DIR, name), keep).catch((err) =>
+      console.error("Off-site copy:", err.message),
+    );
   return name;
 }
 
@@ -196,7 +208,7 @@ function summaryOf(backup) {
 // Replaces everything in the database with the backup, all in one go:
 // if anything fails, nothing is changed. The person restoring stays
 // signed in if they're in the backup; everyone else signs in again.
-async function restore(backup, req) {
+export async function restore(backup, req) {
   checkBackup(backup);
   const token = (req.headers.cookie ?? "")
     .split(";")

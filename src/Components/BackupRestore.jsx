@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Download,
   Upload,
-  HardDrive,
-  Cloud,
-  Database,
   TriangleAlert,
   GitBranch,
   FileJson,
@@ -15,6 +12,7 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import Card from "./Card";
+import OffsiteBackups from "./OffsiteBackups";
 import Modal from "./Modal";
 import {
   inputClass,
@@ -27,31 +25,6 @@ import { api } from "../api";
 import { timeAgo } from "../data";
 import useData from "../useData";
 
-// Where automatic backups go. Only this server for now.
-const DESTINATIONS = [
-  {
-    id: "server",
-    label: "This server",
-    hint: "Saved in the server's backups folder.",
-    icon: HardDrive,
-    ready: true,
-  },
-  {
-    id: "gdrive",
-    label: "Google Drive",
-    hint: "Saved to a folder in your Google Drive.",
-    icon: Cloud,
-    ready: false,
-  },
-  {
-    id: "b2",
-    label: "Backblaze B2",
-    hint: "Saved to a private B2 bucket.",
-    icon: Database,
-    ready: false,
-  },
-];
-
 const RECOVERY_STEPS = [
   {
     title: "Put the website back",
@@ -63,7 +36,7 @@ const RECOVERY_STEPS = [
   },
   {
     title: "Restore your latest backup",
-    text: "Upload your newest backup file. The Super Admin in the backup takes over, with their own password.",
+    text: "Upload your newest backup file, or under Copies in the cloud, fill in the same storage details and backup password and restore the newest copy (it brings the attached files back too). The Super Admin in the backup takes over, with their own password.",
   },
   {
     title: "Everything is back",
@@ -304,7 +277,8 @@ export default function BackupRestore() {
             <p className="flex items-start gap-2 text-xs text-muted">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               Attached files (photos, PDFs…) aren't in the backup file: they're
-              kept in the server's uploads folder. Back that folder up too.
+              kept in the server's uploads folder. Copies in the cloud (below)
+              include them.
             </p>
           </div>
         </Card>
@@ -409,55 +383,6 @@ export default function BackupRestore() {
               : "No backup yet."}
           </p>
 
-          <div
-            role="radiogroup"
-            aria-label="Where backups go"
-            className="grid gap-3 md:grid-cols-3"
-          >
-            {DESTINATIONS.map((d) => {
-              const Icon = d.icon;
-              const selected = d.ready && backup.destination === d.id;
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  disabled={!d.ready}
-                  onClick={() =>
-                    updateSettings("backup", { destination: d.id })
-                  }
-                  className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
-                    selected
-                      ? "border-brand bg-brand/5"
-                      : d.ready
-                        ? "cursor-pointer border-line hover:border-brand/30 hover:bg-brand/5 active:scale-[0.99]"
-                        : "cursor-not-allowed border-dashed border-line opacity-60"
-                  }`}
-                >
-                  <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                      selected ? "bg-brand text-white" : "bg-page text-muted"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                      {d.label}
-                      {!d.ready && (
-                        <span className="rounded bg-page px-1.5 py-0.5 text-[11px] font-normal text-muted">
-                          Coming later
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted">{d.hint}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>
               How often
@@ -557,6 +482,9 @@ export default function BackupRestore() {
           </div>
         </div>
       </Card>
+
+      {/* Copies in the cloud (OffsiteBackups.jsx) */}
+      <OffsiteBackups />
 
       {/* Disaster recovery */}
       <Card title="If the website goes down">

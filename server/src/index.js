@@ -25,6 +25,7 @@ import { liveRouter, sendToEveryone } from "./live.js";
 import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
+import { offsiteRouter } from "./offsite.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
@@ -183,6 +184,7 @@ app.use("/api/live", liveRouter); // live updates, who's on which page
 app.use("/api/notifications", notificationsRouter); // the bell
 app.use("/api/push", pushRouter); // desktop/phone notifications on and off
 app.use("/api/attachments", attachmentsRouter); // files on tickets
+app.use("/api/backup/offsite", offsiteRouter); // copies in the cloud (Super Admin)
 app.use("/api/backup", backupRouter); // backups and restoring (Super Admin)
 app.use("/api/sla", slaRouter); // SLA targets (changed by Admins)
 app.use("/api/requests", requestsRouter); // the public request form (no sign-in)
