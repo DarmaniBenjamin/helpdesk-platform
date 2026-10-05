@@ -148,6 +148,9 @@ export const tickets = pgTable(
     feedbackRating: smallint("feedback_rating"),
     feedbackComment: text("feedback_comment"),
     feedbackAt: time("feedback_at"),
+    // When the "How did we do?" email went out (notices.js), so it's only
+    // sent once per ticket
+    feedbackRequestedAt: time("feedback_requested_at"),
     // Ticket Review: which Admin checked it, and when
     reviewedById: text("reviewed_by_id").references(() => users.id, {
       onDelete: "set null",

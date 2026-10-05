@@ -31,7 +31,12 @@ import { requestsRouter } from "./requests.js";
 import { domainsRouter, seedSiteDomains } from "./domains.js";
 import { startCaddySync } from "./caddy.js";
 import { emailRouter, startEmailChecks } from "./email.js";
-import { passwordRouter } from "./notices.js";
+import {
+  feedbackRouter,
+  passwordRouter,
+  rememberSite,
+  startFeedbackEmails,
+} from "./notices.js";
 import {
   notificationsRouter,
   pushRouter,
@@ -154,6 +159,13 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// The site's address, for links in emails the server sends on its own
+// (e.g. feedback requests, see notices.js): noted whenever the app opens
+app.use("/api/auth/me", (req, res, next) => {
+  if (req.user) rememberSite(req);
+  next();
+});
+
 // ---------- The API ----------
 app.use("/api/auth", authRouter); // signing in and out
 app.use("/api/me", meRouter); // your own profile
@@ -177,6 +189,7 @@ app.use("/api/requests", requestsRouter); // the public request form (no sign-in
 app.use("/api/domains", domainsRouter); // own domain + SSL (Super Admin; Caddy asks /allowed)
 app.use("/api/email", emailRouter); // Integrations → Email (Admins)
 app.use("/api/password", passwordRouter); // "forgot password" (no sign-in)
+app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 
 // Anything else under /api that doesn't exist
@@ -243,4 +256,6 @@ app.listen(port, host, () => {
   startCaddySync();
   // Every minute: new emails in the connected mailboxes become tickets
   startEmailChecks();
+  // Every minute: "how did we do?" emails for newly resolved tickets
+  startFeedbackEmails();
 });

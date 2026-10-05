@@ -33,6 +33,17 @@ function getKey() {
   return key;
 }
 
+// A short signature for some text, made with the same key, e.g. for the
+// feedback links in emails (notices.js): anyone can read the link, but
+// nobody can make a working one for another ticket without the key
+export function sign(text) {
+  return crypto
+    .createHmac("sha256", getKey())
+    .update(String(text))
+    .digest("base64url")
+    .slice(0, 24);
+}
+
 // Thrown when something can't be unlocked, e.g. it was locked by
 // another server's key (a backup restored on a new server)
 export class LockedSecret extends Error {}

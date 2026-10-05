@@ -904,6 +904,39 @@ export default function EmailIntegration() {
             </label>
           )}
 
+          {/* "How did we do?" emails (server/src/notices.js) */}
+          {info.mailboxes.length > 0 && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={info.feedbackEmail}
+                onChange={async (e) => {
+                  try {
+                    setInfo(
+                      await api("/email/feedback", {
+                        method: "PUT",
+                        body: { enabled: e.target.checked },
+                      }),
+                    );
+                  } catch (err) {
+                    setSignInError(err.message);
+                  }
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+              />
+              <span>
+                <span className="font-medium">
+                  Ask customers for feedback when a ticket is resolved
+                </span>
+                <span className="block text-muted">
+                  They get a "How did we do?" email from the company mailbox
+                  with a link to rate it 1 to 5 stars, no sign-in needed. Each
+                  ticket is only asked once, and older tickets never are.
+                </span>
+              </span>
+            </label>
+          )}
+
           {/* Add a mailbox */}
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium">

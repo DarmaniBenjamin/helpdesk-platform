@@ -46,6 +46,7 @@
 //   POST   /api/email/mailboxes             add an "Other" mailbox
 //   PATCH  /api/email/mailboxes/:id         name, agent, team, on/off, password
 //   PUT    /api/email/default               { mailboxId } the company mailbox
+//   PUT    /api/email/feedback              { enabled } "how did we do?" emails
 //   DELETE /api/email/mailboxes/:id
 //   POST   /api/email/mailboxes/:id/check   check for new emails now
 //   POST   /api/email/mailboxes/:id/test    send yourself a test email
@@ -1209,6 +1210,8 @@ async function overview() {
     },
     mailboxes: boxes.map(publicMailbox),
     defaultMailboxId: await defaultMailboxId(),
+    // "How did we do?" emails when tickets are resolved (notices.js)
+    feedbackEmail: (await feedbackSetting())?.enabled !== false,
     agents,
     teams,
   };
@@ -1326,6 +1329,24 @@ emailRouter.post("/oauth/start", async (req, res) => {
     ...PROVIDERS[provider].extra,
   });
   res.json({ url: url.toString() });
+});
+
+async function feedbackSetting() {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "feedbackEmail"));
+  return row?.value;
+}
+
+// Turn the "how did we do?" emails on or off (they're on to start with)
+emailRouter.put("/feedback", async (req, res) => {
+  const value = { enabled: Boolean(req.body?.enabled) };
+  await db
+    .insert(settings)
+    .values({ key: "feedbackEmail", value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  res.json(await overview());
 });
 
 // The company mailbox: emails that aren't from a particular agent's own

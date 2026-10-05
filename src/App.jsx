@@ -29,6 +29,7 @@ const Settings = lazy(() => import("./Components/Pages/Settings"));
 const Login = lazy(() => import("./Components/Pages/Login"));
 const AcceptInvite = lazy(() => import("./Components/Pages/AcceptInvite"));
 const ResetPassword = lazy(() => import("./Components/Pages/ResetPassword"));
+const Feedback = lazy(() => import("./Components/Pages/Feedback"));
 const RequestForm = lazy(() => import("./Components/Pages/RequestForm"));
 const PortalHome = lazy(() => import("./Components/Portal/PortalHome"));
 const PortalNewRequest = lazy(
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/welcome/:id" element={<AcceptInvite />} />
           <Route path="/reset/:token" element={<ResetPassword />} />
+          <Route path="/feedback/:token" element={<Feedback />} />
           <Route path="/request" element={<RequestForm />} />
 
           <Route path="/portal" element={<PortalLayout />}>
