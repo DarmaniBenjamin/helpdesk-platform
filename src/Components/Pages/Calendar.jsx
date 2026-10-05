@@ -349,7 +349,7 @@ function TimeGrid({
                   className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-red-500"
                   style={{ top: nowTop }}
                 >
-                  <span className="absolute -left-1 -top-[5px] h-2 w-2 rounded-full bg-red-500" />
+                  <span className="absolute -left-1 -top-1.25 h-2 w-2 rounded-full bg-red-500" />
                 </div>
               )}
               {placed[ci].map(({ job, top, bottom, lane, lanes }) => {
@@ -379,7 +379,7 @@ function TimeGrid({
                     }}
                     className={`absolute cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-xs shadow-sm transition-shadow hover:shadow-md ${
                       job.done ? "opacity-55" : ""
-                    } ${dragging ? "z-20 shadow-lg ring-2 ring-brand/40" : "z-[5]"} ${canMove(job) ? "select-none" : ""}`}
+                    } ${dragging ? "z-20 shadow-lg ring-2 ring-brand/40" : "z-5"} ${canMove(job) ? "select-none" : ""}`}
                     style={{
                       top: px(top) + (isMoving ? extra : 0),
                       height: Math.max(18, h),
