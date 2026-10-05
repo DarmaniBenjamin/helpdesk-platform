@@ -449,7 +449,7 @@ export default function OffsiteBackups() {
               ) : (
                 <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
               )}
-              <p className="min-w-0 break-words">
+              <p className="min-w-0 wrap-break-word">
                 Copies go to <strong>{config.bucket}</strong>
                 {config.folder ? `/${config.folder}` : ""} (
                 {providers[config.provider]?.label ?? "S3"}).{" "}
