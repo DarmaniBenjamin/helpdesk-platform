@@ -32,6 +32,7 @@ const ResetPassword = lazy(() => import("./Components/Pages/ResetPassword"));
 const Feedback = lazy(() => import("./Components/Pages/Feedback"));
 const EmailReview = lazy(() => import("./Components/Pages/EmailReview"));
 const SetupOwner = lazy(() => import("./Components/Pages/SetupOwner"));
+const Calendar = lazy(() => import("./Components/Pages/Calendar"));
 const RequestForm = lazy(() => import("./Components/Pages/RequestForm"));
 const PortalHome = lazy(() => import("./Components/Portal/PortalHome"));
 const PortalNewRequest = lazy(
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/email-review" element={<EmailReview />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/customers/:id" element={<CustomerDetail />} />
             <Route path="/assignment" element={<TicketAssignment />} />

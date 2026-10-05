@@ -11,6 +11,7 @@ import {
   Blocks,
   ChartColumn,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import { can } from "./teamRoles";
 
@@ -21,6 +22,7 @@ import { can } from "./teamRoles";
 export const mainLinks = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Inbox", path: "/inbox", icon: Inbox },
+  { label: "Calendar", path: "/calendar", icon: CalendarDays },
   { label: "Customers", path: "/customers", icon: BookUser },
   {
     label: "Ticket Assignment",

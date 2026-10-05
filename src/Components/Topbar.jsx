@@ -16,6 +16,7 @@ import {
   User,
   Settings,
   LogOut,
+  CalendarDays,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import useClosing from "./useClosing";
@@ -37,6 +38,7 @@ const NOTIFICATION_ICONS = {
   customerReply: MessageSquare,
   dueSoon: Clock,
   overdue: TriangleAlert,
+  job: CalendarDays,
 };
 
 function IconButton({
@@ -118,7 +120,9 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   function openNotification(n) {
     if (!n.read) markNotificationRead(n.id);
     setNotifOpen(false);
-    if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
+    // Jobs open the calendar (where you see when); the rest their ticket
+    if (n.kind === "job") navigate("/calendar");
+    else if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
   }
 
   return (

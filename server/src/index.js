@@ -27,6 +27,7 @@ import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { offsiteRouter } from "./offsite.js";
 import { setupOwnerRouter } from "./setup-owner.js";
+import { jobsRouter, startJobReminders } from "./jobs.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
@@ -108,6 +109,7 @@ const LIVE = [
   "import",
   "backup",
   "sla",
+  "jobs",
 ];
 app.use("/api", (req, res, next) => {
   if (req.method === "GET") return next();
@@ -177,6 +179,7 @@ app.use("/api/departments", departmentsRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/answers", answersRouter); // the Knowledge Base
+app.use("/api/jobs", jobsRouter); // the calendar: scheduled jobs
 app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
@@ -263,4 +266,6 @@ app.listen(port, host, () => {
   startEmailChecks();
   // Every minute: "how did we do?" emails for newly resolved tickets
   startFeedbackEmails();
+  // Every minute: "your job starts in 30 minutes" reminders
+  startJobReminders();
 });

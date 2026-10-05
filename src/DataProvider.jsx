@@ -40,6 +40,8 @@ export default function DataProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   // How many emails wait in Email review (server/src/email.js)
   const [heldCount, setHeldCount] = useState(0);
+  // Goes up whenever someone changes a job, so the calendar loads again
+  const [jobsVersion, setJobsVersion] = useState(0);
   // Who's on which page right now: [{ userId, path, since }]
   const [presence, setPresence] = useState([]);
   // SLA targets per priority, in hours (from the server)
@@ -327,6 +329,9 @@ export default function DataProvider({ children }) {
       case "settings":
         if (role === "owner")
           later("settings", () => api("/settings").then(setSettings));
+        break;
+      case "jobs":
+        if (role !== "customer") setJobsVersion((v) => v + 1);
         break;
       case "heldEmails":
         if (role !== "customer") later("heldEmails", loadHeldCount);
@@ -976,6 +981,7 @@ export default function DataProvider({ children }) {
         loadConversation,
         heldCount,
         setHeldCount,
+        jobsVersion,
         customers,
         addTicket,
         updateTicket,

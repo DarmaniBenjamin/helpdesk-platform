@@ -40,6 +40,7 @@ import {
   timeAgo,
 } from "../../data";
 import Droplets from "../Droplets";
+import TicketJobs from "../TicketJobs";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
 function toInputValue(time) {
@@ -993,6 +994,12 @@ export default function TicketDetail() {
                 onDelete={() => setDeleting(true)}
               />
             </div>
+          </div>
+
+          {/* Jobs on the calendar for this ticket (TicketJobs.jsx) */}
+          <div className="rounded-xl border border-line bg-white p-4">
+            <p className="mb-2 font-semibold">Jobs</p>
+            <TicketJobs ticket={ticket} />
           </div>
 
           {suggested.length > 0 && (

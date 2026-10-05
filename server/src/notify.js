@@ -146,7 +146,12 @@ async function pushTo(userIds, rows) {
       const message = JSON.stringify({
         title: row.title,
         body: row.body,
-        url: row.ticketId ? `/tickets/${row.ticketId}` : "/",
+        url:
+          row.kind === "job"
+            ? "/calendar"
+            : row.ticketId
+              ? `/tickets/${row.ticketId}`
+              : "/",
         // Same ticket and kind: the newer one replaces the older pop-up
         tag: `${row.kind}-${row.ticketId ?? row.id}`,
       });

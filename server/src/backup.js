@@ -58,6 +58,8 @@ const TABLES = [
   "messages",
   "attachments",
   "email_messages",
+  "jobs",
+  "job_agents",
   "answers",
   "rules",
   "automations",
@@ -75,6 +77,7 @@ const COUNTED = [
   "answers",
   "rules",
   "automations",
+  "jobs",
 ];
 
 // "helpdesk-backup-2026-09-29-1430.json"

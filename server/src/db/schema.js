@@ -230,6 +230,61 @@ export const attachments = pgTable(
   ],
 );
 
+// ---------- Calendar: scheduled jobs ----------
+
+// A piece of work booked for a time: a site visit, a remote session or a
+// call, usually for a ticket (but not always, e.g. a monthly server
+// check). One or more agents do it (jobAgents). See jobs.js.
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    title: text("title").notNull(),
+    kind: text("kind").notNull().default("onsite"), // onsite, remote or call
+    startsAt: time("starts_at").notNull(),
+    endsAt: time("ends_at").notNull(),
+    location: text("location").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    ticketId: integer("ticket_id").references(() => tickets.id, {
+      onDelete: "set null",
+    }),
+    customerId: customerId("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    // Done: ticked off once the work is finished
+    doneAt: time("done_at"),
+    createdById: text("created_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // When the "starts in 30 minutes" reminder went out (cleared when the
+    // time changes, so it goes out again for the new time)
+    remindedAt: time("reminded_at"),
+    createdAt: createdAt(),
+    updatedAt: time("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("jobs_starts_idx").on(t.startsAt),
+    index("jobs_ticket_idx").on(t.ticketId),
+  ],
+);
+
+// Who does each job
+export const jobAgents = pgTable(
+  "job_agents",
+  {
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.jobId, t.userId] }),
+    index("job_agents_user_idx").on(t.userId),
+  ],
+);
+
 // ---------- Knowledge Base ----------
 
 export const answers = pgTable("answers", {
