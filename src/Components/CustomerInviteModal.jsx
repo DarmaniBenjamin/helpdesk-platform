@@ -38,7 +38,11 @@ export default function CustomerInviteModal({ onClose }) {
     try {
       const result = await inviteCustomer(selected.id);
       document.activeElement?.blur();
-      setInvited({ member: result.member, link: inviteLinkFor(result.token) });
+      setInvited({
+        member: result.member,
+        link: inviteLinkFor(result.token),
+        emailed: result.emailed, // { sent, why } (server/src/notices.js)
+      });
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -64,8 +68,10 @@ export default function CustomerInviteModal({ onClose }) {
             invited to the customer portal.
           </p>
           <p className="text-sm text-muted">
-            Invite emails aren't set up yet, so send them this link yourself. It
-            works once, for 7 days. They'll sign in with{" "}
+            {invited.emailed?.sent
+              ? "We've emailed them the invite. You can also send them this link yourself."
+              : `The invite couldn't be emailed${invited.emailed?.why ? ` (${invited.emailed.why})` : ""}, so send them this link yourself.`}{" "}
+            It works once, for 7 days. They'll sign in with{" "}
             <span className="font-medium text-ink">{invited.member.email}</span>
             .
           </p>

@@ -30,7 +30,8 @@ import useData from "../../useData";
 import { isDone, isOverdue, timeAgo } from "../../data";
 
 // A list of emails or phone numbers: the main one first, then any extras.
-// You can add more, remove extras, or make an extra the main one.
+// Every one can be changed or removed (removing asks first), an extra
+// can be made the main one, and more can be added.
 function ContactList({
   title,
   icon,
@@ -39,6 +40,7 @@ function ContactList({
   extras,
   hrefPrefix,
   onAdd,
+  onEdit,
   onRemove,
   onMakeMain,
   validate,
@@ -47,22 +49,88 @@ function ContactList({
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(null); // the one being changed
+  const [removing, setRemoving] = useState(null); // "are you sure?" on this one
 
   const all = [main, ...extras].filter(Boolean);
 
-  function handleAdd(e) {
+  function startAdding() {
+    setEditing(null);
+    setRemoving(null);
+    setValue("");
+    setError("");
+    setAdding(true);
+  }
+
+  function startEditing(item) {
+    setAdding(false);
+    setRemoving(null);
+    setValue(item);
+    setError("");
+    setEditing(item);
+  }
+
+  function cancel() {
+    setAdding(false);
+    setEditing(null);
+    setValue("");
+    setError("");
+  }
+
+  async function handleSave(e) {
     e.preventDefault();
     const clean = value.trim();
-    const problem = validate(clean);
+    if (editing !== null && clean === editing) return cancel();
+    const problem = validate(clean, editing);
     if (problem) {
       setError(problem);
       return;
     }
-    onAdd(clean);
-    setValue("");
-    setError("");
-    setAdding(false);
+    const ok =
+      editing !== null ? await onEdit(editing, clean) : await onAdd(clean);
+    if (ok === false) return; // the page shows why
+    cancel();
   }
+
+  // The box for adding a new one or changing one
+  const editor = (
+    <form onSubmit={handleSave} className="flex flex-col gap-2 py-2">
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          type={type === "email" ? "email" : "tel"}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError("");
+          }}
+          placeholder={
+            type === "email" ? "another@email.com" : "+1 (473) 555-0100"
+          }
+          className={`${inputClass} ${error ? "border-red-400" : ""}`}
+        />
+        <button
+          type="submit"
+          aria-label="Save"
+          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand/90 active:scale-[0.95]"
+        >
+          <Check className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          aria-label="Cancel"
+          onClick={cancel}
+          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition hover:text-ink active:scale-[0.95]"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </form>
+  );
+
+  const iconButton =
+    "cursor-pointer rounded-lg p-2 text-muted transition active:scale-[0.92]";
 
   return (
     <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
@@ -71,7 +139,7 @@ function ContactList({
         {!adding && (
           <button
             type="button"
-            onClick={() => setAdding(true)}
+            onClick={startAdding}
             className="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-brand transition hover:bg-brand/10 active:scale-[0.97]"
           >
             <Plus className="h-4 w-4" />
@@ -87,8 +155,42 @@ function ContactList({
       <ul className="flex flex-col divide-y divide-line">
         {all.map((item) => {
           const isMain = item === main;
+          if (editing === item) return <li key={item}>{editor}</li>;
+          if (removing === item)
+            return (
+              <li
+                key={item}
+                className="flex flex-col gap-2 py-2.5 text-sm sm:flex-row sm:items-center"
+              >
+                <p className="min-w-0 flex-1">
+                  Remove <strong className="break-all">{item}</strong>?
+                  {isMain &&
+                    extras.length > 0 &&
+                    ` ${extras[0]} becomes the main one.`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRemoving(null)}
+                    className="h-9 flex-1 cursor-pointer rounded-lg border border-line px-3 transition hover:bg-page sm:flex-none"
+                  >
+                    Keep
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await onRemove(item);
+                      if (ok !== false) setRemoving(null);
+                    }}
+                    className="h-9 flex-1 cursor-pointer rounded-lg bg-red-500 px-3 font-medium text-white transition hover:bg-red-600 active:scale-[0.97] sm:flex-none"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            );
           return (
-            <li key={item} className="flex items-center gap-3 py-2.5">
+            <li key={item} className="flex items-center gap-2 py-2">
               <Icon className="h-4 w-4 shrink-0 text-muted" />
               <a
                 href={`${hrefPrefix}${item}`}
@@ -96,76 +198,51 @@ function ContactList({
               >
                 {item}
               </a>
-              {isMain ? (
+              {isMain && (
                 <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
                   Main
                 </span>
-              ) : (
-                <div className="flex shrink-0 items-center gap-1">
+              )}
+              <div className="flex shrink-0 items-center">
+                {!isMain && (
                   <button
                     type="button"
                     onClick={() => onMakeMain(item)}
                     title="Make this the main one"
                     aria-label={`Make ${item} the main ${type}`}
-                    className="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-brand/10 hover:text-brand active:scale-[0.92]"
+                    className={`${iconButton} hover:bg-brand/10 hover:text-brand`}
                   >
                     <Star className="h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(item)}
-                    title="Remove"
-                    aria-label={`Remove ${item}`}
-                    className="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-red-50 hover:text-red-500 active:scale-[0.92]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
+                )}
+                <button
+                  type="button"
+                  onClick={() => startEditing(item)}
+                  title="Change"
+                  aria-label={`Change ${item}`}
+                  className={`${iconButton} hover:bg-brand/10 hover:text-brand`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancel();
+                    setRemoving(item);
+                  }}
+                  title="Remove"
+                  aria-label={`Remove ${item}`}
+                  className={`${iconButton} hover:bg-red-50 hover:text-red-500`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </li>
           );
         })}
       </ul>
 
-      {adding && (
-        <form onSubmit={handleAdd} className="mt-3 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              type={type === "email" ? "email" : "tel"}
-              value={value}
-              onChange={(e) => {
-                setValue(e.target.value);
-                setError("");
-              }}
-              placeholder={
-                type === "email" ? "another@email.com" : "+1 (473) 555-0100"
-              }
-              className={`${inputClass} ${error ? "border-red-400" : ""}`}
-            />
-            <button
-              type="submit"
-              aria-label="Save"
-              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand/90 active:scale-[0.95]"
-            >
-              <Check className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Cancel"
-              onClick={() => {
-                setAdding(false);
-                setValue("");
-                setError("");
-              }}
-              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition hover:text-ink active:scale-[0.95]"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </form>
-      )}
+      {adding && <div className="mt-1">{editor}</div>}
     </div>
   );
 }
@@ -341,52 +418,77 @@ export default function CustomerDetail() {
   }
 
   // ----- Emails -----
-  function validateEmail(email) {
+  // `current`: the one being changed (it can keep its own address)
+  function validateEmail(email, current) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return "That doesn't look like an email address.";
     const owner = findCustomerByEmail(email);
-    if (owner?.id === customer.id)
+    if (owner?.id === customer.id && email.toLowerCase() !== current)
       return "This customer already has that email.";
-    if (owner) return `${owner.name} already uses this email.`;
+    if (owner && owner.id !== customer.id)
+      return `${owner.name} already uses this email.`;
     return "";
   }
   function addEmail(email) {
     const clean = email.toLowerCase();
-    if (!customer.email) save({ email: clean });
-    else save({ extraEmails: [...extraEmails, clean] });
+    if (!customer.email) return save({ email: clean });
+    return save({ extraEmails: [...extraEmails, clean] });
+  }
+  function editEmail(old, email) {
+    const clean = email.toLowerCase();
+    if (old === customer.email) return save({ email: clean });
+    return save({
+      extraEmails: extraEmails.map((e) => (e === old ? clean : e)),
+    });
   }
   function removeEmail(email) {
-    save({
-      extraEmails: extraEmails.filter((e) => e !== email),
-    });
+    // Removing the main one: the next one (if any) becomes the main one
+    if (email === customer.email)
+      return save({
+        email: extraEmails[0] ?? null,
+        extraEmails: extraEmails.slice(1),
+      });
+    return save({ extraEmails: extraEmails.filter((e) => e !== email) });
   }
   function makeMainEmail(email) {
     // The old main email becomes an extra one
-    save({
+    return save({
       email,
       extraEmails: [customer.email, ...extraEmails.filter((e) => e !== email)],
     });
   }
 
   // ----- Phones -----
-  function validatePhone(phone) {
+  function validatePhone(phone, current) {
     if (phone.replace(/\D/g, "").length < 7)
       return "Enter a full phone number.";
-    if (phone === customer.phone || extraPhones.includes(phone))
+    if (
+      phone !== current &&
+      (phone === customer.phone || extraPhones.includes(phone))
+    )
       return "This customer already has that number.";
     return "";
   }
   function addPhone(phone) {
-    if (!customer.phone) save({ phone });
-    else save({ extraPhones: [...extraPhones, phone] });
+    if (!customer.phone) return save({ phone });
+    return save({ extraPhones: [...extraPhones, phone] });
   }
-  function removePhone(phone) {
-    save({
-      extraPhones: extraPhones.filter((p) => p !== phone),
+  function editPhone(old, phone) {
+    if (old === customer.phone) return save({ phone });
+    return save({
+      extraPhones: extraPhones.map((p) => (p === old ? phone : p)),
     });
   }
+  function removePhone(phone) {
+    if (phone === customer.phone)
+      return save({
+        phone: extraPhones[0] ?? "",
+        extraPhones: extraPhones.slice(1),
+      });
+    return save({ extraPhones: extraPhones.filter((p) => p !== phone) });
+  }
   function makeMainPhone(phone) {
-    save({
+    return save({
       phone,
       extraPhones: [
         customer.phone,
@@ -546,6 +648,7 @@ export default function CustomerDetail() {
             hrefPrefix="mailto:"
             validate={validateEmail}
             onAdd={addEmail}
+            onEdit={editEmail}
             onRemove={removeEmail}
             onMakeMain={makeMainEmail}
           />
@@ -558,6 +661,7 @@ export default function CustomerDetail() {
             hrefPrefix="tel:"
             validate={validatePhone}
             onAdd={addPhone}
+            onEdit={editPhone}
             onRemove={removePhone}
             onMakeMain={makeMainPhone}
           />

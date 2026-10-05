@@ -810,6 +810,49 @@ export async function canSendEmail(user) {
   return Boolean(await senderFor(user.id));
 }
 
+// An email from the helpdesk itself (an invite, a password reset link,
+// "we got your request"), sent from the company mailbox. Never throws:
+// returns { sent: true }, or { sent: false, why } in plain words, so the
+// page can say so and fall back (e.g. show the invite link to copy).
+// ticketId: the email is about this ticket, so a reply to it lands there
+export async function sendSystemEmail({ to, subject, text, ticketId }) {
+  const id = await defaultMailboxId();
+  const [box] = id
+    ? await db
+        .select()
+        .from(mailboxes)
+        .where(and(eq(mailboxes.id, id), eq(mailboxes.enabled, true)))
+    : [];
+  if (!box)
+    return {
+      sent: false,
+      why: "No company mailbox is set in Integrations → Email.",
+    };
+  try {
+    const auth = await authFor(box);
+    const domain = box.address.split("@")[1] || "helpdesk";
+    const messageId = `<notice-${crypto.randomUUID()}@${domain}>`;
+    await smtpTransport(box, auth).sendMail({
+      from: { name: box.name || box.address, address: box.address },
+      to,
+      subject,
+      text,
+      messageId,
+    });
+    if (ticketId)
+      await db.insert(emailMessages).values({
+        messageId,
+        ticketId,
+        mailboxId: box.id,
+        direction: "out",
+        address: to,
+      });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, why: explain(err, box) };
+  }
+}
+
 // Emails a reply (or automatic reply) on a ticket to the customer, if
 // the ticket came in by email (see sendNewReplies below). Never throws:
 // a problem shows in the bell of the people on the ticket instead.

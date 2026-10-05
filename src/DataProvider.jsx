@@ -475,6 +475,17 @@ export default function DataProvider({ children }) {
     return user;
   }
 
+  // "Forgot password": the new password from the emailed link, then
+  // signed straight in (server/src/notices.js)
+  async function resetPassword(token, password) {
+    const { user } = await api(`/password/reset/${token}`, {
+      method: "POST",
+      body: { password },
+    });
+    await startSignedIn(user);
+    return user;
+  }
+
   // ---------- Settings ----------
 
   // e.g. updateSettings("backup", { schedule: "weekly" })
@@ -964,6 +975,7 @@ export default function DataProvider({ children }) {
         logout,
         changePassword,
         acceptInvite,
+        resetPassword,
         rateTicket,
         markReviewed,
         findMemberByEmail,

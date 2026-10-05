@@ -6,6 +6,7 @@ import SignInAnimation from "../SignInAnimation";
 import PasswordInput from "../PasswordInput";
 import { inputClass, labelClass } from "../formStyles";
 import useData from "../../useData";
+import { api } from "../../api";
 
 const fullButton =
   "h-11 w-full cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70";
@@ -78,12 +79,20 @@ export default function Login() {
     }
   }
 
-  function handleReset(e) {
+  // Asks the server to email a link for choosing a new password
+  // (server/src/notices.js). The answer is always the same, so nobody can
+  // use this to find out which emails have accounts.
+  async function handleReset(e) {
     e.preventDefault();
-    // Always the same answer, so nobody can use this to find out which
-    // emails have accounts. The email itself gets sent once email is
-    // connected to the backend.
-    setResetSent(true);
+    setBusy(true);
+    setError("");
+    try {
+      await api("/password/forgot", { method: "POST", body: { email } });
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
   }
 
   if (view === "reset") {
@@ -106,7 +115,8 @@ export default function Login() {
           <p className="mt-6 flex items-start gap-3 rounded-lg bg-brand/10 p-4 text-sm text-brand">
             <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
             If there's an account for {email.trim()}, we've sent it a link to
-            choose a new password.
+            choose a new password. It works for 1 hour. Nothing arriving? Check
+            your spam folder, or ask your admin.
           </p>
         ) : (
           <form onSubmit={handleReset} className="mt-6 flex flex-col gap-4">
@@ -125,8 +135,9 @@ export default function Login() {
                 className={inputClass}
               />
             </label>
-            <button type="submit" className={fullButton}>
-              Send reset link
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <button type="submit" disabled={busy} className={fullButton}>
+              {busy ? "Sending…" : "Send reset link"}
             </button>
           </form>
         )}

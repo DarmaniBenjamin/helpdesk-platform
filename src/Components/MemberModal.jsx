@@ -115,7 +115,11 @@ export default function MemberModal({ member, onClose }) {
         departments,
       });
       document.activeElement?.blur();
-      setInvited({ member: result.member, link: inviteLinkFor(result.token) });
+      setInvited({
+        member: result.member,
+        link: inviteLinkFor(result.token),
+        emailed: result.emailed, // { sent, why } (server/src/notices.js)
+      });
     } catch (err) {
       setSaveError(err.message);
     } finally {
@@ -147,8 +151,9 @@ export default function MemberModal({ member, onClose }) {
             .
           </p>
           <p className="text-sm text-muted">
-            Invite emails aren't set up yet, so send them this link yourself
-            (WhatsApp, email, Teams...). It works once, for 7 days.
+            {invited.emailed?.sent
+              ? "We've emailed them the invite. You can also send them this link yourself (WhatsApp, Teams...). It works once, for 7 days."
+              : `The invite couldn't be emailed${invited.emailed?.why ? ` (${invited.emailed.why})` : ""}, so send them this link yourself (WhatsApp, email, Teams...). It works once, for 7 days.`}
           </p>
         </div>
 

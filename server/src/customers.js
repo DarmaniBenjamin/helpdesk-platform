@@ -10,6 +10,7 @@ import { publicUser, requireAuth, requireRole } from "./auth.js";
 import { makeInviteToken } from "./team.js";
 import { ADMINS, STAFF } from "./permissions.js";
 import { BadInput, cleanEmail, cleanText } from "./validate.js";
+import { emailInvite } from "./notices.js";
 import { filesOfTicket, removeFiles } from "./attachments.js";
 
 export const customersRouter = Router();
@@ -104,7 +105,10 @@ customersRouter.patch("/:id", requireRole(...STAFF), async (req, res) => {
   if ("phone" in req.body) changes.phone = cleanPhone(req.body.phone);
   if ("extraPhones" in req.body)
     changes.extraPhones = cleanList(req.body.extraPhones, cleanPhone);
-  if ("email" in req.body) changes.email = cleanEmail(req.body.email);
+  // An empty email removes it (the customer then has none, like some
+  // imported from Freshdesk)
+  if ("email" in req.body)
+    changes.email = req.body.email ? cleanEmail(req.body.email) : null;
   if ("extraEmails" in req.body)
     changes.extraEmails = cleanList(req.body.extraEmails, cleanEmail);
 
@@ -125,6 +129,12 @@ customersRouter.patch("/:id", requireRole(...STAFF), async (req, res) => {
     .select()
     .from(users)
     .where(eq(users.customerId, customer.id));
+  // They sign in to the customer portal with their main email, so it
+  // can't be removed while they have portal access
+  if (login && "email" in changes && !changes.email)
+    throw new BadInput(
+      "They sign in to the customer portal with this email, so it can't be removed. Make another email the main one instead.",
+    );
   if (login && changes.email) {
     const [taken] = await db
       .select({ id: users.id })
@@ -189,7 +199,11 @@ customersRouter.post(
       })
       .returning();
     const token = await makeInviteToken(user.id);
-    res.status(201).json({ member: await publicUser(user, []), token });
+    // Emailed to them when there's a company mailbox (notices.js)
+    const emailed = await emailInvite(req, user, token);
+    res
+      .status(201)
+      .json({ member: await publicUser(user, []), token, emailed });
   },
 );
 

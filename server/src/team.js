@@ -29,6 +29,7 @@ import {
   cleanPhoto,
   cleanText,
 } from "./validate.js";
+import { emailInvite } from "./notices.js";
 
 const INVITE_DAYS = 7;
 
@@ -143,8 +144,9 @@ teamRouter.get("/", requireRole(...STAFF), async (req, res) => {
   );
 });
 
-// Invite someone new. Returns the invite link's token, so the Admin can
-// copy the link (until invite emails are set up).
+// Invite someone new. The invite is emailed to them (notices.js) when
+// there's a company mailbox; the link's token is sent back either way, so
+// the Admin can also copy the link. "emailed" says whether it was sent.
 teamRouter.post("/invite", requireRole(...ADMINS), async (req, res) => {
   const email = cleanEmail(req.body?.email);
   const name = cleanText(req.body?.name, { label: "Name" });
@@ -169,14 +171,15 @@ teamRouter.post("/invite", requireRole(...ADMINS), async (req, res) => {
   const departmentIds = await cleanDepartments(req.body?.departments);
   await setDepartments(user.id, departmentIds);
   const token = await makeInviteToken(user.id);
+  const emailed = await emailInvite(req, user, token);
 
   res
     .status(201)
-    .json({ member: await publicUser(user, departmentIds), token });
+    .json({ member: await publicUser(user, departmentIds), token, emailed });
 });
 
 // A new invite link for someone who hasn't signed up yet (Resend, or
-// Copy invite link). The old link stops working.
+// Copy invite link). The old link stops working. Resending emails it.
 teamRouter.post(
   "/:id/invite-link",
   requireRole(...ADMINS),
@@ -193,7 +196,11 @@ teamRouter.post(
       .set({ invitedAt: new Date() })
       .where(eq(users.id, user.id))
       .returning();
-    res.json({ member: await publicUser(updated), token });
+    // "Copy invite link" only wants the link; "Resend" emails it too
+    const emailed = req.body?.email
+      ? await emailInvite(req, updated, token)
+      : null;
+    res.json({ member: await publicUser(updated), token, emailed });
   },
 );
 
