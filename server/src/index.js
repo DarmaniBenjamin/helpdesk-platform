@@ -26,6 +26,7 @@ import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { offsiteRouter } from "./offsite.js";
+import { setupOwnerRouter } from "./setup-owner.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
@@ -192,6 +193,7 @@ app.use("/api/domains", domainsRouter); // own domain + SSL (Super Admin; Caddy 
 app.use("/api/email", emailRouter); // Integrations → Email (Admins)
 app.use("/api/email-review", reviewRouter); // emails waiting for a decision (staff)
 app.use("/api/password", passwordRouter); // "forgot password" (no sign-in)
+app.use("/api/setup-owner", setupOwnerRouter); // the first Super Admin (new servers)
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 

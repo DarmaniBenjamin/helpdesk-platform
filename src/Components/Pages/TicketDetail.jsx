@@ -16,7 +16,6 @@ import {
   Trash2,
   Hand,
   Tag,
-  LoaderCircle,
   MonitorSmartphone,
   MessageCircle,
   MapPin,
@@ -40,6 +39,7 @@ import {
   isDone,
   timeAgo,
 } from "../../data";
+import Droplets from "../Droplets";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
 function toInputValue(time) {
@@ -1032,7 +1032,7 @@ export default function TicketDetail() {
                 <span className="text-red-500">{loadError}</span>
               ) : (
                 <>
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Droplets className="h-4 w-4" />
                   Loading the conversation…
                 </>
               )}

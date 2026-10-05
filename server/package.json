@@ -10,7 +10,8 @@
         "db:migrate": "drizzle-kit migrate",
         "db:seed": "node --env-file-if-exists=.env src/db/seed.js",
         "db:studio": "drizzle-kit studio",
-        "db:seed-examples": "node --env-file=.env src/db/seed-examples.js"
+        "db:seed-examples": "node --env-file=.env src/db/seed-examples.js",
+        "db:demo": "node --env-file-if-exists=.env src/db/demo.js"
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.1146.0",

@@ -490,6 +490,17 @@ export default function DataProvider({ children }) {
     return user;
   }
 
+  // A new server's first Super Admin (the /setup link printed by
+  // deploy/install.sh), then signed straight in
+  async function setupOwner(code, details) {
+    const { user } = await api(`/setup-owner/${code}`, {
+      method: "POST",
+      body: details,
+    });
+    await startSignedIn(user);
+    return user;
+  }
+
   // "Forgot password": the new password from the emailed link, then
   // signed straight in (server/src/notices.js)
   async function resetPassword(token, password) {
@@ -997,6 +1008,7 @@ export default function DataProvider({ children }) {
         changePassword,
         acceptInvite,
         resetPassword,
+        setupOwner,
         rateTicket,
         markReviewed,
         findMemberByEmail,

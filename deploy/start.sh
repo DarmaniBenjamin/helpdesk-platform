@@ -169,6 +169,9 @@ else
   fi
 fi
 
+# (deploy/install.sh prints its own next steps)
+[[ -n "${INSTALLING:-}" ]] && exit 0
+
 DOMAIN="$(env_get SITE_DOMAIN | cut -d, -f1)"
 echo
 echo "Done. The site is only reachable on your domains, over https:"

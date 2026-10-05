@@ -1,6 +1,8 @@
 // Puts the starting data into a new, empty database:
 //   - your four departments
-//   - the Super Admin account (from SUPER_ADMIN_* in .env)
+//   - the Super Admin account (from SUPER_ADMIN_* in .env), if those are
+//     filled in. A new server set up with deploy/install.sh leaves them
+//     out: the first Super Admin is made on the /setup page instead.
 //   - the default settings
 // Safe to run more than once: anything already there is left alone.
 //
@@ -30,40 +32,40 @@ async function seed() {
     .onConflictDoNothing();
   console.log(`✓ Departments: ${STARTING_DEPARTMENTS.length}`);
 
-  // 2. The Super Admin
+  // 2. The Super Admin (if SUPER_ADMIN_* are in .env)
   const email = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
   const name = process.env.SUPER_ADMIN_NAME?.trim();
   const password = process.env.SUPER_ADMIN_PASSWORD;
   if (!email || !name || !password) {
-    throw new Error(
-      "Set SUPER_ADMIN_EMAIL, SUPER_ADMIN_NAME and SUPER_ADMIN_PASSWORD in .env first.",
+    console.log(
+      "• No SUPER_ADMIN_* in .env: the first Super Admin is made on the /setup page.",
     );
-  }
-  if (password.length < 8) {
-    throw new Error("SUPER_ADMIN_PASSWORD must be at least 8 characters.");
-  }
-
-  const [existing] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email));
-  if (existing) {
-    console.log(`✓ Super Admin already exists: ${email}`);
   } else {
-    // The password is scrambled ("hashed") before it's stored. 12 = how
-    // much work that takes; slower for attackers trying to guess it.
-    const passwordHash = await bcrypt.hash(password, 12);
-    const now = new Date();
-    await db.insert(users).values({
-      name,
-      email,
-      role: "owner",
-      status: "active",
-      passwordHash,
-      joinedAt: now,
-      lastActiveAt: now,
-    });
-    console.log(`✓ Super Admin created: ${email}`);
+    if (password.length < 8) {
+      throw new Error("SUPER_ADMIN_PASSWORD must be at least 8 characters.");
+    }
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+    if (existing) {
+      console.log(`✓ Super Admin already exists: ${email}`);
+    } else {
+      // The password is scrambled ("hashed") before it's stored. 12 = how
+      // much work that takes; slower for attackers trying to guess it.
+      const passwordHash = await bcrypt.hash(password, 12);
+      const now = new Date();
+      await db.insert(users).values({
+        name,
+        email,
+        role: "owner",
+        status: "active",
+        passwordHash,
+        joinedAt: now,
+        lastActiveAt: now,
+      });
+      console.log(`✓ Super Admin created: ${email}`);
+    }
   }
 
   // 3. Settings

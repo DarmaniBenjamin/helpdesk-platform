@@ -9,9 +9,9 @@ import {
   FileSpreadsheet,
   File,
   Download,
-  LoaderCircle,
 } from "lucide-react";
 import { ACCEPT, fileUrl, formatSize } from "./useAttachments";
+import Droplets from "./Droplets";
 
 // An icon that fits the kind of file
 function iconFor(name) {
@@ -87,7 +87,7 @@ export function AttachmentChips({ attach }) {
           })}
           {attach.uploading > 0 && (
             <li className="flex items-center gap-2 rounded-lg border border-dashed border-line px-2.5 py-1.5 text-sm text-muted">
-              <LoaderCircle className="h-4 w-4 animate-spin" />
+              <Droplets className="h-4 w-4" />
               Uploading {attach.uploading} file
               {attach.uploading === 1 ? "" : "s"}…
             </li>

@@ -7,7 +7,6 @@ import {
   Globe,
   Info,
   KeyRound,
-  LoaderCircle,
   Lock,
   RefreshCw,
   Server,
@@ -19,6 +18,7 @@ import Modal from "./Modal";
 import { inputClass, labelClass, secondaryButton } from "./formStyles";
 import { copyText } from "./copyText";
 import { api } from "../api";
+import Droplets from "./Droplets";
 
 // How often to look again while a domain is still being set up
 const RECHECK_EVERY = 30 * 1000;
@@ -31,9 +31,8 @@ const STATUS = {
   },
   issuing: {
     label: "Getting certificate",
-    icon: LoaderCircle,
+    icon: Droplets,
     badge: "bg-amber-100 text-amber-700",
-    spin: true,
   },
   "waiting-dns": {
     label: "Waiting for DNS",
@@ -53,7 +52,7 @@ function StatusBadge({ status }) {
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.badge}`}
     >
-      <Icon className={`h-3.5 w-3.5 ${s.spin ? "animate-spin" : ""}`} />
+      <Icon className="h-3.5 w-3.5" />
       {s.label}
     </span>
   );
@@ -254,9 +253,11 @@ function DomainCard({ domain, mode, onCheck, onRemove, checking }) {
             disabled={checking}
             className={`${secondaryButton} flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60`}
           >
-            <RefreshCw
-              className={`h-4 w-4 ${checking ? "animate-spin" : ""}`}
-            />
+            {checking ? (
+              <Droplets className="h-4 w-4" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
             {checking ? "Checking…" : "Check now"}
           </button>
         )}
@@ -562,7 +563,7 @@ function ConfirmRemove({ domain, others, mode, onConfirm, onClose }) {
             disabled={busy || !matches}
             className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy && <Droplets className="h-4 w-4" />}
             {busy ? "Removing…" : "Remove"}
           </button>
         </>
@@ -716,7 +717,7 @@ export default function DomainSettings() {
           </p>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <Droplets className="h-4 w-4" />
             Loading…
           </p>
         )}
@@ -767,7 +768,7 @@ export default function DomainSettings() {
                 className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {adding ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Droplets className="h-4 w-4" />
                 ) : (
                   <Lock className="h-4 w-4" />
                 )}

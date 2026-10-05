@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { BellRing, LoaderCircle, Share, X } from "lucide-react";
+import { BellRing, Share, X } from "lucide-react";
 import { needsHomeScreen, pushStatus, turnOnPush } from "../push";
 import { primaryButton, secondaryButton } from "./formStyles";
+import Droplets from "./Droplets";
 
 // A small card that asks to turn on desktop/phone notifications, a few
 // seconds after opening Uplink in a browser where they're not on yet.
@@ -149,7 +150,7 @@ export default function PushPrompt() {
             disabled={busy}
             className={`${primaryButton} flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60`}
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy && <Droplets className="h-4 w-4" />}
             Turn on
           </button>
         </div>

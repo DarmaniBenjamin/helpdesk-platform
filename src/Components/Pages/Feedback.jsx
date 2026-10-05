@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, Star } from "lucide-react";
 import AuthShell from "../AuthShell";
 import { inputClass } from "../formStyles";
 import { api } from "../../api";
+import Droplets from "../Droplets";
 
 // The page the "How did we do?" email links to (/feedback/<token>): the
 // customer rates their resolved request 1 to 5 stars, with a comment if
@@ -57,7 +58,7 @@ export default function Feedback() {
     return (
       <AuthShell title="Feedback">
         <div className="flex justify-center py-10">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand/20 border-t-brand" />
+          <Droplets className="h-10 w-10 text-brand" />
         </div>
       </AuthShell>
     );

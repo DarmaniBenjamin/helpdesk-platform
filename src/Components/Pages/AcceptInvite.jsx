@@ -8,6 +8,7 @@ import { ROLES } from "../teamRoles";
 import { api } from "../../api";
 import { APP_NAME } from "../../brand";
 import useData from "../../useData";
+import Droplets from "../Droplets";
 
 const fullButton =
   "h-11 w-full cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
@@ -86,7 +87,7 @@ export default function AcceptInvite() {
     return (
       <AuthShell title="Invite">
         <div className="flex justify-center py-10">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand/20 border-t-brand" />
+          <Droplets className="h-10 w-10 text-brand" />
         </div>
       </AuthShell>
     );

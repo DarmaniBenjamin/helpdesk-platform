@@ -4,7 +4,6 @@ import {
   Cloud,
   CloudUpload,
   KeyRound,
-  LoaderCircle,
   RotateCcw,
   TriangleAlert,
 } from "lucide-react";
@@ -20,6 +19,7 @@ import {
 import { formatBytes } from "./backupUtils";
 import { api } from "../api";
 import { timeAgo } from "../data";
+import Droplets from "./Droplets";
 
 // Settings → Backup & Restore → Copies in the cloud. Every backup saved
 // on the server is also locked with a backup password and copied to
@@ -263,7 +263,7 @@ function Settings({ config, providers, onSaved, onCancel }) {
           disabled={busy}
           className={`${primaryButton} flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-70`}
         >
-          {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+          {busy && <Droplets className="h-4 w-4" />}
           {busy ? "Checking…" : "Save and check"}
         </button>
         {onCancel && (
@@ -319,7 +319,7 @@ function ConfirmRestore({ copy, onClose }) {
             disabled={typed !== "RESTORE" || busy}
             className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy && <Droplets className="h-4 w-4" />}
             {busy ? "Restoring…" : "Restore"}
           </button>
         </>
@@ -416,7 +416,7 @@ export default function OffsiteBackups() {
           <p className="text-sm text-red-500">{message.text}</p>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <Droplets className="h-4 w-4" />
             Loading…
           </p>
         )}
@@ -469,7 +469,7 @@ export default function OffsiteBackups() {
                 className={`${primaryButton} flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-70`}
               >
                 {busy === "copy" ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Droplets className="h-4 w-4" />
                 ) : (
                   <CloudUpload className="h-4 w-4" />
                 )}
@@ -504,7 +504,7 @@ export default function OffsiteBackups() {
               <p className="mb-2 text-sm font-medium">In the cloud</p>
               {copies === null ? (
                 <p className="flex items-center gap-2 text-sm text-muted">
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Droplets className="h-4 w-4" />
                   Loading…
                 </p>
               ) : copies.length === 0 ? (

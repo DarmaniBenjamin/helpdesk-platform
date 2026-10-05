@@ -9,7 +9,6 @@ import {
   X,
   RotateCcw,
   Save,
-  LoaderCircle,
 } from "lucide-react";
 import Card from "./Card";
 import OffsiteBackups from "./OffsiteBackups";
@@ -24,6 +23,7 @@ import { readJsonFile, formatBytes, backupContents } from "./backupUtils";
 import { api } from "../api";
 import { timeAgo } from "../data";
 import useData from "../useData";
+import Droplets from "./Droplets";
 
 const RECOVERY_STEPS = [
   {
@@ -92,7 +92,7 @@ function ConfirmRestore({ what, contents, onConfirm, onClose }) {
             disabled={!ready || busy}
             className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy && <Droplets className="h-4 w-4" />}
             {busy ? "Restoring…" : "Restore"}
           </button>
         </>
@@ -267,7 +267,7 @@ export default function BackupRestore() {
                 className={`${secondaryButton} flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-70`}
               >
                 {saving ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Droplets className="h-4 w-4" />
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
@@ -421,7 +421,7 @@ export default function BackupRestore() {
             <p className="mb-2 text-sm font-medium">Saved on the server</p>
             {saved === null ? (
               <p className="flex items-center gap-2 text-sm text-muted">
-                <LoaderCircle className="h-4 w-4 animate-spin" />
+                <Droplets className="h-4 w-4" />
                 Loading…
               </p>
             ) : saved.length === 0 ? (
