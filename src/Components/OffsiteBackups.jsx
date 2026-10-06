@@ -328,8 +328,9 @@ function ConfirmRestore({ copy, onClose }) {
       <p className="text-sm">
         Everything in the helpdesk is replaced with the copy from{" "}
         <strong>{formatDate(copy.at)}</strong>: tickets, customers, the team,
-        settings and attached files. Anything newer than that is lost. Everyone
-        else is signed out.
+        settings and attached files (any this server doesn't have are
+        downloaded). Anything newer than that is lost. Everyone else is signed
+        out.
       </p>
       <label className={labelClass}>
         <span>
@@ -361,6 +362,7 @@ export default function OffsiteBackups() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState(null); // { tone, text }
   const [restoring, setRestoring] = useState(null);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     api("/backup/offsite")
@@ -429,10 +431,11 @@ export default function OffsiteBackups() {
     <Card title="Copies in the cloud">
       <div className="-mt-2 flex flex-col gap-4">
         <p className="text-sm text-muted">
-          If this server is ever lost, the backups on it go too. With this on,
-          each backup is also locked with your backup password and copied to
-          cloud storage, with the attached files, so everything can be put back
-          on a new server.
+          If this server is ever lost, the backups on it go too. With this on, a
+          copy of everything is locked with your backup password and sent to
+          cloud storage within 10 minutes of any change, and each attached file
+          once. Every copy from the last 2 days is kept, then one a day for a
+          month, then one a week for 3 months.
         </p>
 
         {config.enabled && !editing ? (
@@ -456,8 +459,8 @@ export default function OffsiteBackups() {
                 {config.lastError
                   ? `The last copy didn't work: ${config.lastError}`
                   : config.lastCopyAt
-                    ? `Last copy ${timeAgo(config.lastCopyAt)}.`
-                    : "No copy yet: the next backup makes one, or press Copy now."}
+                    ? `Last copy ${timeAgo(config.lastCopyAt)}, with ${config.filesInCloud.toLocaleString()} attached file${config.filesInCloud === 1 ? "" : "s"} in the cloud.`
+                    : "No copy yet: the next change makes one, or press Copy now."}
               </p>
             </div>
 
@@ -513,7 +516,7 @@ export default function OffsiteBackups() {
                 </p>
               ) : (
                 <ul className="divide-y divide-line rounded-lg border border-line">
-                  {copies.map((c) => (
+                  {(showAll ? copies : copies.slice(0, 10)).map((c) => (
                     <li
                       key={c.name}
                       className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center"
@@ -540,6 +543,15 @@ export default function OffsiteBackups() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {copies?.length > 10 && !showAll && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="mt-2 cursor-pointer text-sm text-brand hover:underline"
+                >
+                  Show all {copies.length} versions
+                </button>
               )}
             </div>
           </>

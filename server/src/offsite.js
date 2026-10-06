@@ -1,22 +1,33 @@
 // Off-site copies of the backups (Settings → Backup & Restore), so a
 // lost or broken server doesn't take everything with it.
 //
-// Each time a backup is saved on the server (every day or week, or "Save
-// on the server"), a copy goes to cloud storage too:
-//   - Backblaze B2 (10 GB free), Cloudflare R2 (10 GB free), Wasabi,
-//     Amazon S3, or anything else that speaks "S3"
-//   - only the newest ones are kept there, the same number as on the
-//     server
-// A copy holds everything needed to start again on a new server:
-//   - the backup itself (the whole database)
-//   - the uploads folder (every attached file)
-//   - this server's secret key (secrets.js), so mailbox passwords and
-//     sign-ins to Microsoft/Google still work after restoring
-// It's locked with a backup password (AES-256-GCM, with the key made from
-// the password by scrypt) before it leaves the server, so the storage
-// company (or anyone who gets into the bucket) only ever sees scrambled
-// data. Keep the backup password somewhere safe outside the helpdesk
-// (a password manager): without it, the copies can't be opened.
+// Copies go to cloud storage: Backblaze B2 (10 GB free), Cloudflare R2
+// (10 GB free), Wasabi, Amazon S3, or anything else that speaks "S3".
+//
+// When: within 10 minutes of any change (a new ticket, a reply, a new
+// customer...), at most once every 10 minutes, so at worst 10 minutes of
+// work could ever be lost. Also with every backup saved on the server
+// (every day or week, or "Save on the server"), and with "Copy now".
+//
+// What, in the folder in the bucket:
+//   helpdesk-backup-<date>.uplink   the whole database and this server's
+//                                   secret key (secrets.js), so mailbox
+//                                   passwords and Microsoft/Google
+//                                   sign-ins still work after restoring
+//   files/...                       every attached file, each uploaded
+//                                   once, when it's new (not again with
+//                                   every copy)
+//
+// Versions: every copy from the last 48 hours is kept, then one a day for
+// 30 days, then one a week for 3 months; older ones are deleted. Lots of
+// recent versions to go back to, while the storage stays small.
+//
+// Each copy and file is locked with a backup password (AES-256-GCM, with
+// the key made from the password by scrypt) before it leaves the server,
+// so the storage company (or anyone who gets into the bucket) only ever
+// sees scrambled data. Keep the backup password somewhere safe outside
+// the helpdesk (a password manager): without it, the copies can't be
+// opened.
 //
 // The settings (bucket, keys, password) are kept in the settings table,
 // the secrets locked with secrets.js. Nothing to put in server/.env.
@@ -27,7 +38,9 @@
 //   POST   /api/backup/offsite/send       make a backup and copy it now
 //   GET    /api/backup/offsite/copies     the copies in the cloud
 //   POST   /api/backup/offsite/restore    { name } restore one of them
-// All Super Admin only.
+// All Super Admin only. Restoring brings back the database and the key
+// from the copy, then downloads any attached files this server doesn't
+// have (all of them, on a new server).
 //
 // Restoring on a new server: set up the helpdesk, sign in as the Super
 // Admin, fill in the same storage details and backup password here, then
@@ -52,6 +65,7 @@ import { requireRole } from "./auth.js";
 import { BadInput } from "./validate.js";
 import { seal, unseal, currentKey, replaceKey } from "./secrets.js";
 import { UPLOAD_DIR } from "./attachments.js";
+import { onEveryChange } from "./live.js";
 import { BACKUP_DIR, afterBackupSaved, makeBackup, restore } from "./backup.js";
 
 export const offsiteRouter = Router();
@@ -99,6 +113,7 @@ function publicConfig(config) {
     keyId: config.keyId,
     lastCopyAt: config.lastCopyAt ?? null,
     lastError: config.lastError ?? null,
+    filesInCloud: config.filesInCloud ?? 0,
   };
 }
 
@@ -135,18 +150,32 @@ function explain(err) {
 
 // The key for the password and salt (scrypt: slow on purpose, so the
 // password can't be guessed quickly)
+// (Keys already worked out are remembered, since attached files all use
+// the same salt for a while, and working one out takes a moment)
+const keys = new Map();
 function keyFor(password, salt) {
-  return crypto.scryptSync(String(password), salt, 32, {
-    N: 2 ** 15,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024,
-  });
+  const id = `${crypto.createHash("sha256").update(String(password)).digest("hex")}:${salt.toString("hex")}`;
+  if (!keys.has(id)) {
+    if (keys.size > 50) keys.clear();
+    keys.set(
+      id,
+      crypto.scryptSync(String(password), salt, 32, {
+        N: 2 ** 15,
+        r: 8,
+        p: 1,
+        maxmem: 64 * 1024 * 1024,
+      }),
+    );
+  }
+  return keys.get(id);
 }
 
+// One salt for the attached files while the server runs (each file still
+// gets its own random IV, so no two are locked the same way)
+const FILE_SALT = crypto.randomBytes(16);
+
 // file → MAGIC | salt (16) | iv (12) | locked data | tag (16)
-async function lockFile(from, to, password) {
-  const salt = crypto.randomBytes(16);
+async function lockFile(from, to, password, salt = crypto.randomBytes(16)) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(
     "aes-256-gcm",
@@ -191,7 +220,7 @@ async function unlockFile(from, to, password) {
   }
 }
 
-// ---------- Packing: backup + uploads + key, in one .tar.gz ----------
+// ---------- Packing: backup + key, in one .tar.gz ----------
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -213,6 +242,7 @@ async function workFolder() {
   return fs.promises.mkdtemp(path.join(WORK_DIR, "job-"));
 }
 
+// The database and key (attached files go up on their own, see syncFiles)
 async function pack(backupFile, into) {
   const stage = path.join(into, "stage");
   await fs.promises.mkdir(stage);
@@ -221,19 +251,8 @@ async function pack(backupFile, into) {
     mode: 0o600,
   });
   const archive = path.join(into, "copy.tar.gz");
-  // The uploads folder goes in as "uploads", wherever it is on this server
-  await run("tar", [
-    "-czf",
-    archive,
-    "-C",
-    stage,
-    "backup.json",
-    "secret-key",
-    "-C",
-    path.dirname(UPLOAD_DIR),
-    path.basename(UPLOAD_DIR),
-  ]);
-  return { archive, uploadsName: path.basename(UPLOAD_DIR) };
+  await run("tar", ["-czf", archive, "-C", stage, "backup.json", "secret-key"]);
+  return { archive };
 }
 
 // ---------- Copying to the cloud ----------
@@ -247,16 +266,44 @@ function cloudName(d) {
 
 let copying = false;
 
-// Locks a saved backup (with the uploads and key) and uploads it, then
-// keeps only the newest `keep` copies there
-async function copyToCloud(backupFile, keep) {
+// Which copies to delete: every copy from the last 48 hours stays, then
+// the newest of each day for 30 days, then the newest of each week for
+// about 3 months (and always the 3 newest)
+function oldVersions(copies, now = Date.now()) {
+  const HOUR = 60 * 60 * 1000;
+  const keep = new Set(copies.slice(0, 3).map((c) => c.name));
+  const days = new Set();
+  const weeks = new Set();
+  for (const c of copies) {
+    const age = now - c.at;
+    if (age <= 48 * HOUR) keep.add(c.name);
+    else if (age <= 30 * 24 * HOUR) {
+      const day = new Date(c.at).toDateString();
+      if (!days.has(day)) {
+        days.add(day);
+        keep.add(c.name);
+      }
+    } else if (age <= 91 * 24 * HOUR) {
+      const week = Math.floor(c.at / (7 * 24 * HOUR));
+      if (!weeks.has(week)) {
+        weeks.add(week);
+        keep.add(c.name);
+      }
+    }
+  }
+  return copies.filter((c) => !keep.has(c.name));
+}
+
+// Locks a saved backup (with the key) and uploads it, then thins out the
+// older versions (see oldVersions)
+async function copyToCloud(backupFile) {
   const config = await loadConfig();
   if (!config) return;
   if (copying) throw new Error("A copy is already being made.");
   copying = true;
   const job = await workFolder();
   try {
-    const { archive, uploadsName } = await pack(backupFile, job);
+    const { archive } = await pack(backupFile, job);
     const locked = path.join(job, "copy.uplink");
     await lockFile(archive, locked, unseal(config.password));
 
@@ -268,20 +315,23 @@ async function copyToCloud(backupFile, keep) {
         Bucket: config.bucket,
         Key: `${prefix(config)}${name}`,
         Body: fs.createReadStream(locked),
-        Metadata: { uploads: uploadsName },
       },
     }).done();
 
-    // Only the newest `keep` copies stay in the cloud
     const copies = await listCopies(config);
-    for (const old of copies.slice(keep))
+    for (const old of oldVersions(copies))
       await s3.send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: `${prefix(config)}${old.name}`,
         }),
       );
-    await saveConfig({ ...config, lastCopyAt: Date.now(), lastError: null });
+    lastSnapshotAt = Date.now();
+    await saveConfig({
+      ...(await loadConfig()),
+      lastCopyAt: Date.now(),
+      lastError: null,
+    });
   } catch (err) {
     await saveConfig({
       ...config,
@@ -304,6 +354,7 @@ async function listCopies(config) {
       new ListObjectsV2Command({
         Bucket: config.bucket,
         Prefix: prefix(config),
+        Delimiter: "/", // not the files/ folder
         ContinuationToken: token,
       }),
     );
@@ -321,10 +372,177 @@ async function listCopies(config) {
   return found.sort((a, b) => b.at - a.at);
 }
 
+// ---------- Attached files: each one uploaded once ----------
+
+// Every file in the uploads folder (and its folders), as paths inside it
+async function localFiles(dir = UPLOAD_DIR, base = "") {
+  const found = [];
+  let entries;
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith(".")) continue;
+    const rel = base ? `${base}/${e.name}` : e.name;
+    if (e.isDirectory())
+      found.push(...(await localFiles(path.join(dir, e.name), rel)));
+    else if (e.isFile()) found.push(rel);
+  }
+  return found;
+}
+
+// The files already in the cloud (looked up once, then kept up to date)
+let uploaded = null;
+let uploadedFor = "";
+
+async function remoteFiles(config, s3) {
+  const where = `${config.bucket}/${prefix(config)}`;
+  if (uploaded && uploadedFor === where) return uploaded;
+  const set = new Set();
+  let token;
+  do {
+    const page = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: config.bucket,
+        Prefix: `${prefix(config)}files/`,
+        ContinuationToken: token,
+      }),
+    );
+    for (const item of page.Contents ?? [])
+      set.add(item.Key.slice(`${prefix(config)}files/`.length));
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  uploaded = set;
+  uploadedFor = where;
+  return set;
+}
+
+let syncing = false;
+
+// Uploads the attached files that aren't in the cloud yet, each locked
+// with the backup password
+async function syncFiles() {
+  const config = await loadConfig();
+  if (!config || syncing) return;
+  syncing = true;
+  const job = await workFolder();
+  try {
+    const s3 = client(config, unseal(config.secretKey));
+    const there = await remoteFiles(config, s3);
+    const password = unseal(config.password);
+    let added = 0;
+    for (const rel of await localFiles()) {
+      if (there.has(rel)) continue;
+      const locked = path.join(job, "file.uplink");
+      await lockFile(path.join(UPLOAD_DIR, rel), locked, password, FILE_SALT);
+      await new Upload({
+        client: s3,
+        params: {
+          Bucket: config.bucket,
+          Key: `${prefix(config)}files/${rel}`,
+          Body: fs.createReadStream(locked),
+        },
+      }).done();
+      there.add(rel);
+      added++;
+    }
+    if (added || config.filesInCloud !== there.size)
+      await saveConfig({
+        ...(await loadConfig()),
+        filesInCloud: there.size,
+        lastFilesAt: Date.now(),
+      });
+  } finally {
+    syncing = false;
+    await fs.promises.rm(job, { recursive: true, force: true });
+  }
+}
+
+// Restoring: downloads the attached files this server doesn't have
+async function restoreFiles(config, s3) {
+  const job = await workFolder();
+  let count = 0;
+  try {
+    const password = unseal(config.password);
+    uploaded = null; // look again
+    for (const rel of await remoteFiles(config, s3)) {
+      const target = path.join(UPLOAD_DIR, rel);
+      // (never outside the uploads folder)
+      if (!target.startsWith(UPLOAD_DIR + path.sep)) continue;
+      if (fs.existsSync(target)) continue;
+      const object = await s3.send(
+        new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: `${prefix(config)}files/${rel}`,
+        }),
+      );
+      const locked = path.join(job, "file.uplink");
+      await pipeline(object.Body, fs.createWriteStream(locked));
+      await fs.promises.mkdir(path.dirname(target), { recursive: true });
+      await unlockFile(locked, target, password);
+      count++;
+    }
+  } finally {
+    await fs.promises.rm(job, { recursive: true, force: true });
+  }
+  return count;
+}
+
+// ---------- When copies are made ----------
+
 // Every backup saved on the server gets a copy (backup.js calls this)
-afterBackupSaved(async (file, keep) => {
-  if (await loadConfig()) await copyToCloud(file, keep);
+afterBackupSaved(async (file) => {
+  if (!(await loadConfig())) return;
+  await copyToCloud(file);
+  await syncFiles();
 });
+
+// Soon after any change: a fresh copy of the database (at most every 10
+// minutes), and any new attached files
+const SNAPSHOT_EVERY = 10 * 60 * 1000;
+let changed = false;
+let lastSnapshotAt = 0;
+onEveryChange((data) => {
+  // (restoring a backup isn't new work to copy)
+  if (data?.resource !== "backup") changed = true;
+});
+
+async function snapshot() {
+  const job = await workFolder();
+  try {
+    const backup = await makeBackup();
+    const file = path.join(job, "backup.json");
+    await fs.promises.writeFile(file, JSON.stringify(backup));
+    await copyToCloud(file);
+  } finally {
+    await fs.promises.rm(job, { recursive: true, force: true });
+  }
+}
+
+async function copyIfChanged() {
+  if (copying || !(await loadConfig())) return;
+  if (changed && Date.now() - lastSnapshotAt >= SNAPSHOT_EVERY) {
+    changed = false;
+    try {
+      await snapshot();
+    } catch (err) {
+      changed = true; // try again next time
+      throw err;
+    }
+  }
+  await syncFiles();
+}
+
+export function startOffsiteCopies() {
+  const run = () =>
+    copyIfChanged().catch((err) =>
+      console.error("Off-site copy:", err.message),
+    );
+  setTimeout(run, 30 * 1000).unref();
+  setInterval(run, 60 * 1000).unref();
+}
 
 // ---------- The routes ----------
 
@@ -394,19 +612,11 @@ offsiteRouter.post("/send", async (req, res) => {
   const job = await workFolder();
   try {
     const backup = await makeBackup();
-    const stamp = new Date(backup.exportedAt);
-    const pad = (n) => String(n).padStart(2, "0");
-    const file = path.join(
-      job,
-      `helpdesk-backup-${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.json`,
-    );
+    const file = path.join(job, "backup.json");
     await fs.promises.writeFile(file, JSON.stringify(backup));
-    const [row] = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.key, "backup"));
     try {
-      await copyToCloud(file, row?.value?.keep ?? 14);
+      await copyToCloud(file);
+      await syncFiles();
     } catch (err) {
       throw new BadInput(err instanceof BadInput ? err.message : explain(err));
     }
@@ -457,6 +667,8 @@ offsiteRouter.post("/restore", async (req, res) => {
     }
     const locked = path.join(job, "copy.uplink");
     await pipeline(object.Body, fs.createWriteStream(locked));
+    // (copies made before attached files went up on their own have an
+    // uploads folder inside them)
     const uploadsName = object.Metadata?.uploads || "uploads";
 
     // Unlock and unpack
@@ -484,12 +696,14 @@ offsiteRouter.post("/restore", async (req, res) => {
       throw err;
     }
 
-    // The attached files (added next to any already here)
+    // The attached files: from inside older copies, and any this server
+    // doesn't have from the cloud's files/ folder
     const files = path.join(unpacked, uploadsName);
     if (fs.existsSync(files))
       await fs.promises.cp(files, UPLOAD_DIR, { recursive: true, force: true });
+    const downloaded = await restoreFiles(config, s3);
 
-    res.json(summary);
+    res.json({ ...summary, filesDownloaded: downloaded });
   } finally {
     await fs.promises.rm(job, { recursive: true, force: true });
   }

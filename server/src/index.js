@@ -25,7 +25,7 @@ import { liveRouter, sendToEveryone } from "./live.js";
 import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
-import { offsiteRouter } from "./offsite.js";
+import { offsiteRouter, startOffsiteCopies } from "./offsite.js";
 import { setupOwnerRouter } from "./setup-owner.js";
 import { jobsRouter, startJobReminders } from "./jobs.js";
 import { freshdeskRouter } from "./freshdesk.js";
@@ -269,4 +269,6 @@ app.listen(port, host, () => {
   startFeedbackEmails();
   // Every minute: "your job starts in 30 minutes" reminders
   startJobReminders();
+  // Every minute: a copy to the cloud if anything changed (offsite.js)
+  startOffsiteCopies();
 });

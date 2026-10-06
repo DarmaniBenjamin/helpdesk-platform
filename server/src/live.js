@@ -37,7 +37,22 @@ export function sendToUser(userId, event, data) {
 // Tells every open tab that something changed. Staff hear about
 // everything. A customer only hears about their own tickets (the
 // change says whose ticket it is: customerId), and about a restore.
+// Things that want to know whenever something changes (e.g. offsite.js,
+// which copies the database to the cloud soon after any change)
+const changeListeners = [];
+export function onEveryChange(fn) {
+  changeListeners.push(fn);
+}
+
 export function sendToEveryone(event, data) {
+  if (event === "changed")
+    for (const fn of changeListeners) {
+      try {
+        fn(data);
+      } catch {
+        // a listener's problem isn't the change's problem
+      }
+    }
   for (const c of connections.values()) {
     if (c.staff) {
       send(c.res, event, data);
