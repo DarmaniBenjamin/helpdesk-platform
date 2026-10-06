@@ -132,7 +132,7 @@ export default function JobAlert() {
     "flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl text-base font-medium transition active:scale-[0.98] disabled:opacity-60";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/60 p-3 backdrop-blur-sm sm:items-center">
+    <div className="fixed inset-0 z-70 flex items-end justify-center bg-ink/60 p-3 backdrop-blur-sm sm:items-center">
       <div
         role="alertdialog"
         aria-labelledby="job-alert-title"
