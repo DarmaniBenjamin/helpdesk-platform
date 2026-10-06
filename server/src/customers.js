@@ -25,7 +25,47 @@ function publicCustomer(c) {
     company: c.company,
     extraEmails: c.extraEmails,
     extraPhones: c.extraPhones,
+    // Where they are (null if nobody has saved it yet)
+    location:
+      c.latitude != null && c.longitude != null
+        ? {
+            lat: c.latitude,
+            lng: c.longitude,
+            note: c.locationNote,
+            by: c.locationBy,
+            at: c.locationAt ? c.locationAt.getTime() : null,
+          }
+        : null,
     createdAt: c.createdAt.getTime(),
+  };
+}
+
+// A location sent by the page: { lat, lng, note } (or null to remove it)
+function cleanLocation(value, user) {
+  if (value === null)
+    return {
+      latitude: null,
+      longitude: null,
+      locationNote: "",
+      locationBy: "",
+      locationAt: null,
+    };
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180 ||
+    (lat === 0 && lng === 0)
+  )
+    throw new BadInput("That location isn't valid.");
+  return {
+    latitude: Math.round(lat * 1e6) / 1e6,
+    longitude: Math.round(lng * 1e6) / 1e6,
+    locationNote: cleanText(value?.note, { label: "Location note", max: 300 }),
+    locationBy: user.name || user.email,
+    locationAt: new Date(),
   };
 }
 
@@ -111,6 +151,8 @@ customersRouter.patch("/:id", requireRole(...STAFF), async (req, res) => {
     changes.email = req.body.email ? cleanEmail(req.body.email) : null;
   if ("extraEmails" in req.body)
     changes.extraEmails = cleanList(req.body.extraEmails, cleanEmail);
+  if ("location" in req.body)
+    Object.assign(changes, cleanLocation(req.body.location, req.user));
 
   // None of their emails can belong to another customer. (Some customers
   // imported from Freshdesk have no main email yet, hence the filter.)

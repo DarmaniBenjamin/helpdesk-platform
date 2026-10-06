@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   CalendarDays,
+  AlarmClock,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import useClosing from "./useClosing";
@@ -39,6 +40,7 @@ const NOTIFICATION_ICONS = {
   dueSoon: Clock,
   overdue: TriangleAlert,
   job: CalendarDays,
+  jobNow: AlarmClock,
 };
 
 function IconButton({
@@ -121,12 +123,24 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
     if (!n.read) markNotificationRead(n.id);
     setNotifOpen(false);
     // Jobs open the calendar (where you see when); the rest their ticket
-    if (n.kind === "job") navigate("/calendar");
+    if (n.kind === "job" || n.kind === "jobNow") navigate("/calendar");
     else if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
   }
 
   return (
     <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-line bg-white px-3 sm:gap-4 sm:px-6">
+      {/* Blurred background behind the open notifications or profile menu
+          (phones and tablets, like the side menu). Tapping it closes them. */}
+      {(notifPanel.shown || userPanel.shown) && (
+        <div
+          aria-hidden="true"
+          className={`fixed inset-0 z-10 bg-ink/40 backdrop-blur-sm lg:hidden ${
+            notifPanel.closing || userPanel.closing
+              ? "animate-fade-out"
+              : "animate-fade-in"
+          }`}
+        />
+      )}
       <div className="flex min-w-0 items-center gap-1 sm:gap-4">
         <IconButton
           icon={Menu}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { CircleCheck, Trash2, TriangleAlert } from "lucide-react";
+import { CircleCheck, Navigation, Trash2, TriangleAlert } from "lucide-react";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
 import Droplets from "./Droplets";
@@ -11,6 +11,7 @@ import {
   secondaryButton,
 } from "./formStyles";
 import { JOB_KINDS } from "./jobKinds";
+import { directionsLink } from "../location";
 import { api } from "../api";
 import useData from "../useData";
 
@@ -219,6 +220,20 @@ export default function JobModal({ job, onClose, onSaved, onDeleted }) {
               </Link>
               {job.ticketSubject ? `: ${job.ticketSubject}` : ""}
             </p>
+          )}
+
+          {/* The customer's saved location: directions in the maps app */}
+          {job.place && (
+            <a
+              href={directionsLink(job.place)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-brand/30 text-sm font-medium text-brand transition hover:bg-brand/5"
+            >
+              <Navigation className="h-4 w-4" />
+              Directions to {job.customerName || "the customer"}
+              {job.place.note ? ` (${job.place.note})` : ""}
+            </a>
           )}
 
           <label className={labelClass}>

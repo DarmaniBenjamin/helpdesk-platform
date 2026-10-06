@@ -19,6 +19,7 @@ import {
   MonitorSmartphone,
   MessageCircle,
   MapPin,
+  Navigation,
 } from "lucide-react";
 import Avatar from "../Avatar";
 import StatusBadge from "../StatusBadge";
@@ -41,6 +42,7 @@ import {
 } from "../../data";
 import Droplets from "../Droplets";
 import TicketJobs from "../TicketJobs";
+import { directionsLink } from "../../location";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
 function toInputValue(time) {
@@ -508,7 +510,7 @@ function Composer({ ticket, onSend }) {
 // their page), business, buttons to call, WhatsApp or email them, and how many
 // other tickets of theirs are still open (also opens their page, where
 // they're listed)
-function CustomerLine({ customer, otherOpen }) {
+function CustomerLine({ customer, location, otherOpen }) {
   const iconLink =
     "flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:border-brand/40 hover:text-brand active:scale-[0.95]";
   return (
@@ -537,6 +539,18 @@ function CustomerLine({ customer, otherOpen }) {
             className={iconLink}
           >
             <Phone className="h-4 w-4" />
+          </a>
+        )}
+        {location && (
+          <a
+            href={directionsLink(location)}
+            target="_blank"
+            rel="noreferrer"
+            title={`Directions to ${customer.name}${location.note ? ` (${location.note})` : ""}`}
+            aria-label={`Directions to ${customer.name}`}
+            className={iconLink}
+          >
+            <Navigation className="h-4 w-4" />
           </a>
         )}
         {whatsappLink(customer.phone) && (
@@ -801,6 +815,7 @@ export default function TicketDetail() {
     answers,
     addAnswer,
     loadConversation,
+    customers,
   } = useData();
   const [showDetails, setShowDetails] = useState(false); // phones only
   // A message if a change (status, assignee...) didn't save
@@ -925,7 +940,14 @@ export default function TicketDetail() {
           <h1 className="mt-1 text-xl font-semibold sm:text-2xl">
             {ticket.subject}
           </h1>
-          <CustomerLine customer={customer} otherOpen={otherOpen} />
+          <CustomerLine
+            customer={customer}
+            location={
+              // The customer's saved location (from their customer record)
+              customers.find((c) => c.id === ticket.customerId)?.location
+            }
+            otherOpen={otherOpen}
+          />
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={ticket.status} />
             <PriorityBadge priority={ticket.priority} />

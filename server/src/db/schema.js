@@ -13,6 +13,7 @@ import {
   bigint,
   smallint,
   boolean,
+  doublePrecision,
   jsonb,
   timestamp,
   primaryKey,
@@ -70,6 +71,14 @@ export const customers = pgTable("customers", {
   company: text("company"), // empty = an individual
   extraEmails: text("extra_emails").array().notNull().default([]),
   extraPhones: text("extra_phones").array().notNull().default([]),
+  // Where they are, for site visits: saved on the spot by an agent's phone
+  // ("I'm here"), or typed in / pasted from a maps link. Opens in the
+  // phone's maps app (see src/location.js).
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  locationNote: text("location_note").notNull().default(""), // e.g. "blue gate, upstairs"
+  locationBy: text("location_by").notNull().default(""), // who saved it
+  locationAt: time("location_at"),
   createdAt: createdAt(),
 });
 
@@ -278,6 +287,11 @@ export const jobAgents = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // When the job's time comes: the alert keeps going off (a few times)
+    // until this agent answers it on their phone ("I'm here" / dismiss)
+    ackAt: time("ack_at"),
+    alerts: integer("alerts").notNull().default(0),
+    lastAlertAt: time("last_alert_at"),
   },
   (t) => [
     primaryKey({ columns: [t.jobId, t.userId] }),

@@ -78,6 +78,13 @@
       "when": 1791231729044,
       "tag": "0010_calendar_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791248149056,
+      "tag": "0011_locations_and_alerts",
+      "breakpoints": true
     }
   ]
 }

@@ -6,15 +6,32 @@
 //   POST   /api/jobs                book one
 //   PATCH  /api/jobs/:id            change it (time, agents, done...)
 //   DELETE /api/jobs/:id            remove it
+//   GET    /api/jobs/now            my jobs whose time has come, not answered
+//   POST   /api/jobs/:id/ack        answer it: { snooze } minutes, or done
 //
 // Everyone on the team sees every job (so they can see who's free).
 // Admins can change any job; agents can change the jobs they're on or
 // booked themselves, and book jobs for anyone.
 //
-// Notifications (the bell, and phone/desktop pop-ups): when you're put on
-// a job, when your job's time is changed, and 30 minutes before it starts.
+// Notifications (the bell, and phone/desktop pop-ups), only to the agents
+// on the job: when you're put on it, when its time changes, 15 minutes
+// before it starts, and when it starts. That last one keeps going off
+// (every 2 minutes, up to 5 times) until you answer it on your phone:
+// the app shows a full-screen "It's time" with I'm here / Snooze /
+// Dismiss, and asks to save the customer's location if they have none.
 import { Router } from "express";
-import { and, asc, eq, gt, gte, inArray, isNull, lt, lte } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "./db/index.js";
 import { customers, jobAgents, jobs, tickets, users } from "./db/schema.js";
 import { requireRole } from "./auth.js";
@@ -40,7 +57,7 @@ async function shapeJobs(rows) {
     .where(inArray(jobAgents.jobId, ids));
   const byJob = {};
   for (const a of agents) (byJob[a.jobId] ??= []).push(a.userId);
-  return rows.map(({ job: j, customerName, ticketSubject }) => ({
+  return rows.map(({ job: j, customerName, ticketSubject, place }) => ({
     id: j.id,
     title: j.title,
     kind: j.kind,
@@ -52,6 +69,11 @@ async function shapeJobs(rows) {
     ticketSubject: ticketSubject ?? null,
     customerId: j.customerId,
     customerName: customerName ?? null,
+    // The customer's saved location, if any (to navigate there)
+    place:
+      place?.lat != null && place?.lng != null
+        ? { lat: place.lat, lng: place.lng, note: place.note ?? "" }
+        : null,
     done: Boolean(j.doneAt),
     agents: byJob[j.id] ?? [],
     createdById: j.createdById,
@@ -64,6 +86,11 @@ function selectJobs() {
       job: jobs,
       customerName: customers.name,
       ticketSubject: tickets.subject,
+      place: {
+        lat: customers.latitude,
+        lng: customers.longitude,
+        note: customers.locationNote,
+      },
     })
     .from(jobs)
     .leftJoin(customers, eq(jobs.customerId, customers.id))
@@ -126,6 +153,35 @@ const when = (ms) =>
   });
 
 // ---------- The routes ----------
+
+// My jobs whose time has come (or is a minute away) that I haven't
+// answered yet: the app shows these full screen
+jobsRouter.get("/now", async (req, res) => {
+  const now = Date.now();
+  const mine = await db
+    .select({ jobId: jobAgents.jobId })
+    .from(jobAgents)
+    .innerJoin(jobs, eq(jobAgents.jobId, jobs.id))
+    .where(
+      and(
+        eq(jobAgents.userId, req.user.id),
+        isNull(jobAgents.ackAt),
+        isNull(jobs.doneAt),
+        lte(jobs.startsAt, new Date(now + MINUTE)),
+        gt(jobs.endsAt, new Date(now)),
+      ),
+    );
+  if (!mine.length) return res.json([]);
+  const rows = await selectJobs()
+    .where(
+      inArray(
+        jobs.id,
+        mine.map((m) => m.jobId),
+      ),
+    )
+    .orderBy(asc(jobs.startsAt));
+  res.json(await shapeJobs(rows));
+});
 
 jobsRouter.get("/", async (req, res) => {
   if (req.query.ticketId) {
@@ -284,6 +340,31 @@ jobsRouter.patch("/:id", async (req, res) => {
   res.json(after);
 });
 
+// Answering the "It's time" alert: snooze (it comes back after that many
+// minutes), or I'm here / dismiss (it stops for me)
+jobsRouter.post("/:id/ack", async (req, res) => {
+  const job = await loadJob(req.params.id);
+  if (!job.agents.includes(req.user.id))
+    throw new BadInput("You're not on this job.", 403);
+  const snooze = Math.min(60, Math.max(0, Number(req.body?.snooze) || 0));
+  const mine = and(
+    eq(jobAgents.jobId, job.id),
+    eq(jobAgents.userId, req.user.id),
+  );
+  if (snooze)
+    // The next alert comes 2 minutes after "last alert", so pretend the
+    // last one is still to come
+    await db
+      .update(jobAgents)
+      .set({
+        lastAlertAt: new Date(Date.now() + (snooze - 2) * MINUTE),
+        alerts: 0,
+      })
+      .where(mine);
+  else await db.update(jobAgents).set({ ackAt: new Date() }).where(mine);
+  res.json({ ok: true });
+});
+
 jobsRouter.delete("/:id", async (req, res) => {
   const job = await loadJob(req.params.id);
   if (!mayChange(req.user, job))
@@ -305,7 +386,7 @@ jobsRouter.delete("/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- "Starts in 30 minutes" ----------
+// ---------- "Starts in 15 minutes", and "It's time" ----------
 
 async function remindSoon() {
   const now = new Date();
@@ -316,8 +397,8 @@ async function remindSoon() {
       and(
         isNull(jobs.remindedAt),
         isNull(jobs.doneAt),
-        gte(jobs.startsAt, now),
-        lte(jobs.startsAt, new Date(now.getTime() + 30 * MINUTE)),
+        gt(jobs.startsAt, new Date(now.getTime() + 2 * MINUTE)),
+        lte(jobs.startsAt, new Date(now.getTime() + 15 * MINUTE)),
       ),
     );
   for (const job of soon) {
@@ -339,8 +420,56 @@ async function remindSoon() {
   }
 }
 
+// The job's time has come: each agent on it who hasn't answered gets an
+// urgent notification (it stays on the phone's screen until tapped, and
+// vibrates), again every 2 minutes, up to 5 times
+async function alertNow() {
+  const now = new Date();
+  const due = await db
+    .select({ agent: jobAgents, job: jobs, customerName: customers.name })
+    .from(jobAgents)
+    .innerJoin(jobs, eq(jobAgents.jobId, jobs.id))
+    .leftJoin(customers, eq(jobs.customerId, customers.id))
+    .where(
+      and(
+        isNull(jobAgents.ackAt),
+        isNull(jobs.doneAt),
+        lte(jobs.startsAt, now),
+        gt(jobs.endsAt, now),
+        lt(jobAgents.alerts, 5),
+        or(
+          isNull(jobAgents.lastAlertAt),
+          lte(jobAgents.lastAlertAt, new Date(now.getTime() - 2 * MINUTE)),
+        ),
+      ),
+    );
+  for (const { agent, job, customerName } of due) {
+    await db
+      .update(jobAgents)
+      .set({ alerts: sql`${jobAgents.alerts} + 1`, lastAlertAt: now })
+      .where(
+        and(
+          eq(jobAgents.jobId, agent.jobId),
+          eq(jobAgents.userId, agent.userId),
+        ),
+      );
+    await notify([agent.userId], {
+      kind: "jobNow",
+      title: `It's time: ${job.title}`,
+      body:
+        [KIND_WORDS[job.kind], customerName, job.location]
+          .filter(Boolean)
+          .join(", ") + ". Tap to answer.",
+      ticketId: job.ticketId,
+    });
+  }
+}
+
 export function startJobReminders() {
-  const run = () => remindSoon().catch((err) => console.error("Jobs:", err));
+  const run = () =>
+    Promise.all([remindSoon(), alertNow()]).catch((err) =>
+      console.error("Jobs:", err),
+    );
   setTimeout(run, 20 * 1000).unref();
   setInterval(run, MINUTE).unref();
 }

@@ -6,6 +6,7 @@ import NoAccess from "./Pages/NoAccess";
 import LoadingScreen from "./LoadingScreen";
 import PageLoading from "./PageLoading";
 import PushPrompt from "./PushPrompt";
+import JobAlert from "./JobAlert";
 import { canOpen } from "./navLinks";
 import useData from "../useData";
 
@@ -57,6 +58,9 @@ export default function StaffLayout() {
 
       {/* Asks once to turn on desktop/phone notifications (PushPrompt.jsx) */}
       <PushPrompt />
+
+      {/* "It's time" when one of your jobs starts (JobAlert.jsx) */}
+      <JobAlert />
     </div>
   );
 }

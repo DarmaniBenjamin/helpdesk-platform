@@ -28,6 +28,15 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       tag: data.tag, // a newer one for the same ticket replaces the old one
       data: { url: data.url || "/" },
+      // "It's time" for a job: stays until it's tapped, buzzes, and goes
+      // off again each time it's repeated (server/src/jobs.js)
+      ...(data.urgent
+        ? {
+            requireInteraction: true,
+            renotify: true,
+            vibrate: [500, 250, 500, 250, 500],
+          }
+        : {}),
     }),
   );
 });
