@@ -12,6 +12,7 @@ import {
   ChartColumn,
   Settings,
   CalendarDays,
+  Wrench,
 } from "lucide-react";
 import { can } from "./teamRoles";
 
@@ -53,6 +54,12 @@ export const moreLinks = [
     path: "/integrations",
     icon: Blocks,
     permission: "integrations",
+  },
+  {
+    label: "Maintenance",
+    path: "/maintenance",
+    icon: Wrench,
+    permission: "maintenance",
   },
   {
     label: "Report and Statistics",

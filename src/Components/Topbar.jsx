@@ -18,6 +18,7 @@ import {
   LogOut,
   CalendarDays,
   AlarmClock,
+  Bug,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import useClosing from "./useClosing";
@@ -27,6 +28,7 @@ import PushToggle from "./PushToggle";
 import { ThemeToggleButton, ThemeSwitchRow } from "./ThemeToggle";
 import { ROLES, can } from "./teamRoles";
 import NewTicketModal from "./NewTicketModal";
+import ReportBugModal from "./ReportBugModal";
 import { getPageTitle } from "./navLinks";
 import { APP_NAME } from "../brand";
 import { timeAgo } from "../data";
@@ -100,6 +102,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
 
   const notifRef = useRef(null);
   const userRef = useRef(null);
@@ -318,6 +321,17 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
                     {item.label}
                   </Link>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserOpen(false);
+                    setBugOpen(true);
+                  }}
+                  className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-muted transition hover:bg-brand/10 hover:text-brand"
+                >
+                  <Bug className="h-4 w-4" />
+                  Report a bug
+                </button>
                 <ThemeSwitchRow />
                 <hr className="my-2 border-line" />
                 <Link
@@ -366,6 +380,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
       {newTicketOpen && (
         <NewTicketModal onClose={() => setNewTicketOpen(false)} />
       )}
+      {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)} />}
     </header>
   );
 }

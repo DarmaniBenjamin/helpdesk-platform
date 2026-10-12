@@ -91,6 +91,11 @@ export const PERMISSIONS = [
     label: "Integrations: website form, email, WhatsApp and phone",
     roles: ADMINS_UP,
   },
+  {
+    key: "maintenance",
+    label: "Maintenance: errors and bug reports",
+    roles: ADMINS_UP,
+  },
   { key: "admins", label: "Make, change or remove Admins", roles: SUPER_ADMIN },
   {
     key: "settings",

@@ -7,6 +7,7 @@ import LoadingScreen from "./LoadingScreen";
 import PageLoading from "./PageLoading";
 import PushPrompt from "./PushPrompt";
 import JobAlert from "./JobAlert";
+import ErrorBoundary from "./ErrorBoundary";
 import { canOpen } from "./navLinks";
 import useData from "../useData";
 
@@ -49,9 +50,13 @@ export default function StaffLayout() {
               message instead. A page downloading for the first time shows
               a small spinner (PageLoading). */}
           <div key={location.pathname} className="animate-page-in">
-            <Suspense fallback={<PageLoading />}>
-              {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
-            </Suspense>
+            {/* A page that breaks shows a message, and is reported
+                (ErrorBoundary.jsx), instead of a blank screen */}
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoading />}>
+                {canOpen(me.role, location.pathname) ? <Outlet /> : <NoAccess />}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>
