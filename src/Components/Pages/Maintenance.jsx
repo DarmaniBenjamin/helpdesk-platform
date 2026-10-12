@@ -57,6 +57,10 @@ const EVENT = {
   reopened: "Reopened",
   investigation_requested: "AI investigation requested",
   investigation_result: "Investigation finished",
+  approved: "Approved",
+  rejected: "Fix rejected",
+  review: "Reviewed on GitHub",
+  pr_reopened: "Fix reopened",
 };
 // Statuses an investigation can be (re)started from
 const CAN_INVESTIGATE = ["detected", "failed", "awaiting_approval", "rolled_back", "rejected"];
@@ -295,6 +299,20 @@ function Detail({ id, ai, onBack, onChanged }) {
               )}
             </div>
           )}
+          {github.mergedAt && (
+            <div className="flex flex-col gap-1 rounded-lg bg-violet-50 p-3 text-sm text-violet-800">
+              <p>
+                Approved: merged on GitHub
+                {github.mergedBy ? ` by ${github.mergedBy}` : ""}, {when(github.mergedAt)}.
+                It goes live with the next deploy.
+              </p>
+              {github.approvalWarnings?.map((w) => (
+                <p key={w} className="flex items-start gap-1.5 text-red-700">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /> {w}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {github.prUrl && (
               <a href={github.prUrl} target="_blank" rel="noreferrer" className={`${secondaryButton} flex items-center gap-2`}>
@@ -440,7 +458,7 @@ export default function Maintenance() {
             <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
               <Sparkles className="h-3.5 w-3.5" />
               {ai.configured
-                ? `AI investigations are on (${ai.auto ? "automatic, within limits" : "Investigate button only"}). ${ai.used.month} of ${ai.maxPerMonth} used this month.`
+                ? `AI investigations are on (${ai.auto ? "automatic, within limits" : "Investigate button only"}). ${ai.used.month} of ${ai.maxPerMonth} used this month. ${ai.webhook ? "Approvals show up as soon as a fix is merged." : "Approvals show up within 5 minutes of a fix being merged."}`
                 : "AI investigations are off. To turn them on, see docs/maintenance.md."}
             </p>
           )}

@@ -56,7 +56,11 @@ import {
   installErrorCapture,
   requestIds,
 } from "./incidents.js";
-import { investigationsRouter, startInvestigations } from "./investigations.js";
+import {
+  githubWebhookRouter,
+  investigationsRouter,
+  startInvestigations,
+} from "./investigations.js";
 
 // Maintenance: from here on, errors anywhere in the app are recorded as
 // incidents (incidents.js)
@@ -88,6 +92,12 @@ app.use(
 // Messages from WhatsApp (Meta): kept exactly as sent too, for the same
 // reason (see whatsapp.js)
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "5mb" }));
+// GitHub's events for Maintenance: kept as sent, to check their signature
+// (investigations.js)
+app.use(
+  "/api/maintenance/github-webhook",
+  express.raw({ type: "*/*", limit: "5mb" }),
+);
 // Calls from the phone system can come as a plain web form (phone.js)
 app.use("/api/phone/hook", express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
@@ -234,6 +244,7 @@ app.use("/api/phone", phoneRouter); // Integrations → Phone; calls and voicema
 app.use("/api/whatsapp", whatsappRouter); // Integrations → WhatsApp; messages → tickets
 app.use("/api/incidents", investigationsRouter); // Maintenance: AI investigations (before the next line)
 app.use("/api/incidents", incidentsRouter); // Maintenance: errors and bug reports
+app.use("/api/maintenance/github-webhook", githubWebhookRouter); // GitHub: fixes merged or closed (signed)
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 

@@ -17,8 +17,19 @@
 //   MAINT_MAX_PER_MONTH=20              all investigations per month, the button included
 //   MAINT_ALLOW_PUBLIC_REPO=no          incidents are never sent to a public repository
 //
+//   MAINT_GITHUB_WEBHOOK_SECRET=...     stage 4: GitHub tells the helpdesk at once when a
+//                                       fix is merged or closed (else it checks every 5 minutes)
+//   MAINT_APPROVERS=login1,login2       optional: GitHub accounts whose merge counts as approval
+//
 //   GET  /api/incidents/ai-status           settings and this month's use (Admins)
 //   POST /api/incidents/:id/investigate     investigate now / again (Admins)
+//   POST /api/maintenance/github-webhook    GitHub's events (signed: no sign-in)
+//
+// Approval (stage 4) is a person merging the fix's pull request on
+// GitHub: the incident becomes "approved", with who merged it and the
+// commit, ready for the deploy (stage 5). Closed without merging:
+// "rejected". Nothing here can merge anything.
+import crypto from "node:crypto";
 import { Router } from "express";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
@@ -29,6 +40,7 @@ import { BadInput } from "./validate.js";
 import { addIncidentEvent } from "./incidents.js";
 
 export const investigationsRouter = Router();
+export const githubWebhookRouter = Router();
 
 const MINUTE = 60 * 1000;
 const LABEL = "ai-investigate";
@@ -38,6 +50,7 @@ const LABELS = [
   ["sensitive-change", "b60205", "Touches sign-in, permissions, secrets or deleting data: never auto-approve"],
   ["ai-no-fix", "fbca04", "The AI investigation didn't propose a fix"],
   ["ai-failed", "d93f0b", "The AI investigation or its fix failed"],
+  ["low-risk", "c2e0c6", "Small, confident, fully checked fix: still needs a person"],
 ];
 // Only the workflow's own comments are believed
 const BOT = "github-actions[bot]";
@@ -56,6 +69,11 @@ export function maintenanceConfig() {
     maxPerDay: number("MAINT_MAX_PER_DAY", 3),
     maxPerMonth: number("MAINT_MAX_PER_MONTH", 20),
     allowPublic: /^(yes|true|1)$/i.test(process.env.MAINT_ALLOW_PUBLIC_REPO ?? ""),
+    webhookSecret: process.env.MAINT_GITHUB_WEBHOOK_SECRET ?? "",
+    approvers: String(process.env.MAINT_APPROVERS ?? "")
+      .split(",")
+      .map((a) => a.trim().toLowerCase())
+      .filter(Boolean),
   };
 }
 
@@ -317,6 +335,29 @@ async function tick() {
     .limit(20);
   for (const incident of running) await readResult(incident).catch(() => {});
 
+  // Fixes waiting for approval: merged or closed on GitHub? (The webhook
+  // says so at once; this catches anything it missed. Needs the token to
+  // have Pull requests: Read too, else it's skipped.)
+  if (pullsReadable) {
+    const waitingApproval = await db
+      .select()
+      .from(incidents)
+      .where(eq(incidents.status, "awaiting_approval"))
+      .limit(20);
+    for (const incident of waitingApproval) {
+      const n = incident.github?.prNumber;
+      if (!n) continue;
+      try {
+        await applyPullRequest(incident, await github("GET", `/pulls/${n}`));
+      } catch (err) {
+        if (err.githubStatus === 403) {
+          pullsReadable = false;
+          console.warn("AI investigations: the token can't read pull requests, so only the webhook updates approvals.");
+        }
+      }
+    }
+  }
+
   // Send the most serious one waiting, within the limits
   if (!config.auto) return;
   const waiting = await db
@@ -340,6 +381,144 @@ async function tick() {
   );
 }
 
+// ---------- Approval: the fix's pull request merged or closed ----------
+
+let pullsReadable = true;
+const APPROVED_OR_LATER = ["approved", "deployed", "verified"];
+
+// The incident a pull request is the fix for. Both must agree: the
+// incident's number in the PR, and the PR's number on the incident, so no
+// other pull request can change an incident.
+async function incidentForPullRequest(pr) {
+  const id = Number(String(pr?.body ?? "").match(/<!-- helpdesk-incident:(\d+) -->/)?.[1] ?? 0);
+  if (!id) return null;
+  const [incident] = await db.select().from(incidents).where(eq(incidents.id, id));
+  if (!incident || Number(incident.github?.prNumber) !== Number(pr.number)) return null;
+  return incident;
+}
+
+// Updates the incident from the pull request's state
+export async function applyPullRequest(incident, pr, sender = null) {
+  const config = maintenanceConfig();
+  if (pr.state === "closed" && (pr.merged || pr.merged_at)) {
+    if (APPROVED_OR_LATER.includes(incident.status)) return;
+    const login = String(pr.merged_by?.login ?? sender ?? "").toLowerCase();
+    const warnings = [];
+    if (!login || login.endsWith("[bot]"))
+      warnings.push("It was merged by an automated account, not a person: check who allowed that.");
+    else if (config.approvers.length && !config.approvers.includes(login))
+      warnings.push(`${login} isn't on the approvers list (MAINT_APPROVERS).`);
+    await db
+      .update(incidents)
+      .set({
+        status: "approved",
+        github: {
+          ...incident.github,
+          mergedBy: login || null,
+          mergedAt: pr.merged_at ?? new Date().toISOString(),
+          mergeSha: /^[0-9a-f]{40}$/.test(pr.merge_commit_sha ?? "") ? pr.merge_commit_sha : null,
+          approvalWarnings: warnings,
+        },
+      })
+      .where(eq(incidents.id, incident.id));
+    await addIncidentEvent(incident.id, "approved", {
+      actor: { name: login ? `${login} (GitHub)` : "GitHub" },
+      body: `Approved: pull request #${pr.number} was merged. It goes live with the next deploy.${warnings.length ? ` Warning: ${warnings.join(" ")}` : ""}`,
+      data: { prNumber: pr.number, mergeSha: pr.merge_commit_sha ?? null },
+    });
+  } else if (pr.state === "closed") {
+    if (incident.status !== "awaiting_approval") return;
+    await db.update(incidents).set({ status: "rejected" }).where(eq(incidents.id, incident.id));
+    await addIncidentEvent(incident.id, "rejected", {
+      actor: sender ? { name: `${sender} (GitHub)` } : null,
+      body: `Rejected: pull request #${pr.number} was closed without merging.`,
+      data: { prNumber: pr.number },
+    });
+  } else if (pr.state === "open" && incident.status === "rejected") {
+    await db.update(incidents).set({ status: "awaiting_approval" }).where(eq(incidents.id, incident.id));
+    await addIncidentEvent(incident.id, "pr_reopened", {
+      actor: sender ? { name: `${sender} (GitHub)` } : null,
+      body: `Pull request #${pr.number} was reopened: waiting for approval again.`,
+    });
+  }
+}
+
+// ---------- GitHub's webhook ----------
+
+// Each delivery is handled once, even if GitHub sends it again
+const deliveries = new Set();
+
+export function signedByGitHub(req, secret) {
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const expected = `sha256=${crypto.createHmac("sha256", secret).update(raw).digest("hex")}`;
+  const given = String(req.get("x-hub-signature-256") ?? "");
+  return (
+    given.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))
+  );
+}
+
+export async function handleGitHubEvent(event, payload) {
+  const config = maintenanceConfig();
+  if (String(payload?.repository?.full_name ?? "").toLowerCase() !== config.repo.toLowerCase())
+    return "not this repository";
+  const sender = payload.sender?.login ?? null;
+  if (event === "pull_request" && ["closed", "reopened"].includes(payload.action)) {
+    const incident = await incidentForPullRequest(payload.pull_request);
+    if (!incident) return "not a fix for an incident";
+    await applyPullRequest(incident, payload.pull_request, sender);
+    return "updated";
+  }
+  if (event === "pull_request_review" && payload.action === "submitted") {
+    const incident = await incidentForPullRequest(payload.pull_request);
+    if (!incident) return "not a fix for an incident";
+    const state = String(payload.review?.state ?? "").toLowerCase();
+    const said = { approved: "approved it", changes_requested: "asked for changes", commented: "commented" };
+    await addIncidentEvent(incident.id, "review", {
+      actor: sender ? { name: `${sender} (GitHub)` } : null,
+      body: `Review on pull request #${payload.pull_request.number}: ${said[state] ?? state}. (Approval is merging it.)`,
+    });
+    return "noted";
+  }
+  if (event === "issue_comment" && payload.action === "created" && payload.comment?.user?.login === BOT) {
+    // The investigation just reported: read it now instead of in 5 minutes
+    const [incident] = await db
+      .select()
+      .from(incidents)
+      .where(sql`(${incidents.github} ->> 'issueNumber')::int = ${Number(payload.issue?.number) || 0}`);
+    if (incident?.status === "investigating") await readResult(incident);
+    return "read";
+  }
+  return "ignored";
+}
+
+githubWebhookRouter.post("/", async (req, res) => {
+  const config = maintenanceConfig();
+  if (!config.configured || !config.webhookSecret)
+    return res.status(404).json({ error: "Not set up." });
+  if (!signedByGitHub(req, config.webhookSecret))
+    return res.status(401).json({ error: "Not signed with this webhook's secret." });
+  const delivery = String(req.get("x-github-delivery") ?? "");
+  if (delivery && deliveries.has(delivery)) return res.status(202).json({ ok: true, result: "already had it" });
+  if (delivery) {
+    deliveries.add(delivery);
+    if (deliveries.size > 1000) deliveries.delete(deliveries.values().next().value);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(req.body.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "Not JSON." });
+  }
+  const event = String(req.get("x-github-event") ?? "");
+  if (event === "ping") return res.json({ ok: true, result: "pong" });
+  // Answer at once (GitHub waits 10 seconds at most), then do it
+  res.status(202).json({ ok: true });
+  handleGitHubEvent(event, payload).catch((err) =>
+    console.warn(`GitHub webhook (${event}): ${err.message}`),
+  );
+});
+
 let started = false;
 export function startInvestigations() {
   if (started || !maintenanceConfig().configured) return;
@@ -360,6 +539,7 @@ investigationsRouter.get("/ai-status", requireRole(...ADMINS), async (req, res) 
     auto: config.auto,
     maxPerDay: config.maxPerDay,
     maxPerMonth: config.maxPerMonth,
+    webhook: Boolean(config.webhookSecret),
     used: config.configured ? await usage() : { today: 0, month: 0 },
   });
 });

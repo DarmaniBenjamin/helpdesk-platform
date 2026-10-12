@@ -110,3 +110,17 @@ test("stackFiles and diffPaths", () => {
   ]);
   assert.deepEqual(diffPaths("diff --git a/server/src/a.js b/server/src/a.js\n+x"), ["server/src/a.js"]);
 });
+
+test("lowRisk: only small, confident, fully checked, non-sensitive fixes", async () => {
+  const { lowRisk } = await import("../../scripts/maintenance/policy.mjs");
+  const plan = { confidence: "high", attempt: 1, edits: [{ path: "server/src/tickets.js", find: "a", replace: "b" }] };
+  const ok = { plan, passed: true, touched: ["server/src/tickets.js", "server/test/t.test.js"], sensitive: false };
+  assert.equal(lowRisk(ok).ok, true);
+  assert.equal(lowRisk({ ...ok, sensitive: true }).ok, false);
+  assert.equal(lowRisk({ ...ok, passed: false }).ok, false);
+  assert.equal(lowRisk({ ...ok, plan: { ...plan, confidence: "medium" } }).ok, false);
+  assert.equal(lowRisk({ ...ok, plan: { ...plan, attempt: 2 } }).ok, false);
+  assert.equal(lowRisk({ ...ok, touched: ["server/src/auth.js"] }).ok, false);
+  assert.equal(lowRisk({ ...ok, touched: ["src/a.js", "src/b.js", "src/c.js", "src/d.js"] }).ok, false);
+  assert.equal(lowRisk({ ...ok, plan: { ...plan, edits: [{ path: "src/a.js", create: "x\n".repeat(80) }] } }).ok, false);
+});

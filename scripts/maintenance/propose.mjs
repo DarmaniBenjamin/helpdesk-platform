@@ -12,7 +12,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { applyEdits, checkPath, diffPaths, validatePlan } from "./policy.mjs";
+import { applyEdits, checkPath, diffPaths, lowRisk, validatePlan } from "./policy.mjs";
 
 const REPO = process.env.GITHUB_REPOSITORY;
 const ISSUE = Number(process.env.ISSUE_NUMBER);
@@ -117,6 +117,7 @@ async function openPullRequest(p, r) {
   git("push", "origin", branch);
 
   const sensitive = v.sensitive || p.sensitive;
+  const risk = lowRisk({ plan: p, passed: r?.passed, touched, sensitive });
   const tests = touched.filter((f) => f.startsWith("server/test/"));
   const body = `## Bug
 Incident #${incidentId} in the helpdesk (issue #${ISSUE}): ${p.incident?.title ?? ""}
@@ -147,6 +148,8 @@ ${bullets(p.risks)}
 ## Check by hand before approving
 ${bullets(p.manualChecks)}
 
+**Low-risk:** ${risk.ok ? "yes (small, highly confident, every check passed, no sensitive files). Still needs a person: automatic approval is off." : `no: ${risk.reasons.join("; ")}.`}
+
 ---
 Written by an AI (${p.provider}, ${p.model}), attempt ${p.attempt}. [Investigation run](${RUN_URL}). **Review it like any other change.** Merging is the approval, and only a person can do it.
 <!-- helpdesk-incident:${incidentId} -->`;
@@ -159,7 +162,7 @@ Written by an AI (${p.provider}, ${p.model}), attempt ${p.attempt}. [Investigati
     draft: false,
   });
   await github("POST", `/issues/${pr.number}/labels`, {
-    labels: ["ai-fix", ...(sensitive ? ["sensitive-change"] : [])],
+    labels: ["ai-fix", ...(sensitive ? ["sensitive-change"] : []), ...(risk.ok ? ["low-risk"] : [])],
   });
   return { pr, sensitive };
 }

@@ -9,6 +9,8 @@
 //                                                    write access
 //   node scripts/maintenance/investigate.mjs revise  the AI sees what failed and tries
 //                                                    once more (only if a check failed)
+//   node scripts/maintenance/investigate.mjs verify  every check on the code as it is, no
+//                                                    AI (CI: .github/workflows/ci.yml)
 //
 // The plan and revise jobs have the AI key but never run any code the AI
 // wrote. The check job runs it, but has no secrets and can't change the
@@ -382,6 +384,16 @@ async function checkPlan() {
   setOutput("passed", String(passed));
 }
 
+// ---------- verify (CI) ----------
+
+async function verify() {
+  const results = await runChecks();
+  writeJson("results.json", { passed: results.every((c) => c.optional || c.status === "passed"), after: results });
+  for (const c of results.filter((x) => x.status === "failed"))
+    console.log(`\n--- ${c.name}${c.optional ? " (informational)" : ""} ---\n${c.output}`);
+  if (results.some((c) => !c.optional && c.status === "failed")) process.exitCode = 1;
+}
+
 // ---------- revise ----------
 
 async function revise() {
@@ -422,7 +434,8 @@ try {
   if (step === "plan") await plan();
   else if (step === "check") await checkPlan();
   else if (step === "revise") await revise();
-  else throw new Error("Use: investigate.mjs plan | check | revise");
+  else if (step === "verify") await verify();
+  else throw new Error("Use: investigate.mjs plan | check | revise | verify");
 } catch (err) {
   console.error(err.message);
   writeJson(`error-${step}.json`, { step, error: String(err.message).slice(0, 2000) });

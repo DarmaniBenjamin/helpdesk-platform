@@ -162,3 +162,82 @@ test("no result after 2 hours: marked failed, with a hint", async () => {
   assert.equal(inc.status, "failed");
   assert.match(state.events.at(-1).body, /Actions tab/);
 });
+
+// ---------- Stage 4: approval ----------
+
+const { applyPullRequest, handleGitHubEvent, signedByGitHub } = await import("../src/investigations.js");
+const crypto = await import("node:crypto");
+
+const fixIncident = (over = {}) =>
+  incident({ status: "awaiting_approval", github: { issueNumber: 7, prNumber: 8 }, ...over });
+const pr = (over = {}) => ({
+  number: 8,
+  state: "closed",
+  merged: true,
+  merged_at: "2026-10-12T10:00:00Z",
+  merged_by: { login: "DarmaniBenjamin" },
+  merge_commit_sha: "a".repeat(40),
+  body: "Fix\n<!-- helpdesk-incident:12 -->",
+  ...over,
+});
+const repository = { full_name: "me/helpdesk" };
+
+test("merged by a person: approved, with who and the commit", async () => {
+  const inc = fixIncident();
+  state.incidents.push(inc);
+  await applyPullRequest(inc, pr());
+  assert.equal(inc.status, "approved");
+  assert.equal(inc.github.mergedBy, "darmanibenjamin");
+  assert.equal(inc.github.mergeSha, "a".repeat(40));
+  assert.deepEqual(inc.github.approvalWarnings, []);
+  assert.equal(state.events.at(-1).type, "approved");
+});
+
+test("merged by a bot, or someone not on the approvers list: approved, but flagged", async () => {
+  const a = fixIncident();
+  state.incidents.push(a);
+  await applyPullRequest(a, pr({ merged_by: { login: "github-actions[bot]" } }));
+  assert.match(a.github.approvalWarnings[0], /automated account/);
+
+  process.env.MAINT_APPROVERS = "darmanibenjamin";
+  const b = fixIncident({ id: 13 });
+  state.incidents.push(b);
+  await applyPullRequest(b, pr({ merged_by: { login: "someone-else" } }));
+  assert.match(b.github.approvalWarnings[0], /approvers list/);
+  delete process.env.MAINT_APPROVERS;
+});
+
+test("closed without merging: rejected; reopened: waiting again", async () => {
+  const inc = fixIncident();
+  state.incidents.push(inc);
+  await applyPullRequest(inc, pr({ merged: false, merged_at: null }));
+  assert.equal(inc.status, "rejected");
+  await applyPullRequest(inc, pr({ state: "open", merged: false, merged_at: null }));
+  assert.equal(inc.status, "awaiting_approval");
+});
+
+test("webhook: only a pull request opened for that incident can change it", async () => {
+  const inc = fixIncident();
+  state.incidents.push(inc);
+  // A different pull request that claims to be for incident 12
+  const other = await handleGitHubEvent("pull_request", {
+    action: "closed", repository, sender: { login: "x" }, pull_request: pr({ number: 99 }),
+  });
+  assert.equal(other, "not a fix for an incident");
+  assert.equal(inc.status, "awaiting_approval");
+  // Another repository
+  assert.equal(await handleGitHubEvent("pull_request", { action: "closed", repository: { full_name: "evil/repo" }, pull_request: pr() }), "not this repository");
+  // The real one
+  assert.equal(await handleGitHubEvent("pull_request", { action: "closed", repository, sender: { login: "DarmaniBenjamin" }, pull_request: pr() }), "updated");
+  assert.equal(inc.status, "approved");
+});
+
+test("webhook: only GitHub's signature with this secret is accepted", () => {
+  const body = Buffer.from('{"zen":"hi"}');
+  const sign = (secret) => `sha256=${crypto.createHmac("sha256", secret).update(body).digest("hex")}`;
+  const req = (sig) => ({ body, get: (h) => (h === "x-hub-signature-256" ? sig : undefined) });
+  assert.equal(signedByGitHub(req(sign("right")), "right"), true);
+  assert.equal(signedByGitHub(req(sign("wrong")), "right"), false);
+  assert.equal(signedByGitHub(req(undefined), "right"), false);
+  assert.equal(signedByGitHub(req("sha256=short"), "right"), false);
+});

@@ -166,3 +166,28 @@ export function diffPaths(patch) {
   }
   return [...paths];
 }
+
+// Low-risk: the narrow kind of fix a future administrator might allow to
+// be approved without a person (docs/maintenance.md). Today it's only a
+// label on the pull request: nothing is ever merged automatically.
+// Everything here must hold: one first attempt, high confidence, every
+// check passed, not sensitive, at most 3 files and 60 changed lines, and
+// only the app's own source and tests.
+export function lowRisk({ plan, passed, touched, sensitive }) {
+  const reasons = [];
+  if (sensitive) reasons.push("it's a sensitive change");
+  if (!passed) reasons.push("not every check passed");
+  if (plan?.confidence !== "high") reasons.push("the AI isn't highly confident");
+  if (plan?.attempt !== 1) reasons.push("it took more than one attempt");
+  if (!touched?.length || touched.length > 3) reasons.push("it changes more than 3 files");
+  for (const f of touched ?? []) {
+    const verdict = checkPath(f);
+    if (!verdict.ok || verdict.sensitive) reasons.push(`${f} isn't a low-risk file`);
+  }
+  const lines = (plan?.edits ?? []).reduce(
+    (n, e) => n + String(e.create ?? e.replace ?? "").split("\n").length,
+    0,
+  );
+  if (lines > 60) reasons.push(`it changes ${lines} lines (more than 60)`);
+  return { ok: reasons.length === 0, reasons };
+}

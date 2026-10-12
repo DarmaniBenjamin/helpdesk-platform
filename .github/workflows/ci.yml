@@ -1,0 +1,52 @@
+# CI: every check, on every push to main and every pull request from a
+# person. The same checks the AI's fixes go through: lint, the website
+# build, the backend tests, the migrations and a real server start, on a
+# throwaway Postgres. The deploy (stage 5) only goes ahead for a commit
+# that passed this.
+#
+# (Pull requests opened by the AI investigation don't start this by
+# themselves: GitHub doesn't let one workflow start another. Their checks
+# are in the pull request already, and merging one starts this on main.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U helpdesk"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund && cd server && npm ci --no-audit --no-fund
+      - name: Lint, build, tests, migrations, server start
+        env:
+          TEST_DATABASE_URL: postgres://helpdesk:helpdesk@localhost:5432/helpdesk_test
+          OUT_DIR: ${{ runner.temp }}/out
+        run: node scripts/maintenance/investigate.mjs verify

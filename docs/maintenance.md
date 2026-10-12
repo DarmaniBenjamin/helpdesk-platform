@@ -37,6 +37,16 @@ Nothing is merged or deployed automatically.
    vs. not proven, confidence), the checks, and links to the issue, the
    run and the pull request. Its status becomes *Awaiting approval* (a
    fix is ready) or *Fix failed* (no fix, or it failed its checks).
+5. **Approval** (stage 4): a person reviews the pull request on GitHub.
+   - **Merging it is the approval.** The incident becomes *Approved*,
+     with who merged it and the commit, ready for the next deploy.
+   - **Closing it without merging** makes it *Fix rejected*.
+   - The helpdesk hears about it at once through a signed webhook, or
+     within 5 minutes without one.
+   - A merge by an automated account, or by someone not on
+     `MAINT_APPROVERS`, is flagged on the incident.
+6. **CI** (`.github/workflows/ci.yml`): the same checks run on every push
+   to `main` and every pull request from a person.
 
 ### What the AI can never do
 
@@ -115,6 +125,67 @@ then says "AI investigations are on".
 Open an incident on the Maintenance page and press **Investigate with
 AI**. Watch the run in the repository's **Actions** tab. Within a few
 minutes of it finishing, the findings appear on the incident.
+
+### 6. Approvals: the webhook (recommended)
+
+So the helpdesk hears at once when a fix is merged or closed:
+
+1. Make a secret: run `openssl rand -hex 32` and copy the result.
+2. In `server/.env`, add `MAINT_GITHUB_WEBHOOK_SECRET=` followed by that
+   secret, then restart.
+3. Repository → **Settings → Webhooks → Add webhook**:
+   - **Payload URL:** `https://YOUR-HELPDESK-DOMAIN/api/maintenance/github-webhook`
+   - **Content type:** `application/json`
+   - **Secret:** the same secret
+   - **Which events:** *Let me select individual events*, then tick
+     **Pull requests**, **Pull request reviews** and **Issue comments**
+     (untick Pushes).
+
+GitHub sends a test "ping" straight away. A green tick next to the
+webhook means the helpdesk got it.
+
+Without the webhook, the helpdesk checks GitHub every 5 minutes. For
+that, the helpdesk's token needs **Pull requests: Read-only** as well
+as Issues.
+
+Optional: `MAINT_APPROVERS=yourlogin,colleaguelogin` in `server/.env`.
+A merge by anyone else is still recorded, but flagged on the incident.
+
+### 7. Protect main (recommended)
+
+On a paid GitHub plan (GitHub Pro, about $4 a month, is enough for a
+personal account), add a rule on **Settings → Branches** for `main`:
+
+- require a pull request
+- require the **CI** check to pass
+
+Then nobody, the AI included, can change `main` without a reviewed pull
+request. On the free plan GitHub can't enforce this on private
+repositories. The AI still never pushes to `main`, and its token can't
+merge anything.
+
+## Low-risk fixes and automatic approval (off)
+
+A fix is labelled `low-risk` only if all of these hold:
+
+- it's the first attempt
+- the AI is highly confident
+- every check passed
+- it isn't a sensitive change
+- it touches at most 3 files, and 60 changed lines
+- it only touches the app's own source and tests
+
+The rule is in `policy.mjs` (`lowRisk`), and tested.
+
+**Today it's only a label: every fix still needs a person to merge it.**
+Allowing low-risk fixes to merge by themselves would also need:
+
+- branch protection with required checks (a paid GitHub plan)
+- a GitHub App, so that CI runs on the AI's pull requests (GitHub doesn't
+  let one workflow start another)
+
+Sensitive changes can never be approved automatically, whatever is set
+up.
 
 ## Costs and limits
 
