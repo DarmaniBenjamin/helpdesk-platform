@@ -642,6 +642,74 @@ export const whatsappMessages = pgTable(
   ],
 );
 
+// ---------- Maintenance: incidents ----------
+
+// An application error (or a bug someone reported), recorded by
+// incidents.js. Repeats of the same error are counted on one incident
+// (same fingerprint). status follows the maintenance lifecycle:
+// detected, investigating, fix_proposed, testing, awaiting_approval,
+// approved, deployed, verified, and failed, rejected, rolled_back,
+// dismissed. Everything stored here has had secrets and personal details
+// taken out (incidentRules.js).
+export const incidents = pgTable(
+  "incidents",
+  {
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+    fingerprint: text("fingerprint").notNull().unique(),
+    status: text("status").notNull().default("detected"),
+    severity: text("severity").notNull().default("medium"),
+    // server, crash, browser, user, health or spike
+    source: text("source").notNull(),
+    component: text("component").notNull(),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull().default(""),
+    stack: text("stack").notNull().default(""),
+    description: text("description").notNull().default(""), // a person's bug report
+    context: jsonb("context").notNull().default({}),
+    count: integer("count").notNull().default(1),
+    // Worth an AI investigation (incidentRules.js triage())
+    investigate: boolean("investigate").notNull().default(false),
+    lastRequestId: text("last_request_id"),
+    reportedById: text("reported_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Filled in by the later stages: the AI's findings, and the GitHub
+    // issue / pull request
+    investigation: jsonb("investigation").notNull().default({}),
+    github: jsonb("github").notNull().default({}),
+    firstSeen: time("first_seen").notNull().defaultNow(),
+    lastSeen: time("last_seen").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("incidents_last_seen_idx").on(t.lastSeen),
+    index("incidents_status_idx").on(t.status),
+  ],
+);
+
+// Everything that happened to an incident, and who did it: the audit
+// history (detected, happened again, dismissed, investigated, approved,
+// deployed...)
+export const incidentEvents = pgTable(
+  "incident_events",
+  {
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+    incidentId: integer("incident_id")
+      .notNull()
+      .references(() => incidents.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    actorId: text("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorName: text("actor_name").notNull().default(""),
+    body: text("body").notNull().default(""),
+    data: jsonb("data").notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index("incident_events_incident_idx").on(t.incidentId, t.createdAt)],
+);
+
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),

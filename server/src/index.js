@@ -49,12 +49,28 @@ import { handleBadInput } from "./validate.js";
 import { backupAlertsRouter } from "./backupAlerts.js";
 import { phoneRouter } from "./phone.js";
 import { whatsappRouter } from "./whatsapp.js";
+import {
+  captureRequestError,
+  countServerErrors,
+  incidentsRouter,
+  installErrorCapture,
+  requestIds,
+} from "./incidents.js";
+
+// Maintenance: from here on, errors anywhere in the app are recorded as
+// incidents (incidents.js)
+installErrorCapture();
 
 const app = express();
 
 // On Render, requests reach this server through Render's own proxy.
 // This tells Express to trust it, so it knows the site is on https.
 app.set("trust proxy", 1);
+
+// Every request gets an ID (X-Request-Id), kept with any error it causes,
+// and server errors are counted to notice a sudden rise (incidents.js)
+app.use(requestIds);
+app.use(countServerErrors);
 
 // Freshdesk imports send tickets in batches with their whole
 // conversation, so they're allowed to be bigger. This has to come before
@@ -215,6 +231,7 @@ app.use("/api/setup-owner", setupOwnerRouter); // the first Super Admin (new ser
 app.use("/api/integrations/backup", backupAlertsRouter); // alerts from the backup gateway → tickets
 app.use("/api/phone", phoneRouter); // Integrations → Phone; calls and voicemails from the PBX → tickets
 app.use("/api/whatsapp", whatsappRouter); // Integrations → WhatsApp; messages → tickets
+app.use("/api/incidents", incidentsRouter); // Maintenance: errors and bug reports
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 
@@ -253,10 +270,16 @@ if (fs.existsSync(path.join(site, "index.html"))) {
 app.use(handleBadInput);
 
 // Anything else: show a short message instead of crashing
+// (recorded as an incident first, with the request's ID, which is sent
+// back so whoever saw the error can quote it)
 app.use((err, req, res, next) => {
+  captureRequestError(err, req);
   console.error(err);
   if (res.headersSent) return next(err);
-  res.status(500).json({ error: "Something went wrong on the server." });
+  res.status(500).json({
+    error: "Something went wrong on the server.",
+    requestId: req.id,
+  });
 });
 
 // Render tells the server which port to use (PORT). Locally it's 4000.
