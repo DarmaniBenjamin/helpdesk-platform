@@ -56,6 +56,7 @@ import {
   installErrorCapture,
   requestIds,
 } from "./incidents.js";
+import { investigationsRouter, startInvestigations } from "./investigations.js";
 
 // Maintenance: from here on, errors anywhere in the app are recorded as
 // incidents (incidents.js)
@@ -231,6 +232,7 @@ app.use("/api/setup-owner", setupOwnerRouter); // the first Super Admin (new ser
 app.use("/api/integrations/backup", backupAlertsRouter); // alerts from the backup gateway → tickets
 app.use("/api/phone", phoneRouter); // Integrations → Phone; calls and voicemails from the PBX → tickets
 app.use("/api/whatsapp", whatsappRouter); // Integrations → WhatsApp; messages → tickets
+app.use("/api/incidents", investigationsRouter); // Maintenance: AI investigations (before the next line)
 app.use("/api/incidents", incidentsRouter); // Maintenance: errors and bug reports
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
@@ -299,6 +301,9 @@ app.listen(port, host, () => {
   startAutomations();
   // Every hour: an automatic backup, if one is due
   startAutomaticBackups();
+  // Every 5 minutes, if set up: send incidents for an AI investigation
+  // and read what earlier ones found (investigations.js)
+  startInvestigations();
   // The site's main domain (SITE_DOMAIN) on the Domain & SSL list, then,
   // if Caddy is installed on this computer, give it the https settings
   seedSiteDomains();

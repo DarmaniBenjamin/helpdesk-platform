@@ -6,7 +6,9 @@ import {
   ExternalLink,
   RefreshCw,
   RotateCcw,
+  ShieldAlert,
   ShieldCheck,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import Droplets from "../Droplets";
@@ -53,7 +55,11 @@ const EVENT = {
   recurred: "Happened again",
   dismissed: "Dismissed",
   reopened: "Reopened",
+  investigation_requested: "AI investigation requested",
+  investigation_result: "Investigation finished",
 };
+// Statuses an investigation can be (re)started from
+const CAN_INVESTIGATE = ["detected", "failed", "awaiting_approval", "rolled_back", "rejected"];
 
 function StatusPill({ status }) {
   const s = STATUS[status] ?? { label: status, tone: "bg-line text-muted" };
@@ -76,7 +82,7 @@ function SeverityDot({ severity }) {
 
 const when = (time) => new Date(time).toLocaleString();
 
-function Detail({ id, onBack, onChanged }) {
+function Detail({ id, ai, onBack, onChanged }) {
   const [incident, setIncident] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -94,6 +100,20 @@ function Detail({ id, onBack, onChanged }) {
       current = false;
     };
   }, [id]);
+
+  async function investigate() {
+    setBusy("investigate");
+    setError("");
+    try {
+      await api(`/incidents/${id}/investigate`, { method: "POST" });
+      setIncident(await api(`/incidents/${id}`));
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function act(what, path, body) {
     setBusy(what);
@@ -205,28 +225,90 @@ function Detail({ id, onBack, onChanged }) {
         </section>
       )}
 
-      {(findings.summary || github.issueUrl || github.prUrl) && (
+      {(findings.outcome || github.issueUrl) && (
         <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Investigation</h3>
-          {findings.summary && (
-            <p className="whitespace-pre-wrap rounded-lg bg-page p-3 text-sm">
-              {findings.summary}
-              {findings.confidence && (
-                <span className="mt-2 block text-xs text-muted">
-                  Confidence: {findings.confidence}
-                </span>
-              )}
+          <h3 className="text-sm font-semibold">AI investigation</h3>
+          {incident.status === "investigating" && (
+            <p className="flex items-center gap-2 rounded-lg bg-sky-50 p-3 text-sm text-sky-700">
+              <Droplets className="h-4 w-4" />
+              Running on GitHub. Results appear here a few minutes after it finishes.
             </p>
           )}
+          {findings.outcome && (
+            <div className="flex flex-col gap-3 rounded-lg bg-page p-3 text-sm">
+              {findings.sensitive && (
+                <p className="flex items-start gap-2 rounded-md bg-red-50 p-2 text-red-700">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  Sensitive change: it touches sign-in, permissions, secrets or
+                  deleting data. Review it line by line; it can never be approved
+                  automatically.
+                </p>
+              )}
+              {findings.summary && <p className="whitespace-pre-wrap">{findings.summary}</p>}
+              {findings.rootCause && (
+                <p>
+                  <span className="font-medium">Root cause</span>
+                  {findings.confidence && (
+                    <span className="text-muted"> ({findings.confidence} confidence)</span>
+                  )}
+                  : {findings.rootCause}
+                </p>
+              )}
+              {[
+                ["Confirmed", findings.confirmed],
+                ["Not proven (hypotheses)", findings.hypotheses],
+              ].map(
+                ([label, items]) =>
+                  items?.length > 0 && (
+                    <div key={label}>
+                      <p className="font-medium">{label}</p>
+                      <ul className="list-disc pl-5 text-muted">
+                        {items.map((x, n) => (
+                          <li key={n}>{x}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ),
+              )}
+              {findings.checks?.length > 0 && (
+                <div>
+                  <p className="font-medium">
+                    Checks{findings.attempt > 1 ? ` (attempt ${findings.attempt})` : ""}
+                  </p>
+                  <ul className="flex flex-col gap-0.5">
+                    {findings.checks.map((c) => (
+                      <li key={c.name} className="flex items-center gap-2">
+                        <span className={c.status === "passed" ? "text-brand" : "text-red-600"}>
+                          {c.status === "passed" ? "✓" : "✗"}
+                        </span>
+                        {c.name}
+                        {c.optional && <span className="text-xs text-muted">(informational)</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {findings.model && (
+                <p className="text-xs text-muted">
+                  By {findings.provider} {findings.model}. AI findings can be wrong: check them.
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
+            {github.prUrl && (
+              <a href={github.prUrl} target="_blank" rel="noreferrer" className={`${secondaryButton} flex items-center gap-2`}>
+                <ExternalLink className="h-4 w-4" /> Proposed fix (#{github.prNumber})
+              </a>
+            )}
             {github.issueUrl && (
               <a href={github.issueUrl} target="_blank" rel="noreferrer" className={`${secondaryButton} flex items-center gap-2`}>
                 <ExternalLink className="h-4 w-4" /> GitHub issue
               </a>
             )}
-            {github.prUrl && (
-              <a href={github.prUrl} target="_blank" rel="noreferrer" className={`${secondaryButton} flex items-center gap-2`}>
-                <ExternalLink className="h-4 w-4" /> Proposed fix
+            {github.runUrl && (
+              <a href={github.runUrl} target="_blank" rel="noreferrer" className={`${secondaryButton} flex items-center gap-2`}>
+                <ExternalLink className="h-4 w-4" /> Investigation run
               </a>
             )}
           </div>
@@ -252,6 +334,19 @@ function Detail({ id, onBack, onChanged }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-col gap-2 border-t border-line pt-4">
+        {ai?.configured && CAN_INVESTIGATE.includes(incident.status) && (
+          <div className="flex">
+            <button
+              type="button"
+              disabled={busy === "investigate"}
+              onClick={investigate}
+              className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:opacity-60"
+            >
+              {busy === "investigate" ? <Droplets className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+              {github.issueNumber ? "Investigate again" : "Investigate with AI"}
+            </button>
+          </div>
+        )}
         {finished ? (
           <div className="flex">
             <button
@@ -309,6 +404,13 @@ export default function Maintenance() {
   const [list, setList] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ai, setAi] = useState(null);
+
+  useEffect(() => {
+    api("/incidents/ai-status")
+      .then(setAi)
+      .catch(() => setAi(null));
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -334,6 +436,14 @@ export default function Maintenance() {
             Errors the helpdesk ran into, and bugs the team reported. Repeats of
             the same error are counted on one incident.
           </p>
+          {ai && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+              <Sparkles className="h-3.5 w-3.5" />
+              {ai.configured
+                ? `AI investigations are on (${ai.auto ? "automatic, within limits" : "Investigate button only"}). ${ai.used.month} of ${ai.maxPerMonth} used this month.`
+                : "AI investigations are off. To turn them on, see docs/maintenance.md."}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <div className="flex rounded-lg border border-line p-0.5 text-sm">
@@ -416,7 +526,7 @@ export default function Maintenance() {
           }`}
         >
           {selected ? (
-            <Detail id={selected} onBack={() => open(null)} onChanged={load} />
+            <Detail id={selected} ai={ai} onBack={() => open(null)} onChanged={load} />
           ) : (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-muted">
               <Bug className="h-8 w-8" />

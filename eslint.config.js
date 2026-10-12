@@ -26,4 +26,12 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  // The maintenance scripts run in GitHub Actions, on Node
+  {
+    files: ["scripts/**/*.mjs"],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ]);

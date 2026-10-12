@@ -1,0 +1,228 @@
+# Maintenance, stage 3: AI investigation of a helpdesk incident.
+#
+# Starts when the helpdesk (server/src/investigations.js) labels an issue
+# "ai-investigate". Each job runs on its own fresh machine:
+#
+#   plan     the AI reads the incident and the code, and proposes a fix.
+#            Has the AI key. Runs NO code from the AI.       (read-only)
+#   check-1  applies the fix, runs lint, build, tests, migrations and a
+#            real server start against a throwaway Postgres.
+#            Has NO secrets and NO write access.
+#   revise   only if a check failed: the AI sees what failed and tries
+#            once more. Runs no code.                          (read-only)
+#   check-2  checks the second attempt, like check-1.
+#   propose  reports on the issue; if every check passed, opens a pull
+#            request from the AI's plan (rebuilt here, re-checked against
+#            the rules). The only job that can write, and it runs no
+#            code from the AI. Nothing is ever merged automatically.
+#
+# Setup: docs/maintenance.md
+name: AI investigation
+
+on:
+  issues:
+    types: [labeled]
+
+# One investigation at a time, never cancelled half-way
+concurrency:
+  group: ai-investigation
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  TEST_DATABASE_URL: postgres://helpdesk:helpdesk@localhost:5432/helpdesk_test
+
+jobs:
+  plan:
+    # Only issues the helpdesk made, labelled by someone with access
+    if: >-
+      github.event.label.name == 'ai-investigate' &&
+      contains(github.event.issue.body, '<!-- helpdesk-incident:') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      models: read # GitHub Models (the free option)
+    outputs:
+      ready: ${{ steps.plan.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: plan
+        name: Investigate (AI)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          MAINT_AI_PROVIDER: ${{ vars.MAINT_AI_PROVIDER }}
+          MAINT_AI_MODEL: ${{ vars.MAINT_AI_MODEL }}
+          OUT_DIR: ${{ runner.temp }}/out
+        run: node scripts/maintenance/investigate.mjs plan
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plan
+          path: ${{ runner.temp }}/out
+          retention-days: 30
+
+  check-1:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U helpdesk"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund && cd server && npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: ${{ runner.temp }}/plan
+      - id: check
+        name: Apply the fix and run every check (no secrets here)
+        env:
+          PLAN_FILE: ${{ runner.temp }}/plan/plan.json
+          OUT_DIR: ${{ runner.temp }}/out
+        run: node scripts/maintenance/investigate.mjs check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: check-1
+          path: ${{ runner.temp }}/out
+          retention-days: 30
+
+  revise:
+    needs: [plan, check-1]
+    if: needs.check-1.outputs.passed == 'false' && (vars.MAINT_MAX_ATTEMPTS || '2') != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      models: read
+    outputs:
+      ready: ${{ steps.revise.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: ${{ runner.temp }}/plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: check-1
+          path: ${{ runner.temp }}/check-1
+      - id: revise
+        name: Try again with what failed (AI)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          MAINT_AI_PROVIDER: ${{ vars.MAINT_AI_PROVIDER }}
+          MAINT_AI_MODEL: ${{ vars.MAINT_AI_MODEL }}
+          PLAN_FILE: ${{ runner.temp }}/plan/plan.json
+          RESULTS_FILE: ${{ runner.temp }}/check-1/results.json
+          OUT_DIR: ${{ runner.temp }}/out
+        run: node scripts/maintenance/investigate.mjs revise
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plan-2
+          path: ${{ runner.temp }}/out
+          retention-days: 30
+
+  check-2:
+    needs: revise
+    if: needs.revise.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U helpdesk"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund && cd server && npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan-2
+          path: ${{ runner.temp }}/plan
+      - name: Apply the second fix and run every check (no secrets here)
+        env:
+          PLAN_FILE: ${{ runner.temp }}/plan/plan.json
+          OUT_DIR: ${{ runner.temp }}/out
+        run: node scripts/maintenance/investigate.mjs check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: check-2
+          path: ${{ runner.temp }}/out
+          retention-days: 30
+
+  propose:
+    needs: [plan, check-1, revise, check-2]
+    if: always() && needs.plan.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Whatever the earlier jobs left (some may not have run)
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/reports
+      - name: Report, and open a pull request if the fix passed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_DIR: ${{ runner.temp }}/reports
+        run: node scripts/maintenance/propose.mjs
