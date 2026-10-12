@@ -8,6 +8,7 @@ import {
   PhoneCall,
 } from "lucide-react";
 import { copyText } from "../copyText";
+import BackupAlerts from "../BackupAlerts";
 import EmailIntegration from "../EmailIntegration";
 import { inputClass, labelClass, secondaryButton } from "../formStyles";
 
@@ -15,7 +16,8 @@ import { inputClass, labelClass, secondaryButton } from "../formStyles";
 // place. Each one turns what comes in (a form, an email, a WhatsApp
 // message, a phone call) into tickets in the same Inbox.
 //
-// The website form and email work today (email: EmailIntegration.jsx).
+// The website form, email and backup alerts work today (email:
+// EmailIntegration.jsx, backup alerts: BackupAlerts.jsx).
 // The others are shown with what they'll do, so the page already
 // explains where the helpdesk is going.
 
@@ -259,6 +261,7 @@ export default function Integrations() {
 
       <WebsiteForm />
       <EmailIntegration />
+      <BackupAlerts />
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">

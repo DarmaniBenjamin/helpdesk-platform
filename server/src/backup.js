@@ -50,12 +50,14 @@ fs.mkdirSync(BACKUP_DIR, { recursive: true });
 const TABLES = [
   "departments",
   "customers",
+  "backup_clients",
   "users",
   "user_departments",
   "mailboxes",
   "held_emails",
   "tickets",
   "messages",
+  "backup_alerts",
   "attachments",
   "email_messages",
   "jobs",
@@ -69,6 +71,7 @@ const TABLES = [
 // Tables whose "id" counts up by itself: after a restore, the counter
 // carries on after the highest one
 const COUNTED = [
+  "backup_clients",
   "mailboxes",
   "held_emails",
   "customers",

@@ -19,7 +19,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
-import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "./db/index.js";
 import {
   customers,
@@ -239,6 +239,8 @@ async function askForFeedback() {
           inArray(tickets.status, ["resolved", "closed"]),
           isNull(tickets.feedbackRating),
           isNull(tickets.feedbackRequestedAt),
+          // Backup alerts are for the team, not something to rate
+          ne(tickets.source, "backup"),
           or(gt(tickets.resolvedAt, after), gt(tickets.closedAt, after)),
         ),
       )

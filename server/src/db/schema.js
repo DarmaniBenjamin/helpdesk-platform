@@ -18,6 +18,7 @@ import {
   timestamp,
   primaryKey,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // A date and time, stored with its time zone
@@ -488,6 +489,67 @@ export const heldEmails = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("held_emails_received_idx").on(t.receivedAt)],
+);
+
+// ---------- Backup alerts (from the backup gateway) ----------
+// The backup gateway sends its alerts here (malware found, a device
+// offline, off-site copies failing...) and each one becomes a ticket
+// (see backupAlerts.js).
+
+// The gateway's clients (e.g. "Acme Dental"), and which customer here
+// each one is. Linked on Integrations → Backup alerts. Until someone
+// links it, a customer is made with the client's name (madeCustomer).
+// client "" = the gateway itself (e.g. its disk is nearly full).
+export const backupClients = pgTable(
+  "backup_clients",
+  {
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+    gatewayId: text("gateway_id").notNull(),
+    gatewayName: text("gateway_name").notNull().default(""),
+    client: text("client").notNull(),
+    customerId: customerId("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    madeCustomer: boolean("made_customer").notNull().default(false),
+    firstSeenAt: createdAt(),
+    lastSeenAt: time("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("backup_clients_gateway_client_idx").on(t.gatewayId, t.client),
+  ],
+);
+
+// Each ticket made from backup alerts. While "open", more alerts about
+// the same problem on the same device (the same "key") are added to it
+// as notes instead of making new tickets; "back to normal" resolves it.
+export const backupAlerts = pgTable(
+  "backup_alerts",
+  {
+    ticketId: integer("ticket_id")
+      .primaryKey()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    key: text("key").notNull(), // gateway | device | kind of problem
+    clientId: integer("client_id").references(() => backupClients.id, {
+      onDelete: "set null",
+    }),
+    open: boolean("open").notNull().default(true),
+    count: integer("count").notNull().default(1),
+    openedAt: createdAt(),
+    lastEventAt: time("last_event_at").notNull().defaultNow(),
+  },
+  (t) => [index("backup_alerts_key_idx").on(t.key, t.open)],
+);
+
+// Alerts already handled, so one sent twice (the gateway tries again if
+// it didn't hear back) isn't added twice. Kept for 30 days.
+export const backupEvents = pgTable(
+  "backup_events",
+  {
+    gatewayId: text("gateway_id").notNull(),
+    eventId: bigint("event_id", { mode: "number" }).notNull(),
+    receivedAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.gatewayId, t.eventId] })],
 );
 
 // ---------- Settings, sign-in sessions and invites ----------

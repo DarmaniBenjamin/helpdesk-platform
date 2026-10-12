@@ -55,6 +55,7 @@ const SOURCES = {
   portal: "Customer portal",
   phone: "Phone",
   agent: "Created by an agent",
+  backup: "Backup gateway",
 };
 
 // Monday first, like a work week (getDay() gives Sunday = 0)

@@ -4,7 +4,8 @@
 // Who can do what (see permissions.js):
 // - Staff see and work on every ticket. Only Admins create tickets.
 // - A customer sees only their own tickets, never internal notes or
-//   history lines. They can send requests, reply, mark a ticket fixed,
+//   history lines, and never tickets made from backup alerts (those are
+//   for the team, see backupAlerts.js). They can send requests, reply, mark a ticket fixed,
 //   and rate it once it's finished.
 import { Router } from "express";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -242,7 +243,11 @@ async function findTicket(id, viewer) {
     .select()
     .from(tickets)
     .where(eq(tickets.id, Number(id) || 0));
-  if (!ticket || (!isStaff(viewer) && ticket.customerId !== viewer.customerId))
+  if (
+    !ticket ||
+    (!isStaff(viewer) &&
+      (ticket.customerId !== viewer.customerId || ticket.source === "backup"))
+  )
     throw new BadInput("That ticket doesn't exist.", 404);
   return ticket;
 }
@@ -374,7 +379,13 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
     );
   if (!req.user.customerId) return res.json([]);
   res.json(
-    await loadTickets(eq(tickets.customerId, req.user.customerId), req.user),
+    await loadTickets(
+      and(
+        eq(tickets.customerId, req.user.customerId),
+        ne(tickets.source, "backup"),
+      ),
+      req.user,
+    ),
   );
 });
 

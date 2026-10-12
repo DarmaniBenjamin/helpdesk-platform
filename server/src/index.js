@@ -46,6 +46,7 @@ import {
   startDueTimeChecks,
 } from "./notify.js";
 import { handleBadInput } from "./validate.js";
+import { backupAlertsRouter } from "./backupAlerts.js";
 
 const app = express();
 
@@ -59,6 +60,12 @@ app.set("trust proxy", 1);
 app.use("/api/import", express.json({ limit: "20mb" }));
 // A backup being restored is the whole database in one request
 app.use("/api/backup/restore", express.json({ limit: "500mb" }));
+// Alerts from the backup gateway: kept exactly as sent, because their
+// signature is checked against the bytes (see backupAlerts.js)
+app.use(
+  "/api/integrations/backup/webhook",
+  express.raw({ type: "*/*", limit: "2mb" }),
+);
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
 // ---------- Safety settings for browsers ----------
@@ -198,6 +205,7 @@ app.use("/api/email", emailRouter); // Integrations → Email (Admins)
 app.use("/api/email-review", reviewRouter); // emails waiting for a decision (staff)
 app.use("/api/password", passwordRouter); // "forgot password" (no sign-in)
 app.use("/api/setup-owner", setupOwnerRouter); // the first Super Admin (new servers)
+app.use("/api/integrations/backup", backupAlertsRouter); // alerts from the backup gateway → tickets
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 

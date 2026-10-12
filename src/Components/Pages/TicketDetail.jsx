@@ -71,6 +71,7 @@ const SOURCES = {
   website: "Website form",
   phone: "Phone",
   agent: "Created by an agent",
+  backup: "Backup gateway",
 };
 
 // How a reply or note reached the customer (see "channel" on messages)
