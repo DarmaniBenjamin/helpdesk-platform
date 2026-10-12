@@ -292,13 +292,8 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
     }
   }
 
-  // Tickets made in this app afterwards get the next number after the
-  // highest one, so they never clash with an imported Freshdesk number
-  if (added > 0) {
-    await db.execute(
-      sql`select setval(pg_get_serial_sequence('tickets', 'id'), greatest((select max(id) from tickets), 1))`,
-    );
-  }
+  // Tickets made in this app afterwards take the lowest free number
+  // (next_ticket_id()), so they never clash with an imported Freshdesk one
 
   res.json({ added, updated, skipped, problems });
 });

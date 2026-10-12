@@ -13,7 +13,7 @@
 //
 // Don't run this on the real site's database once customers use it: use
 // it on a test copy (your laptop, or a test server).
-import { inArray, like, sql } from "drizzle-orm";
+import { inArray, like } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { customers, departments, messages, tickets, users } from "./schema.js";
 
@@ -166,13 +166,22 @@ async function remove() {
     removed += gone.length;
     await db.delete(customers).where(inArray(customers.id, part));
   }
-  // The next ticket number follows the highest one left
-  await db.execute(
-    sql`select setval(pg_get_serial_sequence('tickets', 'id'), coalesce((select max(id) from tickets), 0) + 1, false)`,
-  );
+  // Their ticket numbers are free again for new tickets (next_ticket_id())
   console.log(
     `Removed ${removed} test tickets and ${ids.length} test customers.`,
   );
+}
+
+// The lowest n ticket numbers nobody is using (gaps left by deleted
+// tickets first). Given to each batch, so 500 tickets go in at once.
+async function freeNumbers(n) {
+  const { rows } = await pool.query(
+    `select g as id from generate_series(1, (select coalesce(max(id), 0) from tickets) + $1) g
+      where not exists (select 1 from tickets t where t.id = g)
+      order by g limit $1`,
+    [n],
+  );
+  return rows.map((r) => r.id);
 }
 
 async function create(count) {
@@ -264,9 +273,10 @@ async function create(count) {
         assignee,
       });
     }
+    const ids = await freeNumbers(batch.length);
     const inserted = await db
       .insert(tickets)
-      .values(batch.map((b) => b.ticket))
+      .values(batch.map((b, i) => ({ id: ids[i], ...b.ticket })))
       .returning({ id: tickets.id, createdAt: tickets.createdAt });
 
     const allMessages = [];

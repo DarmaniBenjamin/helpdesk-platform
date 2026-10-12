@@ -55,9 +55,12 @@ const TABLES = [
   "user_departments",
   "mailboxes",
   "held_emails",
+  "whatsapp_numbers",
   "tickets",
   "messages",
   "backup_alerts",
+  "phone_calls",
+  "whatsapp_messages",
   "attachments",
   "email_messages",
   "jobs",
@@ -81,6 +84,8 @@ const COUNTED = [
   "rules",
   "automations",
   "jobs",
+  "phone_calls",
+  "whatsapp_numbers",
 ];
 
 // "helpdesk-backup-2026-09-29-1430.json"

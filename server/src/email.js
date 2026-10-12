@@ -102,6 +102,7 @@ import {
   onTicketCreated,
 } from "./notify.js";
 import { sendToEveryone } from "./live.js";
+import { isVoicemailSender, voicemailFromEmail } from "./phone.js";
 
 export const emailRouter = Router();
 export const reviewRouter = Router();
@@ -582,6 +583,25 @@ async function receiveEmail(box, source, { force = false } = {}) {
       .from(heldEmails)
       .where(eq(heldEmails.messageId, messageId));
     if (held) return; // already waiting in Email review
+  }
+
+  // A voicemail emailed by the phone system (Integrations → Phone): a
+  // voicemail ticket instead (phone.js). Checked before the automatic
+  // reply check, because phone systems mark their emails as automatic.
+  if (await isVoicemailSender(address)) {
+    const ticketId = await voicemailFromEmail(parsed, messageId);
+    if (ticketId)
+      await db
+        .insert(emailMessages)
+        .values({
+          messageId,
+          ticketId,
+          mailboxId: box.id,
+          direction: "in",
+          address,
+        })
+        .onConflictDoNothing();
+    return;
   }
 
   // From one of our own mailboxes, or an automatic reply: skip

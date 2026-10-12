@@ -92,6 +92,13 @@
       "when": 1791773176880,
       "tag": "0012_backup_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791830000000,
+      "tag": "0013_phone_whatsapp",
+      "breakpoints": true
     }
   ]
 }

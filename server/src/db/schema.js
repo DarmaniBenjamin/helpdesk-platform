@@ -20,6 +20,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // A date and time, stored with its time zone
 const time = (name) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -128,8 +129,12 @@ export const userDepartments = pgTable(
 export const tickets = pgTable(
   "tickets",
   {
-    // Kept the same as Freshdesk's ticket numbers when importing
-    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+    // Kept the same as Freshdesk's ticket numbers when importing. A new
+    // ticket gets the lowest free number (next_ticket_id(), in migration
+    // 0013), so numbers left by deleted tickets are used again.
+    id: integer("id")
+      .primaryKey()
+      .default(sql`next_ticket_id()`),
     subject: text("subject").notNull(),
     description: text("description").notNull().default(""),
     status: ticketStatusEnum("status").notNull().default("open"),
@@ -555,6 +560,88 @@ export const backupEvents = pgTable(
 // ---------- Settings, sign-in sessions and invites ----------
 
 // App settings, one row per section, e.g. "backup" or "freshdesk"
+// ---------- Phone (PBX) ----------
+
+// Every call the phone system told the helpdesk about (phone.js): from
+// its webhook, or a voicemail email. call_id (the phone system's own ID
+// for the call, or the email's Message-ID) stops the same call being
+// handled twice when it's sent again.
+export const phoneCalls = pgTable(
+  "phone_calls",
+  {
+    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+    callId: text("call_id"),
+    event: text("event").notNull(), // voicemail, missed or answered
+    direction: text("direction").notNull().default("in"), // in or out
+    fromNumber: text("from_number").notNull().default(""),
+    fromName: text("from_name").notNull().default(""),
+    extension: text("extension").notNull().default(""),
+    duration: integer("duration"), // seconds
+    via: text("via").notNull().default("webhook"), // webhook or email
+    // What the helpdesk did with it: "ticket", "added", "noted", "logged"
+    result: text("result").notNull().default(""),
+    agentId: text("agent_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    customerId: customerId("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    ticketId: integer("ticket_id").references(() => tickets.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("phone_calls_call_id_idx").on(t.callId),
+    index("phone_calls_created_idx").on(t.createdAt),
+  ],
+);
+
+// ---------- WhatsApp ----------
+
+// A WhatsApp Business number connected to the helpdesk (whatsapp.js),
+// usually an agent's: messages to it become tickets for that agent.
+// "coexistence" = it stays on the WhatsApp Business app on the agent's
+// phone too, and what they send from the app is copied onto the ticket.
+export const whatsappNumbers = pgTable("whatsapp_numbers", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  phoneNumberId: text("phone_number_id").notNull().unique(), // Meta's ID for it
+  wabaId: text("waba_id").notNull().default(""),
+  displayNumber: text("display_number").notNull().default(""),
+  name: text("name").notNull().default(""), // the business name on WhatsApp
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  departmentId: text("department_id").references(() => departments.id, {
+    onDelete: "set null",
+  }),
+  token: text("token").notNull(), // locked with secrets.js
+  coexistence: boolean("coexistence").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(true),
+  lastMessageAt: time("last_message_at"),
+  createdAt: createdAt(),
+});
+
+// Every WhatsApp message in or out of a ticket, by WhatsApp's own ID, so
+// the same message is never added twice, and the next message from that
+// person lands on the same ticket
+export const whatsappMessages = pgTable(
+  "whatsapp_messages",
+  {
+    wamid: text("wamid").primaryKey(),
+    numberId: integer("number_id")
+      .notNull()
+      .references(() => whatsappNumbers.id, { onDelete: "cascade" }),
+    waId: text("wa_id").notNull(), // the customer's WhatsApp number
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    direction: text("direction").notNull(), // in or out
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("whatsapp_messages_thread_idx").on(t.numberId, t.waId, t.createdAt),
+  ],
+);
+
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),

@@ -4,52 +4,21 @@ import {
   Copy,
   ExternalLink,
   Globe,
-  MessageCircle,
-  PhoneCall,
 } from "lucide-react";
 import { copyText } from "../copyText";
 import BackupAlerts from "../BackupAlerts";
 import EmailIntegration from "../EmailIntegration";
+import PhoneIntegration from "../PhoneIntegration";
+import WhatsAppIntegration from "../WhatsAppIntegration";
 import { inputClass, labelClass, secondaryButton } from "../formStyles";
 
 // Integrations: every way customers can reach the helpdesk, in one
 // place. Each one turns what comes in (a form, an email, a WhatsApp
 // message, a phone call) into tickets in the same Inbox.
 //
-// The website form, email and backup alerts work today (email:
-// EmailIntegration.jsx, backup alerts: BackupAlerts.jsx).
-// The others are shown with what they'll do, so the page already
-// explains where the helpdesk is going.
-
-// Coming next, in the order they'll be built
-const COMING = [
-  {
-    id: "phone",
-    name: "Phone (PBX)",
-    icon: PhoneCall,
-    tint: "bg-violet-500/15 text-violet-500",
-    blurb:
-      "When an agent can't pick up, the call goes to your phone system (3CX, FreePBX...) and the caller leaves a voicemail, which becomes a ticket for that agent.",
-    points: [
-      "The recording attached to the ticket",
-      "A written transcript, made on your own server",
-      "The caller matched to the customer by phone number",
-    ],
-  },
-  {
-    id: "whatsapp",
-    name: "WhatsApp",
-    icon: MessageCircle,
-    tint: "bg-emerald-500/15 text-emerald-500",
-    blurb:
-      "Messages and voice notes sent to each agent's WhatsApp Business number become tickets for that agent. Free: the helpdesk only reads, it never sends.",
-    points: [
-      "Each agent's company number, connected once",
-      "Voice notes attached, with a written transcript",
-      "Uses the official WhatsApp Business Platform",
-    ],
-  },
-];
+// Website form (here), email (EmailIntegration.jsx), WhatsApp
+// (WhatsAppIntegration.jsx), phone (PhoneIntegration.jsx) and backup
+// alerts (BackupAlerts.jsx).
 
 function CopyButton({ value, label }) {
   const [copied, setCopied] = useState(false);
@@ -74,15 +43,11 @@ function CopyButton({ value, label }) {
   );
 }
 
-function StatusPill({ live }) {
-  return live ? (
+function StatusPill() {
+  return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">
       <span className="h-1.5 w-1.5 rounded-full bg-brand" />
       On
-    </span>
-  ) : (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-line px-2.5 py-1 text-xs font-medium text-muted">
-      Coming soon
     </span>
   );
 }
@@ -126,7 +91,7 @@ function WebsiteForm() {
             </p>
           </div>
         </div>
-        <StatusPill live />
+        <StatusPill />
       </div>
 
       {/* The link */}
@@ -221,34 +186,6 @@ function WebsiteForm() {
   );
 }
 
-function ComingCard({ item }) {
-  const Icon = item.icon;
-  return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-white p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.tint}`}
-        >
-          <Icon className="h-5 w-5" />
-        </div>
-        <StatusPill live={false} />
-      </div>
-      <div>
-        <h2 className="text-lg font-semibold">{item.name}</h2>
-        <p className="mt-1 text-sm text-muted">{item.blurb}</p>
-      </div>
-      <ul className="mt-auto flex flex-col gap-2 text-sm">
-        {item.points.map((point) => (
-          <li key={point} className="flex items-start gap-2">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-            <span>{point}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export default function Integrations() {
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -261,18 +198,9 @@ export default function Integrations() {
 
       <WebsiteForm />
       <EmailIntegration />
+      <WhatsAppIntegration />
+      <PhoneIntegration />
       <BackupAlerts />
-
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          Coming next
-        </h2>
-      </div>
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-        {COMING.map((item) => (
-          <ComingCard key={item.id} item={item} />
-        ))}
-      </div>
     </div>
   );
 }

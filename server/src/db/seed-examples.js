@@ -237,12 +237,10 @@ try {
     console.log("✓ Automations already there, left alone");
   }
 
-  // New customers and tickets carry on numbering after the highest ones
+  // New customers carry on numbering after the highest one (new tickets
+  // take the lowest free number by themselves, next_ticket_id())
   await db.execute(
     sql`select setval(pg_get_serial_sequence('customers', 'id'), (select max(id) from customers))`,
-  );
-  await db.execute(
-    sql`select setval(pg_get_serial_sequence('tickets', 'id'), (select max(id) from tickets))`,
   );
 } catch (err) {
   console.error("Failed:", err.message);

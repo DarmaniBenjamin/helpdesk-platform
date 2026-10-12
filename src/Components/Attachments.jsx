@@ -109,6 +109,8 @@ export function AttachmentChips({ attach }) {
 export function AttachmentList({ files, onColor = false }) {
   if (!files?.length) return null;
   const images = files.filter((f) => f.image);
+  // Voicemails and voice notes: played right here (and downloadable below)
+  const sounds = files.filter((f) => f.audio);
   const others = files.filter((f) => !f.image);
 
   return (
@@ -131,6 +133,21 @@ export function AttachmentList({ files, onColor = false }) {
                   className="h-28 w-28 object-cover sm:h-32 sm:w-32"
                 />
               </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {sounds.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {sounds.map((f) => (
+            <li key={f.id}>
+              <audio
+                controls
+                preload="metadata"
+                src={fileUrl(f.id)}
+                aria-label={f.name}
+                className="h-10 w-full max-w-sm"
+              />
             </li>
           ))}
         </ul>

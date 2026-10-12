@@ -70,6 +70,7 @@ const SOURCES = {
   portal: "Customer portal",
   website: "Website form",
   phone: "Phone",
+  whatsapp: "WhatsApp",
   agent: "Created by an agent",
   backup: "Backup gateway",
 };

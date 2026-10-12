@@ -47,6 +47,8 @@ import {
 } from "./notify.js";
 import { handleBadInput } from "./validate.js";
 import { backupAlertsRouter } from "./backupAlerts.js";
+import { phoneRouter } from "./phone.js";
+import { whatsappRouter } from "./whatsapp.js";
 
 const app = express();
 
@@ -66,6 +68,11 @@ app.use(
   "/api/integrations/backup/webhook",
   express.raw({ type: "*/*", limit: "2mb" }),
 );
+// Messages from WhatsApp (Meta): kept exactly as sent too, for the same
+// reason (see whatsapp.js)
+app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "5mb" }));
+// Calls from the phone system can come as a plain web form (phone.js)
+app.use("/api/phone/hook", express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
 // ---------- Safety settings for browsers ----------
@@ -206,6 +213,8 @@ app.use("/api/email-review", reviewRouter); // emails waiting for a decision (st
 app.use("/api/password", passwordRouter); // "forgot password" (no sign-in)
 app.use("/api/setup-owner", setupOwnerRouter); // the first Super Admin (new servers)
 app.use("/api/integrations/backup", backupAlertsRouter); // alerts from the backup gateway → tickets
+app.use("/api/phone", phoneRouter); // Integrations → Phone; calls and voicemails from the PBX → tickets
+app.use("/api/whatsapp", whatsappRouter); // Integrations → WhatsApp; messages → tickets
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 

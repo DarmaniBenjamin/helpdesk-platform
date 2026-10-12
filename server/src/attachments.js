@@ -74,9 +74,20 @@ const FILE_TYPES = {
   mp4: "video/mp4",
   mov: "video/quicktime",
   webm: "video/webm",
+  "3gp": "video/3gpp",
+  // Voicemails and voice notes (phone.js, whatsapp.js): played in the page
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  aac: "audio/aac",
+  amr: "audio/amr",
 };
 // Photos the browser can show in the page. Everything else downloads.
 const SHOWN_IN_PAGE = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"]);
+// Audio the browser can play in the page (AMR can't be played, only downloaded)
+const PLAYED_IN_PAGE = new Set(["wav", "mp3", "m4a", "ogg", "opus", "aac"]);
 
 const endingOf = (name) => path.extname(name).slice(1).toLowerCase();
 
@@ -96,6 +107,7 @@ export function publicAttachment(a) {
     name: a.fileName,
     size: a.size,
     image: SHOWN_IN_PAGE.has(endingOf(a.fileName)),
+    audio: PLAYED_IN_PAGE.has(endingOf(a.fileName)),
   };
 }
 
@@ -285,7 +297,9 @@ attachmentsRouter.get("/:id", requireAuth, async (req, res) => {
   });
   // Photos open in the page; everything else downloads. ?download=1
   // downloads photos too.
-  const inline = SHOWN_IN_PAGE.has(ending) && !req.query.download;
+  const inline =
+    (SHOWN_IN_PAGE.has(ending) || PLAYED_IN_PAGE.has(ending)) &&
+    !req.query.download;
   res.attachment(file.fileName);
   if (inline)
     res.set(
