@@ -600,6 +600,11 @@ async function full(id) {
     lastRequestId: incident.lastRequestId,
     reportedBy: reporter?.name ?? null,
     investigation: incident.investigation,
+    // An AI investigation still running after 15 minutes: something went
+    // wrong on GitHub, and it can be started again (investigations.js)
+    stuck:
+      incident.status === "investigating" &&
+      Date.now() - (Number(incident.github?.requestedAt) || 0) > 15 * MINUTE,
     events: events.map(({ event, name }) => ({
       id: event.id,
       type: event.type,

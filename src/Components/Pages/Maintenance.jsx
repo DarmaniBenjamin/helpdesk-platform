@@ -151,6 +151,9 @@ function Detail({ id, ai, onBack, onChanged }) {
   const finished = ["dismissed", "verified", "rejected"].includes(incident.status);
   const github = incident.github ?? {};
   const findings = incident.investigation ?? {};
+  // Still "investigating" after 15 minutes: it can be started again (the
+  // server works this out, server/src/incidents.js)
+  const stuck = Boolean(incident.stuck);
 
   return (
     <div className="flex flex-col gap-5">
@@ -240,7 +243,9 @@ function Detail({ id, ai, onBack, onChanged }) {
           {incident.status === "investigating" && (
             <p className="flex items-center gap-2 rounded-lg bg-sky-50 p-3 text-sm text-sky-700">
               <Droplets className="h-4 w-4" />
-              Running on GitHub. Results appear here a few minutes after it finishes.
+              {stuck
+                ? "Still waiting for GitHub after 15 minutes: check the repository's Actions tab, or press Investigate again."
+                : "Running on GitHub. Results appear here a few minutes after it finishes."}
             </p>
           )}
           {findings.outcome && (
@@ -359,7 +364,7 @@ function Detail({ id, ai, onBack, onChanged }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-col gap-2 border-t border-line pt-4">
-        {ai?.configured && CAN_INVESTIGATE.includes(incident.status) && (
+        {ai?.configured && (CAN_INVESTIGATE.includes(incident.status) || stuck) && (
           <div className="flex">
             <button
               type="button"

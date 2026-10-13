@@ -35,11 +35,15 @@ env:
 
 jobs:
   plan:
-    # Only issues the helpdesk made, labelled by someone with access
+    # Only issues the helpdesk made: opened by its own GitHub App
+    # (helpdesk-maintenance-...[bot], Maintenance → AI & GitHub), or by
+    # someone with access (the older token setup). Adding the label needs
+    # access to the repository too.
     if: >-
       github.event.label.name == 'ai-investigate' &&
       contains(github.event.issue.body, '<!-- helpdesk-incident:') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) ||
+       (github.event.issue.user.type == 'Bot' && startsWith(github.event.issue.user.login, 'helpdesk-maintenance-')))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

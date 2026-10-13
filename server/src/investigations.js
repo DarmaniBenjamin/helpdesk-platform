@@ -48,6 +48,8 @@ export const investigationsRouter = Router();
 export const githubWebhookRouter = Router();
 
 const MINUTE = 60 * 1000;
+// An investigation still running after this can be started again
+const STUCK_AFTER = 15 * MINUTE;
 const LABEL = "ai-investigate";
 const LABELS = [
   [LABEL, "5319e7", "The helpdesk asked for an AI investigation"],
@@ -545,7 +547,10 @@ investigationsRouter.post("/:id/investigate", requireRole(...ADMINS), async (req
     .from(incidents)
     .where(eq(incidents.id, Number(req.params.id) || 0));
   if (!incident) throw new BadInput("That incident doesn't exist.", 404);
-  if (incident.status === "investigating")
+  // Still waiting after 15 minutes: something went wrong on GitHub, so it
+  // can be sent again (otherwise it waits for the 2-hour timeout)
+  const waitingSince = Number(incident.github?.requestedAt) || 0;
+  if (incident.status === "investigating" && Date.now() - waitingSince < STUCK_AFTER)
     throw new BadInput("It's being investigated already. Results appear here within a few minutes of the run finishing.");
   const sent = await sendForInvestigation(incident, { actor: req.user, manual: true });
   res.json({ ok: true, ...sent });
