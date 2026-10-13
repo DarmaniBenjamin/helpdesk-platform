@@ -146,6 +146,13 @@ ok "Website packages"
 as_app "$APP_DIR" "npm run build" >/dev/null
 ok "Website built"
 as_app "$APP_DIR/server" "npm ci --omit=dev --no-audit --no-fund" >/dev/null
+# Packages some features need, checked so a missing one is noticed now
+# (libsodium-wrappers: storing the AI's key on GitHub, Maintenance → AI &
+# GitHub). They come from server/package-lock.json like all the others.
+for pkg in libsodium-wrappers; do
+  as_app "$APP_DIR/server" "node -e 'import(\"$pkg\").then(() => {}, () => process.exit(1))'" ||
+    die "The server package $pkg didn't install. Run: cd server && npm install, commit server/package-lock.json, and try again."
+done
 ok "Server packages"
 INSTALLING=1 bash "$APP_DIR/deploy/start.sh"
 
