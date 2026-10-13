@@ -17,7 +17,7 @@ self.addEventListener("activate", (event) => {
 
 // A message from the server (see server/src/notify.js)
 self.addEventListener("push", (event) => {
-  let data = {};
+  let data;
   try {
     data = event.data ? event.data.json() : {};
   } catch {

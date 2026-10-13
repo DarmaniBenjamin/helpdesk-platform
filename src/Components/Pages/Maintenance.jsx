@@ -93,10 +93,10 @@ function Detail({ id, ai, onBack, onChanged }) {
   const [dismissing, setDismissing] = useState(false);
   const [reason, setReason] = useState("");
 
+  // (A new incident gets a new Detail: see key= below, so nothing needs
+  // clearing here)
   useEffect(() => {
     let current = true;
-    setIncident(null);
-    setError("");
     api(`/incidents/${id}`)
       .then((data) => current && setIncident(data))
       .catch((err) => current && setError(err.message));
@@ -421,7 +421,9 @@ export default function Maintenance() {
   const [showAll, setShowAll] = useState(false);
   const [list, setList] = useState(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // Bumped to load the list again (Refresh, or after a change)
+  const [reloads, setReloads] = useState(0);
   const [ai, setAi] = useState(null);
 
   useEffect(() => {
@@ -430,18 +432,25 @@ export default function Maintenance() {
       .catch(() => setAi(null));
   }, []);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  useEffect(() => {
+    let current = true;
     api(`/incidents${showAll ? "?all=1" : ""}`)
       .then((data) => {
+        if (!current) return;
         setList(data.incidents);
         setError("");
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [showAll]);
+      .catch((err) => current && setError(err.message))
+      .finally(() => current && setLoading(false));
+    return () => {
+      current = false;
+    };
+  }, [showAll, reloads]);
 
-  useEffect(load, [load]);
+  const load = useCallback(() => {
+    setLoading(true);
+    setReloads((n) => n + 1);
+  }, []);
 
   const open = (id) => setParams(id ? { id: String(id) } : {});
 
@@ -472,7 +481,11 @@ export default function Maintenance() {
               <button
                 key={label}
                 type="button"
-                onClick={() => setShowAll(value)}
+                onClick={() => {
+                  if (showAll === value) return;
+                  setLoading(true);
+                  setShowAll(value);
+                }}
                 className={`h-9 cursor-pointer rounded-md px-3 ${
                   showAll === value ? "bg-brand/10 font-medium text-brand" : "text-muted"
                 }`}
@@ -544,7 +557,7 @@ export default function Maintenance() {
           }`}
         >
           {selected ? (
-            <Detail id={selected} ai={ai} onBack={() => open(null)} onChanged={load} />
+            <Detail key={selected} id={selected} ai={ai} onBack={() => open(null)} onChanged={load} />
           ) : (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-muted">
               <Bug className="h-8 w-8" />

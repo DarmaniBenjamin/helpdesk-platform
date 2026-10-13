@@ -42,6 +42,7 @@ export function redact(text, max = 2000) {
   for (const [pattern, replacement] of RULES) out = out.replace(pattern, replacement);
   // Control characters (except new lines and tabs) can't hurt anything
   // stored, but they can mess up logs and the page
+  // eslint-disable-next-line no-control-regex -- control characters are taken out on purpose
   out = out.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
   return out.length > max ? `${out.slice(0, max)}…` : out;
 }
@@ -146,7 +147,7 @@ export function triage({ source, category, component, count = 1 }) {
   else if (source === "browser") severity = count >= 5 ? "medium" : "low";
   else if (count >= 10) severity = "high";
 
-  let investigate = false;
+  let investigate;
   if (source === "user") investigate = true; // a person reported it
   else if (category === "network" || category === "bad-input") investigate = false;
   else if (source === "crash") investigate = true;

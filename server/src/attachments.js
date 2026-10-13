@@ -95,6 +95,7 @@ const endingOf = (name) => path.extname(name).slice(1).toLowerCase();
 function cleanFileName(name) {
   const base = path
     .basename(String(name || "file"))
+    // eslint-disable-next-line no-control-regex -- control characters are taken out on purpose
     .replace(/[\u0000-\u001f<>:"/\\|?*]+/g, "_")
     .trim();
   return (base || "file").slice(-150);

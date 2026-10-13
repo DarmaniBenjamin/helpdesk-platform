@@ -479,7 +479,7 @@ export default function WhatsAppIntegration() {
     // from the sign-in code
     let session = null;
     const listen = (event) => {
-      let host = "";
+      let host;
       try {
         host = new URL(event.origin).hostname;
       } catch {
