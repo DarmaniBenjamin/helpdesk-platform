@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import useSavedState, { isAgent, isTeam } from "../savedState";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   Search,
@@ -99,11 +100,11 @@ export default function Inbox() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("search") ?? "";
 
-  const [tab, setTab] = useState("active");
-  const [priority, setPriority] = useState("any");
-  const [department, setDepartment] = useState("any");
-  const [assignee, setAssignee] = useState("any");
-  const [sort, setSort] = useState("newest");
+  const [tab, setTab] = useSavedState("inbox.tab", "active");
+  const [priority, setPriority] = useSavedState("inbox.priority", "any");
+  const [department, setDepartment] = useSavedState("inbox.department", "any", isTeam);
+  const [assignee, setAssignee] = useSavedState("inbox.assignee", "any", isAgent);
+  const [sort, setSort] = useSavedState("inbox.sort", "newest");
   const [showFilters, setShowFilters] = useState(false); // phones only
   // Which page, and how many per page (30, 50 or 100)
   const { page, pageSize, setPage, setPageSize } = usePaging("inbox");

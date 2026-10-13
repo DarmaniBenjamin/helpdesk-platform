@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useSavedState, { isTeam } from "../savedState";
 import { Link, useSearchParams } from "react-router";
 import {
   Search,
@@ -171,8 +172,8 @@ export default function SavedAnswers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("search") ?? "";
 
-  const [team, setTeam] = useState("all");
-  const [sort, setSort] = useState("recent");
+  const [team, setTeam] = useSavedState("answers.team", "all", isTeam);
+  const [sort, setSort] = useSavedState("answers.sort", "recent");
   // A ticket page can also say which answer to open (?open=3)
   const [openId, setOpenId] = useState(
     () => Number(searchParams.get("open")) || null,

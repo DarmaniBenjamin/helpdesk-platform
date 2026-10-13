@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useSavedState, { isAgent, isTeam } from "../savedState";
 import { useNavigate } from "react-router";
 import {
   ClipboardCheck,
@@ -330,12 +331,12 @@ export default function TicketReview() {
   const navigate = useNavigate();
   const { tickets, markReviewed } = useData();
 
-  const [tab, setTab] = useState("open"); // "open" or "closed"
-  const [person, setPerson] = useState("any"); // "any", "none" or an agent id
-  const [department, setDepartment] = useState("any");
-  const [period, setPeriod] = useState("week");
-  const [show, setShow] = useState("all"); // closed: "all", "todo", "done"
-  const [staleOnly, setStaleOnly] = useState(false);
+  const [tab, setTab] = useSavedState("review.tab", "open"); // "open" or "closed"
+  const [person, setPerson] = useSavedState("review.person", "any", isAgent); // "any", "none" or an agent id
+  const [department, setDepartment] = useSavedState("review.department", "any", isTeam);
+  const [period, setPeriod] = useSavedState("review.period", "week");
+  const [show, setShow] = useSavedState("review.show", "all"); // closed: "all", "todo", "done"
+  const [staleOnly, setStaleOnly] = useSavedState("review.staleOnly", false);
 
   // The time "now" is worked out once per visit, so the page doesn't
   // shift while you read it

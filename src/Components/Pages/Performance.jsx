@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useSavedState, { isAgent } from "../savedState";
 import { Link } from "react-router";
 import {
   Download,
@@ -404,10 +405,10 @@ export default function Performance() {
     return () => clearInterval(timer);
   }, []);
 
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useSavedState("performance.days", 30);
   const [showAllAttention, setShowAllAttention] = useState(false);
-  const [agentFilter, setAgentFilter] = useState("all");
-  const [ratingFilter, setRatingFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useSavedState("performance.agent", "all", isAgent);
+  const [ratingFilter, setRatingFilter] = useSavedState("performance.rating", "all");
   const [feedbackShown, setFeedbackShown] = useState(FEEDBACK_PAGE);
   const feedbackRef = useRef(null);
 

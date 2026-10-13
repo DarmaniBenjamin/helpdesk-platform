@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import useSavedState from "../savedState";
 import { useNavigate } from "react-router";
 import {
   Search,
@@ -43,7 +44,7 @@ export default function Customers() {
   const { tickets, customers } = useData();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useSavedState("customers.filter", "all");
   const [adding, setAdding] = useState(false);
   // Which page, and how many per page (30, 50 or 100)
   const { page, pageSize, setPage, setPageSize } = usePaging("customers");
