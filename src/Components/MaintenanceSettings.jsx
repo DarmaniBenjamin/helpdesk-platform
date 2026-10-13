@@ -191,7 +191,7 @@ export default function MaintenanceSettings({ onChanged }) {
             </p>
           </div>
         </div>
-        <span className="flex items-center gap-2">
+        <span className="flex shrink-0 items-center gap-2">
           <OnOffPill on={info.connected} />
           <ChevronDown className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
         </span>
@@ -256,7 +256,7 @@ export default function MaintenanceSettings({ onChanged }) {
                       if (window.confirm("Disconnect GitHub? Investigations stop until it's connected again. (The app stays on GitHub: delete it there too if you're done with it.)"))
                         run("disconnect", () => api("/maintenance/settings/github", { method: "DELETE" }));
                     }}
-                    className="h-11 cursor-pointer rounded-lg px-3 text-sm text-muted hover:text-red-500"
+                    className="min-h-11 cursor-pointer rounded-lg px-3 py-2 text-sm text-muted hover:text-red-500"
                   >
                     Disconnect
                   </button>
@@ -361,7 +361,7 @@ export default function MaintenanceSettings({ onChanged }) {
             </label>
 
             {form.provider === "openai" && (
-              <div className="flex rounded-lg border border-line p-0.5 text-sm">
+              <div className="flex flex-col rounded-lg border border-line p-0.5 text-sm sm:flex-row">
                 {[
                   ["key", "API key"],
                   ["signin", "Continue with ChatGPT"],
@@ -370,7 +370,7 @@ export default function MaintenanceSettings({ onChanged }) {
                     key={mode}
                     type="button"
                     onClick={() => setForm({ ...form, openaiMode: mode })}
-                    className={`h-9 flex-1 cursor-pointer rounded-md px-3 ${form.openaiMode === mode ? "bg-brand/10 font-medium text-brand" : "text-muted"}`}
+                    className={`min-h-9 flex-1 cursor-pointer rounded-md px-3 py-1.5 leading-tight ${form.openaiMode === mode ? "bg-brand/10 font-medium text-brand" : "text-muted"}`}
                   >
                     {label}
                   </button>
@@ -438,11 +438,11 @@ export default function MaintenanceSettings({ onChanged }) {
                         Save
                       </button>
                       {info.openai.clientId ? (
-                        <a href="/api/maintenance/openai/signin" className={`${primaryButton} flex items-center justify-center`}>
+                        <a href="/api/maintenance/openai/signin" className={`${primaryButton} flex h-auto! min-h-11 items-center justify-center py-2 text-center`}>
                           Continue with ChatGPT
                         </a>
                       ) : (
-                        <span className={`${primaryButton} flex cursor-not-allowed items-center justify-center opacity-50`}>Continue with ChatGPT</span>
+                        <span className={`${primaryButton} flex h-auto! min-h-11 cursor-not-allowed items-center justify-center py-2 text-center opacity-50`}>Continue with ChatGPT</span>
                       )}
                     </div>
                   </>
