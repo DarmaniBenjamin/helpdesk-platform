@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CircleCheck,
   CloudDownload,
   Eye,
   EyeOff,
+  History,
   Link2,
   TriangleAlert,
 } from "lucide-react";
@@ -15,6 +16,12 @@ import {
   secondaryButton,
 } from "./formStyles";
 import { testConnection, fetchEverything } from "./freshdeskApi";
+import {
+  clearDownload,
+  downloadInfo,
+  downloadKey,
+  downloadStore,
+} from "./freshdeskStore";
 import useData from "../useData";
 
 // How much to get. Start with one ticket to check everything comes over
@@ -47,6 +54,21 @@ export default function FreshdeskConnect({ onFetched }) {
   const connection = { domain, apiKey: apiKey.trim() };
   const max = AMOUNTS.find((a) => a.id === amount).max;
 
+  // A download of this same choice kept in this browser (freshdeskStore.js):
+  // one that stopped part-way carries on from where it got to
+  const key = downloadKey(domain, max, withConversations);
+  const [saved, setSaved] = useState(null);
+  const [savedChecks, setSavedChecks] = useState(0);
+  useEffect(() => {
+    if (!account) return undefined;
+    let current = true;
+    downloadInfo(key).then((info) => current && setSaved(info));
+    return () => {
+      current = false;
+    };
+  }, [account, key, savedChecks]);
+  const recheckSaved = () => setSavedChecks((n) => n + 1);
+
   async function connect(e) {
     e.preventDefault();
     setBusy(true);
@@ -77,15 +99,27 @@ export default function FreshdeskConnect({ onFetched }) {
         withConversations,
         signal: controller.signal,
         onProgress: setProgress,
+        store: downloadStore(key),
       });
       onFetched(data, `${domain}.freshdesk.com`);
     } catch (err) {
-      if (err.name !== "AbortError") setError(err.message);
+      if (err.name !== "AbortError")
+        setError(
+          `${err.message} What was downloaded so far is kept: press the button again to carry on from there.`,
+        );
     } finally {
       setProgress(null);
       cancelRef.current = null;
+      recheckSaved();
     }
   }
+
+  async function startOver() {
+    await clearDownload(key);
+    recheckSaved();
+  }
+
+  const when = (time) => new Date(time).toLocaleString();
 
   return (
     <Card title="Connect to Freshdesk">
@@ -222,10 +256,36 @@ export default function FreshdeskConnect({ onFetched }) {
             {amount === "all" && withConversations && (
               <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
                 <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                Freshdesk only allows a set number of requests a minute. With
-                thousands of tickets this can take a long while, so keep this
-                tab open. It waits and carries on by itself.
+                Freshdesk only allows a set number of requests a minute (50 on a
+                trial, 200 to 700 on paid plans), so with thousands of tickets
+                this takes a while: it shows how long. If it stops (the tab is
+                closed, the connection drops), nothing is lost: come back and
+                it carries on from where it got to.
               </p>
+            )}
+
+            {saved && !progress && (
+              <div className="flex flex-col gap-2 rounded-lg border border-line bg-page px-3 py-2.5 text-sm sm:flex-row sm:items-center">
+                <History className="h-4 w-4 shrink-0 text-muted" />
+                <p className="min-w-0 flex-1">
+                  {saved.finished
+                    ? `A finished download from ${when(saved.finishedAt ?? saved.startedAt)} is kept in this browser: the button uses it again, without asking Freshdesk.`
+                    : `A download from ${when(saved.startedAt)} stopped part-way${
+                        saved.parts.includes("tickets") ? " after the ticket list" : ""
+                      }${
+                        saved.conversations
+                          ? `, with notes and replies for ${saved.conversations.toLocaleString()} tickets`
+                          : ""
+                      }. The button carries on from there.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={startOver}
+                  className="shrink-0 cursor-pointer text-left text-sm text-muted underline-offset-2 hover:text-ink hover:underline"
+                >
+                  Start over
+                </button>
+              </div>
             )}
 
             {progress ? (
@@ -263,7 +323,11 @@ export default function FreshdeskConnect({ onFetched }) {
                   className={`${primaryButton} flex items-center justify-center gap-2`}
                 >
                   <CloudDownload className="h-4 w-4" />
-                  Get data from Freshdesk
+                  {saved?.finished
+                    ? "Use the saved download"
+                    : saved
+                      ? "Carry on downloading"
+                      : "Get data from Freshdesk"}
                 </button>
               </div>
             )}

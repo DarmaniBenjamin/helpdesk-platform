@@ -47,6 +47,9 @@ freshdeskRouter.get("/*path", requireRole(...ADMINS), async (req, res) => {
       "retry-after",
       "x-ratelimit-remaining",
       "x-ratelimit-total",
+      // How much of the minute's allowance this call used (the importer
+      // spaces its calls by it: src/Components/freshdeskApi.js)
+      "x-ratelimit-used-currentrequest",
     ]) {
       const value = answer.headers.get(header);
       if (value) res.set(header, value);
