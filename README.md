@@ -1,6 +1,6 @@
-# 🌌 DarkFlow — Helpdesk Platform
+# 🌌 Uplink — Helpdesk Platform
 
-**DarkFlow** is a private, custom-built customer support and ticket
+**Uplink** is a private, custom-built customer support and ticket
 management system: tickets from email, WhatsApp, the phone system, the
 website and the customer portal land in one Inbox, where the team works
 them, with automations, SLAs, a calendar, a knowledge base, reports, and
