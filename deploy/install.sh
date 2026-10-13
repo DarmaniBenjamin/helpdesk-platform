@@ -3,9 +3,12 @@
 #  Install the helpdesk on a brand-new server, in one go
 # =====================================================================
 # For a fresh Ubuntu or Debian server (e.g. after the old one was lost).
-# As your normal user (not root):
+# The repository is private, so the server first gets its own read-only
+# deploy key: every step, from nothing, is in docs/disaster-recovery.md
+# (open it on github.com while signed in). Then, as your normal user (not
+# root):
 #
-#   git clone https://github.com/DarmaniBenjamin/helpdesk-platform.git
+#   git clone git@github-helpdesk:DarmaniBenjamin/helpdesk-platform.git
 #   cd helpdesk-platform
 #   sudo bash deploy/install.sh
 #
@@ -17,7 +20,8 @@
 #   4. installs Caddy (https and certificates, deploy/install-caddy.sh)
 #   5. installs the packages, builds the website, and starts the app as a
 #      service (deploy/start.sh), which also starts after every reboot
-#   6. adds the update-uplink command, for pulling updates later
+#   6. adds the update-uplink command, for safe updates later
+#      (deploy/update.sh)
 # and finishes by printing a link: open it, make your Super Admin, then
 # Settings → Domain & SSL, and Settings → Backup → Copies in the cloud to
 # bring everything back from Backblaze.
@@ -148,13 +152,19 @@ INSTALLING=1 bash "$APP_DIR/deploy/start.sh"
 # ---------------------------------------------------------------------
 echo
 echo "6/6 The update-uplink command"
+# The safe update (deploy/update.sh): checks CI, backs up before a
+# migration, checks the app after the restart and rolls back if it isn't
+# healthy. An older one-line update-uplink is replaced.
 BASHRC="$APP_HOME/.bashrc"
-if ! grep -q "alias update-uplink=" "$BASHRC" 2>/dev/null; then
-  echo "alias update-uplink='cd $APP_DIR && git pull && npm ci && npm run build && cd server && npm ci --omit=dev && sudo systemctl restart helpdesk'" >>"$BASHRC"
+ALIAS="alias update-uplink='bash $APP_DIR/deploy/update.sh'"
+if grep -qxF "$ALIAS" "$BASHRC" 2>/dev/null; then
+  ok "Already there"
+else
+  touch "$BASHRC"
+  sed -i '/^alias update-uplink=/d' "$BASHRC"
+  echo "$ALIAS" >>"$BASHRC"
   chown "$APP_USER:" "$BASHRC"
   ok "Added (open a new terminal to use it)"
-else
-  ok "Already there"
 fi
 
 # ---------------------------------------------------------------------

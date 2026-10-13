@@ -105,8 +105,12 @@ GitHub → your picture → **Settings → Developer settings → Fine-grained
 tokens → Generate new token**:
 
 - **Repository access:** only this repository
-- **Permissions → Repository → Issues:** Read and write (Metadata: Read
-  is added by itself). Nothing else.
+- **Permissions → Repository:**
+  - **Issues:** Read and write
+  - **Pull requests:** Read-only, so approvals are noticed without the
+    webhook
+  - **Checks:** Read-only, so `update-uplink` can see that CI passed
+  - Metadata: Read is added by itself. Nothing else.
 - **Expiration:** up to a year. Set a reminder to renew it.
 
 Then, in `server/.env` on the server:
@@ -186,6 +190,53 @@ Allowing low-risk fixes to merge by themselves would also need:
 
 Sensitive changes can never be approved automatically, whatever is set
 up.
+
+## Deploying: update-uplink (stage 5)
+
+On the server, `update-uplink` runs `deploy/update.sh`. It goes ahead
+only if it's safe, and puts the old version back if the new one doesn't
+work:
+
+1. **One update at a time** (a lock).
+2. **Checks first:**
+   - no files changed by hand on the server
+   - GitHub's `main` follows on from the running version
+   - **CI passed** for that exact commit. For this, the helpdesk's token
+     needs **Checks: Read-only** too. Without it, you're asked whether to
+     go on.
+3. **With a database migration in the update:**
+   - one that edits an old migration is refused
+   - one that deletes or reshapes data needs you to type yes
+   - it makes a **database backup** first, and checks it can be read back
+     (in `~/.helpdesk-deploy/backups`, the last 5 kept; the Backblaze
+     copies aren't touched)
+4. **Builds the new website beside the live one,** so the site keeps
+   working until the switch.
+5. **Restarts, and checks for a minute:**
+   - the health check, with the database connected
+   - the website and the API answer
+   - no crashes
+   - fewer than 10 errors
+6. **If anything fails,** it rolls back: the previous code and website,
+   restarted and checked.
+   - It never undoes database changes by itself, since restoring would
+     delete what was written since.
+   - If a migration ran, it prints the exact commands to restore the
+     backup it made, if the previous version doesn't work with it.
+     Migrations only add things, so usually it does.
+7. **On the Maintenance page:**
+   - approved fixes in the update become *Deployed*
+   - after 7 days without their error (`MAINT_VERIFY_DAYS`), *Verified*
+   - if the update was rolled back, *Rolled back*
+
+Options:
+
+- `--check`: say what would happen, change nothing
+- `--backup`: back up even without a migration
+- `--yes`: don't ask when CI can't be checked (a failed CI still stops it)
+- `--skip-ci`: deploy although CI failed, after typing yes
+
+Every update and rollback is written to `~/.helpdesk-deploy/history.log`.
 
 ## Costs and limits
 

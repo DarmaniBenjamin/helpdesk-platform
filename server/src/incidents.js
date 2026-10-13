@@ -395,6 +395,28 @@ async function checkHealth() {
   }
 }
 
+// ---------- Verified fixes ----------
+
+// A deployed fix (deploy/update.sh marks them) whose error hasn't
+// happened again for 7 days (MAINT_VERIFY_DAYS) is verified. If it does
+// happen again, save() above opens the incident again instead.
+const VERIFY_DAYS = Number(process.env.MAINT_VERIFY_DAYS) || 7;
+export async function verifyFixes(now = Date.now()) {
+  const live = await db.select().from(incidents).where(eq(incidents.status, "deployed"));
+  for (const incident of live) {
+    const at = Date.parse(incident.github?.deployedAt ?? "");
+    if (!at || now - at < VERIFY_DAYS * 24 * HOUR) continue;
+    if (incident.lastSeen.getTime() > at) continue;
+    await db.update(incidents).set({ status: "verified" }).where(eq(incidents.id, incident.id));
+    await addIncidentEvent(incident.id, "verified", {
+      body:
+        incident.source === "user"
+          ? `Verified by time: live for ${VERIFY_DAYS} days (a reported bug can't be seen happening again: check with whoever reported it).`
+          : `Verified: the error hasn't happened in the ${VERIFY_DAYS} days since the fix went live.`,
+    });
+  }
+}
+
 // After a crash: save what was caught (for up to 3 seconds), then stop,
 // as before; systemd starts the app again
 let stopping = false;
@@ -441,6 +463,7 @@ export function installErrorCapture() {
   setInterval(() => flushIncidents().catch(() => {}), FLUSH_EVERY).unref();
   setInterval(checkForSpike, MINUTE).unref();
   setInterval(checkHealth, MINUTE).unref();
+  setInterval(() => verifyFixes().catch(() => {}), HOUR).unref();
 }
 
 // ---------- From people's browsers ----------

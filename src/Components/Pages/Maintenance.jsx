@@ -61,6 +61,9 @@ const EVENT = {
   rejected: "Fix rejected",
   review: "Reviewed on GitHub",
   pr_reopened: "Fix reopened",
+  deployed: "Deployed",
+  rolled_back: "Rolled back",
+  verified: "Verified fixed",
 };
 // Statuses an investigation can be (re)started from
 const CAN_INVESTIGATE = ["detected", "failed", "awaiting_approval", "rolled_back", "rejected"];
@@ -304,7 +307,9 @@ function Detail({ id, ai, onBack, onChanged }) {
               <p>
                 Approved: merged on GitHub
                 {github.mergedBy ? ` by ${github.mergedBy}` : ""}, {when(github.mergedAt)}.
-                It goes live with the next deploy.
+                {github.deployedAt
+                  ? ` Live since ${when(github.deployedAt)} (version ${String(github.deployedSha ?? "").slice(0, 7)}).`
+                  : " It goes live with the next deploy (update-uplink)."}
               </p>
               {github.approvalWarnings?.map((w) => (
                 <p key={w} className="flex items-start gap-1.5 text-red-700">

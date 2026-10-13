@@ -172,3 +172,19 @@ test("an error loop can't make more than 30 new incidents an hour", async () => 
   assert.ok(store.incidents.length <= 30, `made ${store.incidents.length}`);
   assert.ok(store.incidents.length >= 25);
 });
+
+test("a deployed fix is verified after 7 days without the error, not before", async () => {
+  const { verifyFixes } = await import("../src/incidents.js");
+  const day = 24 * 60 * 60 * 1000;
+  const deployedAt = new Date(Date.now() - 8 * day).toISOString();
+  store.incidents.push(
+    { id: 1, status: "deployed", source: "server", lastSeen: new Date(Date.now() - 9 * day), github: { deployedAt } },
+    { id: 2, status: "deployed", source: "server", lastSeen: new Date(Date.now() - 1 * day), github: { deployedAt } },
+    { id: 3, status: "deployed", source: "server", lastSeen: new Date(Date.now() - 9 * day), github: { deployedAt: new Date().toISOString() } },
+  );
+  await verifyFixes();
+  assert.equal(store.incidents[0].status, "verified"); // quiet for 8 days
+  assert.equal(store.incidents[1].status, "deployed"); // happened after the deploy
+  assert.equal(store.incidents[2].status, "deployed"); // deployed today
+  assert.ok(store.incident_events.some((e) => e.type === "verified" && e.incidentId === 1));
+});
