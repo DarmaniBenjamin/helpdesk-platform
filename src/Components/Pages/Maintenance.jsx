@@ -70,8 +70,12 @@ const EVENT = {
 // Statuses an investigation can be (re)started from
 const CAN_INVESTIGATE = ["detected", "failed", "awaiting_approval", "rolled_back", "rejected"];
 
-function StatusPill({ status }) {
-  const s = STATUS[status] ?? { label: status, tone: "bg-line text-muted" };
+function StatusPill({ status, outcome }) {
+  // The AI looked and found nothing to fix: not a failure
+  const s =
+    status === "failed" && outcome === "no-fix"
+      ? { label: "No fix proposed", tone: "bg-line text-muted" }
+      : (STATUS[status] ?? { label: status, tone: "bg-line text-muted" });
   return (
     <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${s.tone}`}>
       {s.label}
@@ -168,7 +172,7 @@ function Detail({ id, ai, onBack, onChanged }) {
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted">Incident #{incident.id}</span>
-          <StatusPill status={incident.status} />
+          <StatusPill status={incident.status} outcome={incident.outcome} />
           <span className="text-xs text-muted">
             {SEVERITY[incident.severity]?.label ?? incident.severity} severity
           </span>
@@ -259,6 +263,19 @@ function Detail({ id, ai, onBack, onChanged }) {
                 </p>
               )}
               {findings.summary && <p className="whitespace-pre-wrap">{findings.summary}</p>}
+              {findings.outcome !== "pr" && findings.problems?.length > 0 && (
+                <div>
+                  <p className="font-medium">Why there's no fix</p>
+                  <ul className="list-disc pl-5 text-muted">
+                    {findings.problems.map((x, n) => (
+                      <li key={n} className="wrap-break-word">{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {findings.outcome === "no-fix" && !findings.summary && !findings.problems?.length && (
+                <p className="text-muted">The AI didn't find anything to fix. If you think it missed something, add more detail to the report and investigate again.</p>
+              )}
               {findings.rootCause && (
                 <p>
                   <span className="font-medium">Root cause</span>
@@ -562,7 +579,7 @@ export default function Maintenance() {
                         {timeAgo(i.lastSeen)}
                       </p>
                     </div>
-                    <StatusPill status={i.status} />
+                    <StatusPill status={i.status} outcome={i.outcome} />
                   </button>
                 </li>
               ))}

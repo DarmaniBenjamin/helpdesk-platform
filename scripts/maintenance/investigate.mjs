@@ -51,7 +51,7 @@ let PROVIDER = "github";
 let MODEL = MODELS.github;
 let OPENAI_AUTH = "key";
 // GitHub Models' free tier takes much less text per request
-let CONTEXT_CHARS = 24_000;
+let CONTEXT_CHARS = 12_000;
 let MAX_OUTPUT = 4_000;
 
 // The helpdesk's choice (in the incident), else the older variables, else
@@ -69,7 +69,9 @@ function chooseAi(incident) {
   const model = String(fromHelpdesk.model || process.env.MAINT_AI_MODEL || "");
   MODEL = /^[\w./:-]{1,80}$/.test(model) ? model : MODELS[PROVIDER];
   OPENAI_AUTH = fromHelpdesk.auth === "signin" ? "signin" : "key";
-  CONTEXT_CHARS = PROVIDER === "github" ? 24_000 : 150_000;
+  // (GitHub Models' free tier takes about 8,000 tokens per request, the
+  // instructions and the list of files included)
+  CONTEXT_CHARS = PROVIDER === "github" ? 12_000 : 150_000;
   MAX_OUTPUT = PROVIDER === "github" ? 4_000 : 16_000;
 }
 const MAX_CALLS = 4; // per job: the AI can't be called in a loop
@@ -89,7 +91,15 @@ async function askOpenAI(system, user, signal) {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: MODEL, instructions: system, input: user, max_output_tokens: MAX_OUTPUT, stream: true }),
+    body: JSON.stringify({
+      model: MODEL,
+      instructions: system,
+      input: user,
+      max_output_tokens: MAX_OUTPUT,
+      stream: true,
+      // A JSON answer, always (the plan below has to be read as data)
+      text: { format: { type: "json_object" } },
+    }),
     signal,
   });
   if (!res.ok) {
@@ -135,7 +145,7 @@ async function askGemini(system, user, signal) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: { maxOutputTokens: MAX_OUTPUT, temperature: 0.2 },
+        generationConfig: { maxOutputTokens: MAX_OUTPUT, temperature: 0.2, responseMimeType: "application/json" },
       }),
       signal,
     },
@@ -186,6 +196,7 @@ async function ask(system, user) {
       model: MODEL,
       max_tokens: MAX_OUTPUT,
       temperature: 0.2,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -196,7 +207,10 @@ async function ask(system, user) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`GitHub Models said: ${data?.error?.message ?? data?.message ?? res.status}`);
   usage.push({ input: data.usage?.prompt_tokens ?? 0, output: data.usage?.completion_tokens ?? 0 });
-  return data.choices?.[0]?.message?.content ?? "";
+  const choice = data.choices?.[0];
+  if (choice?.finish_reason && choice.finish_reason !== "stop")
+    console.log(`GitHub Models stopped early: ${choice.finish_reason}`);
+  return choice?.message?.content ?? "";
 }
 
 // ---------- The incident, from the GitHub issue the helpdesk made ----------
@@ -233,6 +247,16 @@ function startingFiles(incident, readable) {
     }
   }
   return found.slice(0, 6);
+}
+
+// The list of the project's files shown to the AI. For the free tier, only
+// the ones near the incident (the same folders), at most 120.
+function fileList(readable, files) {
+  if (PROVIDER !== "github") return readable;
+  const folders = new Set(files.map((f) => path.dirname(f)));
+  const near = readable.filter((f) => folders.has(path.dirname(f)));
+  const rest = readable.filter((f) => !folders.has(path.dirname(f)) && !f.startsWith("server/test/"));
+  return [...near, ...rest].slice(0, 120);
 }
 
 function filesBlock(files) {
@@ -309,9 +333,10 @@ async function askForPlan(prompt) {
 
   function check(answer) {
     const raw = parseModelJson(answer);
+    console.log(`${PROVIDER} ${MODEL}: answered ${String(answer ?? "").length} characters${raw ? "" : " (not readable as JSON)"}`);
+    if (!raw) console.log(`The start of the answer: ${String(answer ?? "").slice(0, 300).replace(/\s+/g, " ")}`);
     const v = validatePlan(raw);
     const problems = [...v.errors];
-    if (!raw) problems.push("The answer wasn't valid JSON.");
     if (v.plan?.canFix && v.plan.edits.length && !v.errors.length) {
       try {
         applyEdits(readRepo, v.plan.edits);
@@ -336,7 +361,7 @@ async function plan() {
   for (let round = 0; round < 2; round++) {
     const prompt = [
       incidentBlock(incident),
-      `<project_files>\n${readable.join("\n")}\n</project_files>`,
+      `<project_files>\n${fileList(readable, files).join("\n")}\n</project_files>`,
       filesBlock(files),
       round === 0
         ? "Investigate this incident. If you need to read more files first, list them in needFiles and leave edits empty."

@@ -74,7 +74,8 @@ const list = (value) =>
 // Returns { plan, errors, sensitive, sensitiveReasons }.
 export function validatePlan(raw) {
   const errors = [];
-  if (!raw || typeof raw !== "object") return { plan: null, errors: ["The AI's answer wasn't JSON."] };
+  if (!raw || typeof raw !== "object")
+    return { plan: null, errors: ["The AI's answer couldn't be read: it wasn't in the format asked for (JSON). The run's log shows how it started."] };
   const confidence = ["low", "medium", "high"].includes(raw.confidence) ? raw.confidence : "low";
   const plan = {
     summary: String(raw.summary ?? "").slice(0, 4000),

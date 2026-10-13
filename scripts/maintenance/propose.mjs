@@ -205,6 +205,8 @@ const data = {
   confirmed: (p?.confirmed ?? []).slice(0, 10),
   hypotheses: (p?.hypotheses ?? []).slice(0, 10),
   checks: (r?.after ?? []).map((c) => ({ name: c.name, status: c.status, optional: c.optional })),
+  // Why there's no fix (shown on the incident)
+  problems: [...(p?.problems ?? []), ...(p ? [] : errors)].slice(0, 6).map((x) => String(x).slice(0, 300)),
   attempt: p?.attempt ?? 0,
   sensitive: Boolean(p?.sensitiveFinal ?? p?.sensitive),
   prNumber: p?.prNumber ?? null,

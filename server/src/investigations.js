@@ -277,6 +277,7 @@ async function readResult(incident) {
           optional: Boolean(c.optional),
         })),
         attempt: Number(r.attempt) || 0,
+        problems: (Array.isArray(r.problems) ? r.problems : []).map((x) => text(x, 300)).slice(0, 6),
         sensitive: Boolean(r.sensitive),
         provider: text(r.provider, 40),
         model: text(r.model, 80),

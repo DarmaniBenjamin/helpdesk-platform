@@ -554,6 +554,8 @@ const listed = (i) => ({
   count: i.count,
   investigate: i.investigate,
   github: i.github,
+  // For the label: "No fix proposed" rather than "Fix failed"
+  outcome: i.investigation?.outcome ?? null,
   firstSeen: i.firstSeen.getTime(),
   lastSeen: i.lastSeen.getTime(),
 });
