@@ -81,7 +81,7 @@ function findings(p) {
   if (!p) return "_The investigation didn't produce findings._";
   return `**Summary:** ${p.summary || "(none)"}
 
-**Root cause** (confidence: **${p.confidence}**): ${p.rootCause || "(not determined)"}
+**Root cause** (confidence: **${p.confidence ?? "not given"}**): ${p.rootCause || "(not determined)"}
 
 **Confirmed:**
 ${bullets(p.confirmed)}

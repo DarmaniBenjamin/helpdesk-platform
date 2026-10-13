@@ -186,31 +186,50 @@ async function ask(system, user) {
     return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   }
   if (!process.env.GITHUB_TOKEN) throw new Error("GitHub Models needs the workflow's token (models: read).");
-  const res = await fetch("https://models.github.ai/inference/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: MAX_OUTPUT,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-    signal,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`GitHub Models said: ${data?.error?.message ?? data?.message ?? res.status}`);
-  usage.push({ input: data.usage?.prompt_tokens ?? 0, output: data.usage?.completion_tokens ?? 0 });
-  const choice = data.choices?.[0];
-  if (choice?.finish_reason && choice.finish_reason !== "stop")
-    console.log(`GitHub Models stopped early: ${choice.finish_reason}`);
-  return choice?.message?.content ?? "";
+  // Asked for a structured (JSON) answer first; if GitHub Models gives an
+  // empty answer that way, once more without it
+  for (const structured of [true, false]) {
+    const res = await fetch("https://models.github.ai/inference/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_OUTPUT,
+        temperature: 0.2,
+        ...(structured ? { response_format: { type: "json_object" } } : {}),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      signal,
+    });
+    const raw = await res.text();
+    let data = {};
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      // not JSON: shown below
+    }
+    if (!res.ok) throw new Error(`GitHub Models said: ${data?.error?.message ?? data?.message ?? `${res.status} ${raw.slice(0, 200)}`}`);
+    usage.push({ input: data.usage?.prompt_tokens ?? 0, output: data.usage?.completion_tokens ?? 0 });
+    const choice = data.choices?.[0];
+    if (choice?.finish_reason && choice.finish_reason !== "stop")
+      console.log(`GitHub Models stopped early: ${choice.finish_reason}`);
+    const content = choice?.message?.content ?? "";
+    if (content) return content;
+    console.log(`GitHub Models gave an empty answer${structured ? " (asked for JSON); trying once without that" : ""}. What it sent: ${raw.slice(0, 400).replace(/\s+/g, " ")}`);
+    if (!structured)
+      throw new Error(
+        `GitHub Models gave an empty answer${choice?.finish_reason ? ` (it stopped: ${choice.finish_reason})` : ""}. What it sent back: ${raw.slice(0, 300).replace(/\s+/g, " ") || "(nothing)"}`,
+      );
+  }
+  return "";
 }
 
 // ---------- The incident, from the GitHub issue the helpdesk made ----------
