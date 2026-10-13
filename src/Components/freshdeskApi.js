@@ -46,12 +46,29 @@ function wait(ms, signal) {
 const pace = { perMinute: 0, nextAt: 0 };
 export const freshdeskPerMinute = () => pace.perMinute;
 
+// Some kinds of request also have their own, lower limit (on Growth, only
+// 20 pages of the ticket list a minute). Freshdesk doesn't say what it is,
+// so it's learned: when Freshdesk says "slow down" for one kind, the calls
+// of that kind made in the last minute are its limit, and the rest of
+// that kind are spaced to stay under it.
+const kinds = new Map(); // kind -> { recent: [times], gap, nextAt }
+function kindOf(path) {
+  if (/^\/tickets\/\d+\/conversations/.test(path)) return "conversations";
+  return path.split("?")[0].replace(/\/\d+.*$/, "/:id");
+}
+function kind(path) {
+  const name = kindOf(path);
+  if (!kinds.has(name)) kinds.set(name, { recent: [], gap: 0, nextAt: 0 });
+  return kinds.get(name);
+}
+
 // One request to Freshdesk. If Freshdesk still says "too many requests"
 // (other apps on the account use the same allowance), it waits the time
 // Freshdesk asks for and tries again.
 async function get(connection, path, { signal, onWait } = {}) {
+  const k = kind(path);
   for (;;) {
-    const early = pace.nextAt - Date.now();
+    const early = Math.max(pace.nextAt, k.nextAt) - Date.now();
     if (early > 0) await wait(early, signal);
     const response = await fetch(`/freshdesk-api${path}`, {
       signal,
@@ -69,10 +86,19 @@ async function get(connection, path, { signal, onWait } = {}) {
 
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after")) || 60;
+      // This kind's own limit: what got through in the last minute
+      const now = Date.now();
+      const gotThrough = k.recent.filter((t) => now - t < 60_000).length;
+      if (gotThrough > 0) k.gap = Math.max(k.gap, (60_000 / gotThrough) * 1.05);
       onWait?.(seconds);
       await wait(seconds * 1000, signal);
       continue;
     }
+    // Got through: counted for this kind, and the next one of this kind
+    // waits its turn if this kind has its own limit
+    k.recent.push(Date.now());
+    if (k.recent.length > 1000) k.recent.splice(0, k.recent.length - 1000);
+    if (k.gap) k.nextAt = Date.now() + k.gap;
 
     // A web page came back instead: the helpdesk server isn't answering
     const type = response.headers.get("content-type") ?? "";
@@ -147,7 +173,7 @@ export async function fetchEverything(
 ) {
   const onWait = (seconds) =>
     onProgress({
-      message: `Freshdesk's allowance for this minute is used up (other apps on your account share it). Carrying on in ${seconds} seconds…`,
+      message: `Freshdesk's limit for this kind of request is used up for this minute. Carrying on in ${seconds} seconds, then at a steady pace…`,
     });
   const options = { signal, onWait };
   await store?.start();
