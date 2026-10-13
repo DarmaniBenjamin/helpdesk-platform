@@ -60,23 +60,27 @@ by printing a **setup link**.
    settings and files.
 4. Sign in again with your old account (the restore brought it back).
 
-## 4. Put the rest back
+## 4. Check the rest
 
-These live in `server/.env`, which isn't backed up (it holds the
-secrets). Set them again if you used them, then run
-`sudo systemctl restart helpdesk`:
+**AI investigations** (Maintenance → AI & GitHub) come back with the
+restore, still connected: their settings are in the database, and the
+backup includes the key that unlocks them. Press **Test connection** to
+check.
 
-- **AI investigations** (docs/maintenance.md): `MAINT_GITHUB_REPO`,
-  `MAINT_GITHUB_TOKEN`, `MAINT_GITHUB_WEBHOOK_SECRET`. Make a new token,
-  and revoke the old one on GitHub, since the old server may be in
-  someone else's hands. Do the same for the webhook secret, in the
-  repository's webhook settings.
-- Anything else you'd added to `server/.env` (see `server/.env.example`).
+Anything you'd added to `server/.env` by hand isn't backed up (see
+`server/.env.example`). Set it again, then run
+`sudo systemctl restart helpdesk`.
 
-If the old server was hacked, also change on the services themselves:
-the Backblaze application key, email passwords, the WhatsApp app secret,
-and the phone system's webhook address (Integrations → Phone → Make a
-new address).
+**If the old server was hacked,** whoever has it also has the
+credentials it held, so change them:
+
+- **GitHub:** on GitHub, open the helpdesk's app (Settings → Developer
+  settings → GitHub Apps), make a new private key and delete the old one.
+  Then, in the helpdesk, Disconnect and Connect GitHub again. Also
+  replace the AI key (the AI company's console, then paste it again).
+- **The other services:** the Backblaze application key, email
+  passwords, the WhatsApp app secret, and the phone system's webhook
+  address (Integrations → Phone → Make a new address).
 
 ## Updating afterwards
 

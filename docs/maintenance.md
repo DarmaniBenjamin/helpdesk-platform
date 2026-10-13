@@ -63,99 +63,92 @@ bug report or file can change them:
   data** are allowed, but labelled `sensitive-change` and must be reviewed
   line by line. They can never be approved automatically.
 
-## Setting it up
+## Setting it up (Maintenance → AI & GitHub)
 
-### 1. Make the repository private (required)
+Everything is set from the helpdesk, as the Super Admin. Nothing goes in
+`server/.env`, and the settings are saved in the database, so they come
+back with a restore too.
 
-Incidents are never sent to a public repository. Before you switch it
-to private, give the server its own read-only **deploy key**, or
-`update-uplink` stops working (see the steps in the chat, or Stage 5's
-install script).
+### 1. Connect GitHub
 
-### 2. Let GitHub Actions open pull requests
+Open **Maintenance → AI & GitHub**, type the repository
+(`DarmaniBenjamin/helpdesk-platform`) and press **Connect GitHub**:
 
-Repository → **Settings → Actions → General → Workflow permissions**:
+1. GitHub asks to create an app for this helpdesk: press **Create GitHub
+   App**.
+2. It asks where to install it: choose **Only select repositories**, pick
+   the repository, and press **Install**.
+3. You come back to the helpdesk, connected. Press **Test connection**:
+   each line shows ✓, or what's missing in plain words.
+
+The app has only what it needs, on that one repository:
+
+- **Issues:** read and write (the investigation runs on an issue)
+- **Pull requests:** read (notice when a fix is merged)
+- **Checks:** read (`update-uplink` checks that CI passed)
+- **Secrets:** write (store the AI's key, encrypted)
+
+Its webhook is set up by itself, so approvals show up at once. To
+disconnect, press Disconnect, then delete the app on GitHub (Settings →
+Developer settings → GitHub Apps).
+
+Under **Advanced** you can paste a fine-grained token instead, with the
+same four permissions. It works the same, but without the webhook.
+
+### 2. Let GitHub Actions open pull requests (once, on GitHub)
+
+The one thing that has to be done on GitHub itself. Repository →
+**Settings → Actions → General → Workflow permissions**:
 
 - choose **Read and write permissions**
 - tick **Allow GitHub Actions to create and approve pull requests**
 
-The workflow itself limits each job to what it needs. Only the last job
-can write.
-
 ### 3. Choose the AI
 
-Repository → **Settings → Secrets and variables → Actions**:
+In **The AI**, pick one:
 
-| What you want | Set |
+| AI | What to do |
 |---|---|
-| **Free**: GitHub Models | Nothing. It's the default when there's no Anthropic key. Rate-limited, and it takes less code per request, so it suits small fixes. |
-| **Claude** (better for real fixes) | Secret `ANTHROPIC_API_KEY`, from console.anthropic.com. Claude **Max** and **Team** plans include monthly API credits: claim them in Claude → Settings → Billing → API credits, linked to the same Console organization. **Pro** doesn't include API credits: you'd pay as you go. |
+| **Free (GitHub Models)** | Nothing. Rate-limited, and it reads less code at a time: good for small fixes. |
+| **Claude** | Paste an API key from console.anthropic.com (Settings → API keys). Claude **Max** and **Team** plans include monthly API credits (Claude → Settings → Billing). **Pro** doesn't: you'd pay as you go. Anthropic doesn't allow signing in to other apps with a Claude account, so it's a key. |
+| **ChatGPT** | Paste an API key from platform.openai.com, or use **Continue with ChatGPT** to run on a Plus or Pro plan. For that, OpenAI has to give this helpdesk a client first: request one for "Sign in with ChatGPT" with plan usage, and give them the callback address shown on the page. Then paste the client ID, save, and press Continue with ChatGPT. |
+| **Gemini** | Paste an API key from aistudio.google.com (it has a free tier). |
 
-Optional **variables**:
+The key goes **straight to GitHub as an encrypted secret**. The helpdesk
+doesn't keep it, and nobody can read it back: the page only shows
+whether one is saved. The **Model** box is optional; empty means the
+default shown.
 
-- `MAINT_AI_PROVIDER`: `auto` (default), `anthropic` or `github`
-- `MAINT_AI_MODEL`: e.g. `claude-sonnet-5-5`, or `openai/gpt-4.1` on GitHub Models
-- `MAINT_MAX_ATTEMPTS`: `2` (default) or `1`
+To cap spending, also set a monthly limit in the AI company's own
+console.
 
-To cap spending, set a monthly **spend limit** in the Claude Console too.
+### 4. When to investigate
 
-### 4. Give the helpdesk an issues-only token
+- **Investigate serious errors by themselves:** off means only when
+  someone presses Investigate with AI.
+- **Limits:** a daily limit for automatic investigations, and a monthly
+  limit that counts the button too.
+- **Allow a public repository (testing only):** issues on a public
+  repository can be read by anyone. Only use it for test bugs, and turn
+  it off once the repository is private.
+- **Approvers:** GitHub usernames whose merge counts as approval. A merge
+  by anyone else is still recorded, but flagged.
 
-GitHub → your picture → **Settings → Developer settings → Fine-grained
-tokens → Generate new token**:
-
-- **Repository access:** only this repository
-- **Permissions → Repository:**
-  - **Issues:** Read and write
-  - **Pull requests:** Read-only, so approvals are noticed without the
-    webhook
-  - **Checks:** Read-only, so `update-uplink` can see that CI passed
-  - Metadata: Read is added by itself. Nothing else.
-- **Expiration:** up to a year. Set a reminder to renew it.
-
-Then, in `server/.env` on the server:
-
-    MAINT_GITHUB_REPO=DarmaniBenjamin/helpdesk-platform
-    MAINT_GITHUB_TOKEN=github_pat_...
-    MAINT_AUTO_INVESTIGATE=on
-    MAINT_MAX_PER_DAY=3
-    MAINT_MAX_PER_MONTH=20
-
-and restart: `sudo systemctl restart helpdesk`. The Maintenance page
-then says "AI investigations are on".
+Press **Save**.
 
 ### 5. Try it
 
-Open an incident on the Maintenance page and press **Investigate with
-AI**. Watch the run in the repository's **Actions** tab. Within a few
-minutes of it finishing, the findings appear on the incident.
+Report a test bug (profile menu → Report a bug), open it on the
+Maintenance page and press **Investigate with AI**. Watch the run in the
+repository's **Actions** tab. Within a few minutes of it finishing, the
+findings appear on the incident.
 
-### 6. Approvals: the webhook (recommended)
+### Older setups
 
-So the helpdesk hears at once when a fix is merged or closed:
+The `MAINT_*` lines in `server/.env` from earlier versions still work
+until GitHub is connected on the page. After that they're not needed.
 
-1. Make a secret: run `openssl rand -hex 32` and copy the result.
-2. In `server/.env`, add `MAINT_GITHUB_WEBHOOK_SECRET=` followed by that
-   secret, then restart.
-3. Repository → **Settings → Webhooks → Add webhook**:
-   - **Payload URL:** `https://YOUR-HELPDESK-DOMAIN/api/maintenance/github-webhook`
-   - **Content type:** `application/json`
-   - **Secret:** the same secret
-   - **Which events:** *Let me select individual events*, then tick
-     **Pull requests**, **Pull request reviews** and **Issue comments**
-     (untick Pushes).
-
-GitHub sends a test "ping" straight away. A green tick next to the
-webhook means the helpdesk got it.
-
-Without the webhook, the helpdesk checks GitHub every 5 minutes. For
-that, the helpdesk's token needs **Pull requests: Read-only** as well
-as Issues.
-
-Optional: `MAINT_APPROVERS=yourlogin,colleaguelogin` in `server/.env`.
-A merge by anyone else is still recorded, but flagged on the incident.
-
-### 7. Protect main (recommended)
+### Protect main (recommended)
 
 On a paid GitHub plan (GitHub Pro, about $4 a month, is enough for a
 personal account), add a rule on **Settings → Branches** for `main`:
@@ -201,8 +194,8 @@ work:
 2. **Checks first:**
    - no files changed by hand on the server
    - GitHub's `main` follows on from the running version
-   - **CI passed** for that exact commit. For this, the helpdesk's token
-     needs **Checks: Read-only** too. Without it, you're asked whether to
+   - **CI passed** for that exact commit, using the GitHub connection
+     from Maintenance → AI & GitHub. Without one, you're asked whether to
      go on.
 3. **With a database migration in the update:**
    - one that edits an old migration is refused
@@ -251,5 +244,6 @@ Every update and rollback is written to `~/.helpdesk-deploy/history.log`.
 
 ## Turning it off
 
-Empty `MAINT_GITHUB_TOKEN` in `server/.env` and restart. Errors are still
-recorded; nothing is sent anywhere.
+Maintenance → AI & GitHub → **Disconnect** (and delete the app on
+GitHub if you're done with it). Errors are still recorded; nothing is
+sent anywhere.

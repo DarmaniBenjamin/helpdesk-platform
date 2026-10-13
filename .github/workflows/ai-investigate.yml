@@ -16,7 +16,7 @@
 #            the rules). The only job that can write, and it runs no
 #            code from the AI. Nothing is ever merged automatically.
 #
-# Setup: docs/maintenance.md
+# Setup: in the helpdesk, Maintenance → AI & GitHub (docs/maintenance.md)
 name: AI investigation
 
 on:
@@ -57,7 +57,11 @@ jobs:
       - id: plan
         name: Investigate (AI)
         env:
+          # The AI's key, saved from the helpdesk (Maintenance → AI & GitHub)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_OAUTH_TOKEN: ${{ secrets.OPENAI_OAUTH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           MAINT_AI_PROVIDER: ${{ vars.MAINT_AI_PROVIDER }}
           MAINT_AI_MODEL: ${{ vars.MAINT_AI_MODEL }}
@@ -143,7 +147,11 @@ jobs:
       - id: revise
         name: Try again with what failed (AI)
         env:
+          # The AI's key, saved from the helpdesk (Maintenance → AI & GitHub)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_OAUTH_TOKEN: ${{ secrets.OPENAI_OAUTH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           MAINT_AI_PROVIDER: ${{ vars.MAINT_AI_PROVIDER }}
           MAINT_AI_MODEL: ${{ vars.MAINT_AI_MODEL }}

@@ -21,6 +21,7 @@ const fakeDb = {
       limit: () => api,
       ...thenable(() => {
         if (q.t === "incident_events") return [{ n: state.used }];
+        if (q.t === "settings") return [];
         return state.incidents.filter((r) => matches(r, q.c));
       }),
     };
@@ -33,7 +34,9 @@ const fakeDb = {
   }),
 };
 mock.module("../src/db/index.js", { namedExports: { db: fakeDb } });
-mock.module("../src/db/schema.js", { namedExports: { incidents: incidentsT, incidentEvents: eventsT } });
+mock.module("../src/db/schema.js", {
+  namedExports: { incidents: incidentsT, incidentEvents: eventsT, settings: { _name: "settings", key: col("key") } },
+});
 mock.module("drizzle-orm", {
   namedExports: {
     eq: (c, val) => ({ col: c, val }),
@@ -44,7 +47,7 @@ mock.module("drizzle-orm", {
     sql: () => null,
   },
 });
-const router = () => ({ get() {}, post() {}, use() {} });
+const router = () => ({ get() {}, post() {}, put() {}, delete() {}, use() {} });
 mock.module("express", { namedExports: { Router: router } });
 mock.module("../src/auth.js", { namedExports: { requireRole: () => () => {} } });
 mock.module("../src/permissions.js", { namedExports: { ADMINS: [] } });
@@ -65,6 +68,7 @@ globalThis.fetch = async (url, opts = {}) => {
   return reply(200, {});
 };
 
+process.env.SECRET_KEY_FILE = `${(await import("node:os")).tmpdir()}/helpdesk-test-key-${process.pid}`;
 process.env.MAINT_GITHUB_REPO = "me/helpdesk";
 process.env.MAINT_GITHUB_TOKEN = "test-token";
 process.env.MAINT_MAX_PER_MONTH = "5";

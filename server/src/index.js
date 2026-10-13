@@ -61,6 +61,10 @@ import {
   investigationsRouter,
   startInvestigations,
 } from "./investigations.js";
+import {
+  maintenanceCallbacksRouter,
+  maintenanceSettingsRouter,
+} from "./maintenanceSettings.js";
 
 // Maintenance: from here on, errors anywhere in the app are recorded as
 // incidents (incidents.js)
@@ -245,6 +249,8 @@ app.use("/api/whatsapp", whatsappRouter); // Integrations → WhatsApp; messages
 app.use("/api/incidents", investigationsRouter); // Maintenance: AI investigations (before the next line)
 app.use("/api/incidents", incidentsRouter); // Maintenance: errors and bug reports
 app.use("/api/maintenance/github-webhook", githubWebhookRouter); // GitHub: fixes merged or closed (signed)
+app.use("/api/maintenance/settings", maintenanceSettingsRouter); // Maintenance → AI & GitHub (Super Admin)
+app.use("/api/maintenance", maintenanceCallbacksRouter); // back from GitHub / OpenAI (Super Admin)
 app.use("/api/feedback", feedbackRouter); // "how did we do?" links (no sign-in)
 app.use("/freshdesk-api", freshdeskRouter); // reading from Freshdesk (Admins)
 

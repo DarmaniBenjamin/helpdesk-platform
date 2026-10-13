@@ -1,17 +1,15 @@
 // Did CI (.github/workflows/ci.yml) pass for this commit? Asked by
 // deploy/update.sh before it deploys anything.
 //
-//   node deploy/ci-status.mjs <commit>
+//   cd server && node --env-file=.env ../deploy/ci-status.mjs <commit>
 //
 // Prints one line, and exits with:
 //   0 passed   1 failed   2 still running   3 can't tell
 //
-// It reads MAINT_GITHUB_REPO and MAINT_GITHUB_TOKEN from server/.env. The
-// token needs "Checks: Read-only" as well as Issues (docs/maintenance.md).
-// Without them it says it can't tell, and update.sh asks before going on.
-import fs from "node:fs";
-import path from "node:path";
-
+// It uses the GitHub connection set up in the helpdesk (Maintenance → AI &
+// GitHub), or for older setups MAINT_GITHUB_REPO / MAINT_GITHUB_TOKEN in
+// server/.env. Without one, it says it can't tell, and update.sh asks
+// before going on.
 const sha = process.argv[2] ?? "";
 const say = (code, line) => {
   console.log(line);
@@ -19,20 +17,19 @@ const say = (code, line) => {
 };
 if (!/^[0-9a-f]{40}$/.test(sha)) say(3, "No commit given.");
 
-const envFile = path.resolve(import.meta.dirname, "../server/.env");
-const env = {};
+let repo = "";
+let token = "";
 try {
-  for (const line of fs.readFileSync(envFile, "utf8").split("\n")) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m) env[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, "$2");
-  }
+  const settings = await import("../server/src/maintenanceSettings.js");
+  await settings.refreshConfig();
+  const config = settings.maintenanceConfig();
+  repo = config.repo;
+  if (config.configured) token = await settings.githubToken();
 } catch {
-  // no settings file: can't tell
+  // the database or GitHub can't be reached: can't tell
 }
-const repo = env.MAINT_GITHUB_REPO;
-const token = env.MAINT_GITHUB_TOKEN;
 if (!repo || !token)
-  say(3, "Can't check CI: MAINT_GITHUB_REPO and MAINT_GITHUB_TOKEN aren't in server/.env.");
+  say(3, "Can't check CI: GitHub isn't connected in the helpdesk (Maintenance → AI & GitHub).");
 
 let res;
 try {
@@ -48,7 +45,7 @@ try {
   say(3, "Can't check CI: GitHub didn't answer.");
 }
 if (res.status === 403 || res.status === 404)
-  say(3, "Can't check CI: the token needs Checks: Read-only (docs/maintenance.md).");
+  say(3, "Can't check CI: the GitHub connection can't read checks (Maintenance → AI & GitHub → Test connection).");
 if (!res.ok) say(3, `Can't check CI: GitHub said ${res.status}.`);
 const runs = (await res.json()).check_runs ?? [];
 if (!runs.length) say(2, "CI hasn't started for this commit yet.");

@@ -16,10 +16,15 @@
 // wrote. The check job runs it, but has no secrets and can't change the
 // repository. propose.mjs then opens the pull request.
 //
-// Settings (GitHub → Settings → Secrets and variables → Actions):
-//   secret   ANTHROPIC_API_KEY   use Claude. Without it, GitHub Models (free) is used.
-//   variable MAINT_AI_PROVIDER   auto (default), anthropic or github
-//   variable MAINT_AI_MODEL      e.g. claude-sonnet-5-5, or openai/gpt-4.1 on GitHub Models
+// Which AI: chosen in the helpdesk (Maintenance → AI & GitHub), which puts
+// it in the incident's data on the issue, and stores the AI's key as a
+// GitHub Actions secret:
+//   github     Free (GitHub Models): the workflow's own token, no key
+//   anthropic  Claude: ANTHROPIC_API_KEY
+//   openai     ChatGPT: OPENAI_API_KEY, or OPENAI_OAUTH_TOKEN ("Continue
+//              with ChatGPT", a Plus or Pro plan)
+//   gemini     Gemini: GEMINI_API_KEY
+// (Older setups: the MAINT_AI_PROVIDER / MAINT_AI_MODEL variables.)
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -36,27 +41,120 @@ fs.mkdirSync(OUT, { recursive: true });
 
 // ---------- Which AI ----------
 
-const PROVIDER = (() => {
-  const chosen = String(process.env.MAINT_AI_PROVIDER || "auto").toLowerCase();
-  if (chosen === "anthropic" || chosen === "github") return chosen;
-  return process.env.ANTHROPIC_API_KEY ? "anthropic" : "github";
-})();
-const MODEL =
-  process.env.MAINT_AI_MODEL ||
-  (PROVIDER === "anthropic" ? "claude-sonnet-5-5" : "openai/gpt-4.1");
+const MODELS = {
+  github: "openai/gpt-4.1",
+  anthropic: "claude-sonnet-5-5",
+  openai: "gpt-5",
+  gemini: "gemini-2.5-flash",
+};
+let PROVIDER = "github";
+let MODEL = MODELS.github;
+let OPENAI_AUTH = "key";
 // GitHub Models' free tier takes much less text per request
-const CONTEXT_CHARS = PROVIDER === "anthropic" ? 150_000 : 24_000;
-const MAX_OUTPUT = PROVIDER === "anthropic" ? 16_000 : 4_000;
+let CONTEXT_CHARS = 24_000;
+let MAX_OUTPUT = 4_000;
+
+// The helpdesk's choice (in the incident), else the older variables, else
+// Claude if its key is there, else the free one
+function chooseAi(incident) {
+  const fromHelpdesk = incident?.ai ?? {};
+  const env = String(process.env.MAINT_AI_PROVIDER || "auto").toLowerCase();
+  PROVIDER = MODELS[fromHelpdesk.provider]
+    ? fromHelpdesk.provider
+    : MODELS[env]
+      ? env
+      : process.env.ANTHROPIC_API_KEY
+        ? "anthropic"
+        : "github";
+  const model = String(fromHelpdesk.model || process.env.MAINT_AI_MODEL || "");
+  MODEL = /^[\w./:-]{1,80}$/.test(model) ? model : MODELS[PROVIDER];
+  OPENAI_AUTH = fromHelpdesk.auth === "signin" ? "signin" : "key";
+  CONTEXT_CHARS = PROVIDER === "github" ? 24_000 : 150_000;
+  MAX_OUTPUT = PROVIDER === "github" ? 4_000 : 16_000;
+}
 const MAX_CALLS = 4; // per job: the AI can't be called in a loop
 const usage = [];
 let calls = 0;
+
+// ChatGPT, through OpenAI's Responses API (streamed: plan usage with
+// "Continue with ChatGPT" works this way)
+async function askOpenAI(system, user, signal) {
+  const key = OPENAI_AUTH === "signin" ? process.env.OPENAI_OAUTH_TOKEN : process.env.OPENAI_API_KEY;
+  if (!key)
+    throw new Error(
+      OPENAI_AUTH === "signin"
+        ? "ChatGPT sign-in token missing: sign in again in the helpdesk (Maintenance → AI & GitHub)."
+        : "The ChatGPT (OpenAI) key isn't saved: add it in the helpdesk (Maintenance → AI & GitHub).",
+    );
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model: MODEL, instructions: system, input: user, max_output_tokens: MAX_OUTPUT, stream: true }),
+    signal,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`OpenAI said: ${data?.error?.message ?? res.status}`);
+  }
+  let text = "";
+  let buffer = "";
+  const decoder = new TextDecoder();
+  for await (const chunk of res.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let end;
+    while ((end = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      for (const line of block.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        let event;
+        try {
+          event = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue;
+        }
+        if (event.type === "response.output_text.delta") text += event.delta ?? "";
+        else if (event.type === "response.completed")
+          usage.push({ input: event.response?.usage?.input_tokens ?? 0, output: event.response?.usage?.output_tokens ?? 0 });
+        else if (event.type === "response.failed" || event.type === "error")
+          throw new Error(`OpenAI said: ${event.response?.error?.message ?? event.message ?? "the request failed"}`);
+      }
+    }
+  }
+  return text;
+}
+
+async function askGemini(system, user, signal) {
+  if (!process.env.GEMINI_API_KEY)
+    throw new Error("The Gemini key isn't saved: add it in the helpdesk (Maintenance → AI & GitHub).");
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: MAX_OUTPUT, temperature: 0.2 },
+      }),
+      signal,
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Gemini said: ${data?.error?.message ?? res.status}`);
+  usage.push({ input: data.usageMetadata?.promptTokenCount ?? 0, output: data.usageMetadata?.candidatesTokenCount ?? 0 });
+  return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
+}
 
 async function ask(system, user) {
   calls += 1;
   if (calls > MAX_CALLS) throw new Error(`Stopped: more than ${MAX_CALLS} AI requests in one job.`);
   const signal = AbortSignal.timeout(6 * 60 * 1000);
+  if (PROVIDER === "openai") return askOpenAI(system, user, signal);
+  if (PROVIDER === "gemini") return askGemini(system, user, signal);
   if (PROVIDER === "anthropic") {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error("MAINT_AI_PROVIDER is anthropic, but the ANTHROPIC_API_KEY secret isn't set.");
+    if (!process.env.ANTHROPIC_API_KEY)
+      throw new Error("The Claude key isn't saved: add it in the helpdesk (Maintenance → AI & GitHub).");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -231,6 +329,7 @@ const ready = (p) => (p.plan?.canFix && p.plan.edits.length && !p.problems.lengt
 
 async function plan() {
   const incident = readIncident();
+  chooseAi(incident);
   const readable = readableFiles();
   let files = startingFiles(incident, readable);
   let result;
@@ -398,6 +497,7 @@ async function verify() {
 
 async function revise() {
   const incident = readIncident();
+  chooseAi(incident);
   const p = JSON.parse(fs.readFileSync(process.env.PLAN_FILE, "utf8"));
   const r = JSON.parse(fs.readFileSync(process.env.RESULTS_FILE, "utf8"));
   const failing = r.after

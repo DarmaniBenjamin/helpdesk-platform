@@ -12,6 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import Droplets from "../Droplets";
+import MaintenanceSettings from "../MaintenanceSettings";
+import useData from "../../useData";
 import { inputClass, secondaryButton } from "../formStyles";
 import { api } from "../../api";
 import { timeAgo } from "../../data";
@@ -430,12 +432,15 @@ export default function Maintenance() {
   // Bumped to load the list again (Refresh, or after a change)
   const [reloads, setReloads] = useState(0);
   const [ai, setAi] = useState(null);
+  const [aiReloads, setAiReloads] = useState(0);
+  const { me } = useData();
+  const superAdmin = me?.role === "owner";
 
   useEffect(() => {
     api("/incidents/ai-status")
       .then(setAi)
       .catch(() => setAi(null));
-  }, []);
+  }, [aiReloads]);
 
   useEffect(() => {
     let current = true;
@@ -473,7 +478,9 @@ export default function Maintenance() {
               <Sparkles className="h-3.5 w-3.5" />
               {ai.configured
                 ? `AI investigations are on (${ai.auto ? "automatic, within limits" : "Investigate button only"}). ${ai.used.month} of ${ai.maxPerMonth} used this month. ${ai.webhook ? "Approvals show up as soon as a fix is merged." : "Approvals show up within 5 minutes of a fix being merged."}`
-                : "AI investigations are off. To turn them on, see docs/maintenance.md."}
+                : superAdmin
+                  ? "AI investigations are off. Set them up in AI & GitHub below."
+                  : "AI investigations are off. The Super Admin can turn them on here."}
             </p>
           )}
         </div>
@@ -509,6 +516,8 @@ export default function Maintenance() {
           </button>
         </div>
       </div>
+
+      {superAdmin && <MaintenanceSettings onChanged={() => setAiReloads((n) => n + 1)} />}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

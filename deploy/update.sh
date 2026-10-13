@@ -98,7 +98,7 @@ git log --oneline --no-decorate "$PREV..$TARGET" | head -n 15 | sed 's/^/      /
 # 3. CI
 step "2/6 CI"
 set +e
-CI_LINE="$(node "$APP_DIR/deploy/ci-status.mjs" "$TARGET" 2>&1)"
+CI_LINE="$(cd "$APP_DIR/server" && node --env-file=.env ../deploy/ci-status.mjs "$TARGET" 2>&1 | tail -n 1)"
 CI=$?
 set -e
 confirm() { # confirm "question": yes only if they type yes

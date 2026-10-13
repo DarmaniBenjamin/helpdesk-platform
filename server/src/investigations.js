@@ -4,12 +4,11 @@
 // details and labels it "ai-investigate". GitHub Actions does the rest
 // (.github/workflows/ai-investigate.yml) and reports back on the issue.
 //
-// The token this server holds can only read and write issues: it can't
-// change code, open pull requests, or read secrets. Setup:
-// docs/maintenance.md. Without the settings below, all of this is off
-// and the helpdesk works exactly the same.
+// It's set up in the helpdesk: Maintenance → AI & GitHub (Super Admin,
+// maintenanceSettings.js). Until it's set up there, all of this is off and
+// the helpdesk works exactly the same. (Older setups can still use these
+// lines in server/.env instead:)
 //
-// server/.env:
 //   MAINT_GITHUB_REPO=owner/repo        the (private) repository
 //   MAINT_GITHUB_TOKEN=github_pat_...   fine-grained token: Issues read/write only
 //   MAINT_AUTO_INVESTIGATE=on           send incidents worth it by themselves (off: only the button)
@@ -38,6 +37,12 @@ import { requireRole } from "./auth.js";
 import { ADMINS } from "./permissions.js";
 import { BadInput } from "./validate.js";
 import { addIncidentEvent } from "./incidents.js";
+import {
+  githubToken,
+  maintenanceConfig,
+  prepareAiForInvestigation,
+  refreshConfig,
+} from "./maintenanceSettings.js";
 
 export const investigationsRouter = Router();
 export const githubWebhookRouter = Router();
@@ -55,32 +60,13 @@ const LABELS = [
 // Only the workflow's own comments are believed
 const BOT = "github-actions[bot]";
 
-const number = (name, fallback) => {
-  const n = Number(process.env[name]);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
-};
-export function maintenanceConfig() {
-  const repo = String(process.env.MAINT_GITHUB_REPO ?? "").trim();
-  return {
-    repo,
-    token: process.env.MAINT_GITHUB_TOKEN ?? "",
-    configured: /^[\w.-]+\/[\w.-]+$/.test(repo) && Boolean(process.env.MAINT_GITHUB_TOKEN),
-    auto: !/^(off|no|false|0)$/i.test(process.env.MAINT_AUTO_INVESTIGATE ?? "on"),
-    maxPerDay: number("MAINT_MAX_PER_DAY", 3),
-    maxPerMonth: number("MAINT_MAX_PER_MONTH", 20),
-    allowPublic: /^(yes|true|1)$/i.test(process.env.MAINT_ALLOW_PUBLIC_REPO ?? ""),
-    webhookSecret: process.env.MAINT_GITHUB_WEBHOOK_SECRET ?? "",
-    approvers: String(process.env.MAINT_APPROVERS ?? "")
-      .split(",")
-      .map((a) => a.trim().toLowerCase())
-      .filter(Boolean),
-  };
-}
+export { maintenanceConfig };
 
 // ---------- GitHub ----------
 
 async function github(method, url, body) {
-  const { repo, token } = maintenanceConfig();
+  const { repo } = maintenanceConfig();
+  const token = await githubToken();
   let res;
   try {
     res = await fetch(`https://api.github.com/repos/${repo}${url}`, {
@@ -114,7 +100,7 @@ async function checkPrivate() {
   const repo = await github("GET", "");
   if (!repo.private)
     throw new BadInput(
-      `${config.repo} is public: incidents won't be sent to it. Make it private first (docs/maintenance.md).`,
+      `${config.repo} is public: incidents won't be sent to it. Make it private first, or while testing, turn on "Allow a public repository" (Maintenance → AI & GitHub).`,
     );
   privateChecked = Date.now();
 }
@@ -160,8 +146,10 @@ async function usage() {
 
 // What goes into the issue: the incident's details, which were already
 // redacted when they were recorded (incidentRules.js)
-function issueBody(incident) {
+function issueBody(incident, ai = {}) {
   const data = {
+    // Which AI investigates (set in Maintenance → AI & GitHub)
+    ai,
     title: incident.title,
     severity: incident.severity,
     source: incident.source,
@@ -192,7 +180,8 @@ ${JSON.stringify(data, null, 2).replace(/```/g, "'''")}
 // it). manual: an Admin pressed the button (only the monthly limit applies).
 export async function sendForInvestigation(incident, { actor = null, manual = false } = {}) {
   const config = maintenanceConfig();
-  if (!config.configured) throw new BadInput("AI investigations aren't set up: see docs/maintenance.md.");
+  if (!config.configured)
+    throw new BadInput("AI investigations aren't set up: Maintenance → AI & GitHub.");
   const used = await usage();
   if (used.month >= config.maxPerMonth)
     throw new BadInput(`This month's limit of ${config.maxPerMonth} AI investigations is used up (MAINT_MAX_PER_MONTH).`);
@@ -201,6 +190,9 @@ export async function sendForInvestigation(incident, { actor = null, manual = fa
 
   await checkPrivate();
   await makeLabels();
+  // The chosen AI's key where the workflow can use it (for "Continue with
+  // ChatGPT", a fresh access token)
+  const ai = await prepareAiForInvestigation();
   const github0 = incident.github ?? {};
   let issueNumber = github0.issueNumber;
   let issueUrl = github0.issueUrl;
@@ -208,12 +200,12 @@ export async function sendForInvestigation(incident, { actor = null, manual = fa
     // Investigate again: take the label off and put it back, which starts
     // the workflow again
     await github("DELETE", `/issues/${issueNumber}/labels/${LABEL}`).catch(() => {});
-    await github("PATCH", `/issues/${issueNumber}`, { state: "open", body: issueBody(incident) });
+    await github("PATCH", `/issues/${issueNumber}`, { state: "open", body: issueBody(incident, ai) });
     await github("POST", `/issues/${issueNumber}/labels`, { labels: [LABEL] });
   } else {
     const issue = await github("POST", "/issues", {
       title: `[Incident #${incident.id}] ${incident.title}`.slice(0, 250),
-      body: issueBody(incident),
+      body: issueBody(incident, ai),
       labels: [LABEL],
     });
     issueNumber = issue.number;
@@ -521,8 +513,11 @@ githubWebhookRouter.post("/", async (req, res) => {
 
 let started = false;
 export function startInvestigations() {
-  if (started || !maintenanceConfig().configured) return;
+  if (started) return;
   started = true;
+  // The saved settings (Maintenance → AI & GitHub); it does nothing until
+  // they're set up
+  refreshConfig().catch((err) => console.warn(`Maintenance settings: ${err.message}`));
   const run = () =>
     tick().catch((err) => console.warn(`AI investigations: ${err.message}`));
   setTimeout(run, MINUTE).unref();
