@@ -189,26 +189,38 @@ async function ask(system, user) {
   // Asked for a structured (JSON) answer first; if GitHub Models gives an
   // empty answer that way, once more without it
   for (const structured of [true, false]) {
-    const res = await fetch("https://models.github.ai/inference/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/vnd.github+json",
-        "x-github-api-version": "2022-11-28",
-        authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_OUTPUT,
-        temperature: 0.2,
-        ...(structured ? { response_format: { type: "json_object" } } : {}),
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-      signal,
+    const body = JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_OUTPUT,
+      temperature: 0.2,
+      ...(structured ? { response_format: { type: "json_object" } } : {}),
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
     });
+    const send = (url) =>
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/vnd.github+json",
+          "x-github-api-version": "2022-11-28",
+          authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        },
+        body,
+        // A redirect is followed by sending the request again to the new
+        // address: followed the usual way, it becomes an empty GET, which
+        // only gets "OK" back
+        redirect: "manual",
+        signal,
+      });
+    let res = await send("https://models.github.ai/inference/chat/completions");
+    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+      const to = new URL(res.headers.get("location"), "https://models.github.ai").toString();
+      console.log(`GitHub Models redirected the request (${res.status}) to ${to}: sending it there`);
+      res = await send(to);
+    }
     const raw = await res.text();
     let data = {};
     try {
@@ -223,10 +235,12 @@ async function ask(system, user) {
       console.log(`GitHub Models stopped early: ${choice.finish_reason}`);
     const content = choice?.message?.content ?? "";
     if (content) return content;
-    console.log(`GitHub Models gave an empty answer${structured ? " (asked for JSON); trying once without that" : ""}. What it sent: ${raw.slice(0, 400).replace(/\s+/g, " ")}`);
+    // Where the answer really came from, to see what went wrong
+    const from = `status ${res.status}, ${res.headers.get("content-type") || "no content type"}, from ${res.url || "?"}`;
+    console.log(`GitHub Models gave an empty answer${structured ? " (asked for JSON); trying once without that" : ""}. What it sent (${from}): ${raw.slice(0, 400).replace(/\s+/g, " ")}`);
     if (!structured)
       throw new Error(
-        `GitHub Models gave an empty answer${choice?.finish_reason ? ` (it stopped: ${choice.finish_reason})` : ""}. What it sent back: ${raw.slice(0, 300).replace(/\s+/g, " ") || "(nothing)"}`,
+        `GitHub Models gave an empty answer${choice?.finish_reason ? ` (it stopped: ${choice.finish_reason})` : ""} (${from}). What it sent back: ${raw.slice(0, 300).replace(/\s+/g, " ") || "(nothing)"}. The free GitHub Models option may not be available to this account: choosing Gemini (a free key) in Maintenance → AI & GitHub avoids it.`,
       );
   }
   return "";
