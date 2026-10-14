@@ -45,7 +45,7 @@ jobs:
       (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) ||
        (github.event.issue.user.type == 'Bot' && startsWith(github.event.issue.user.login, 'helpdesk-maintenance-')))
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
       models: read # GitHub Models (the free option)
@@ -127,7 +127,7 @@ jobs:
     needs: [plan, check-1]
     if: needs.check-1.outputs.passed == 'false' && (vars.MAINT_MAX_ATTEMPTS || '2') != '1'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
       models: read

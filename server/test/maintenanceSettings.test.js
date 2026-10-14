@@ -127,7 +127,7 @@ test("an AI key is encrypted with the repository's key before it goes to GitHub"
 test("the chosen AI goes with each investigation", async () => {
   stored = { repo: "me/helpdesk", auth: "token", token: seal("ghp_test_token_1234567890"), provider: "gemini", model: "" };
   await s.refreshConfig();
-  assert.deepEqual(await s.prepareAiForInvestigation(), { provider: "gemini", model: "gemini-2.5-flash", auth: "key" });
+  assert.deepEqual(await s.prepareAiForInvestigation(), { provider: "gemini", model: "gemini-3.8-flash", auth: "key" });
 });
 
 test("Continue with ChatGPT: a fresh access token is stored before an investigation", async () => {

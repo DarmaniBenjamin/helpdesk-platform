@@ -71,7 +71,7 @@ export const PROVIDERS = {
   gemini: {
     label: "Gemini",
     secret: "GEMINI_API_KEY",
-    model: "gemini-2.5-flash",
+    model: "gemini-3.8-flash",
     keyUrl: "https://aistudio.google.com/apikey",
   },
 };

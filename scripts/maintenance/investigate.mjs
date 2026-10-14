@@ -45,7 +45,7 @@ const MODELS = {
   github: "openai/gpt-4.1",
   anthropic: "claude-sonnet-5-5",
   openai: "gpt-5",
-  gemini: "gemini-2.5-flash",
+  gemini: "gemini-3.8-flash",
 };
 let PROVIDER = "github";
 let MODEL = MODELS.github;
@@ -74,6 +74,27 @@ function chooseAi(incident) {
   CONTEXT_CHARS = PROVIDER === "github" ? 12_000 : 150_000;
   MAX_OUTPUT = PROVIDER === "github" ? 4_000 : 16_000;
 }
+// When the AI company says the model isn't available any more (they rename
+// them often), say where to choose another
+const modelHint = (message) =>
+  /model/i.test(String(message))
+    ? `${message} (Type the model it suggests in the helpdesk: Maintenance → AI & GitHub → The AI → Model.)`
+    : message;
+// The AI company is busy or overloaded ("high demand", too many requests):
+// worth waiting and trying again, unlike other errors
+class Busy extends Error {
+  constructor(message, retryAfter) {
+    super(message);
+    this.retryAfter = retryAfter;
+  }
+}
+const BUSY = [408, 429, 500, 502, 503, 504, 529];
+function failure(message, res) {
+  if (!BUSY.includes(res.status)) return new Error(modelHint(message));
+  return new Busy(message, Number(res.headers.get("retry-after")) || 0);
+}
+// Waits between tries when busy, in seconds (about 5½ minutes in all)
+const BUSY_WAITS = [15, 45, 90, 180];
 const MAX_CALLS = 4; // per job: the AI can't be called in a loop
 const usage = [];
 let calls = 0;
@@ -104,7 +125,7 @@ async function askOpenAI(system, user, signal) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(`OpenAI said: ${data?.error?.message ?? res.status}`);
+    throw failure(`OpenAI said: ${data?.error?.message ?? res.status}`, res);
   }
   let text = "";
   let buffer = "";
@@ -151,7 +172,7 @@ async function askGemini(system, user, signal) {
     },
   );
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Gemini said: ${data?.error?.message ?? res.status}`);
+  if (!res.ok) throw failure(`Gemini said: ${data?.error?.message ?? res.status}`, res);
   usage.push({ input: data.usageMetadata?.promptTokenCount ?? 0, output: data.usageMetadata?.candidatesTokenCount ?? 0 });
   return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
 }
@@ -159,6 +180,24 @@ async function askGemini(system, user, signal) {
 async function ask(system, user) {
   calls += 1;
   if (calls > MAX_CALLS) throw new Error(`Stopped: more than ${MAX_CALLS} AI requests in one job.`);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await askOnce(system, user);
+    } catch (err) {
+      if (!(err instanceof Busy)) throw err;
+      if (attempt >= BUSY_WAITS.length)
+        throw new Error(
+          `${err.message} It was still busy after ${BUSY_WAITS.length + 1} tries over about ${Math.round(BUSY_WAITS.reduce((a, b) => a + b, 0) / 60)} minutes. Press Investigate again later.`,
+          { cause: err },
+        );
+      const wait = Math.min(Math.max(err.retryAfter, BUSY_WAITS[attempt]), 300);
+      console.log(`${err.message} Trying again in ${wait} seconds (${attempt + 1} of ${BUSY_WAITS.length})…`);
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+    }
+  }
+}
+
+async function askOnce(system, user) {
   const signal = AbortSignal.timeout(6 * 60 * 1000);
   if (PROVIDER === "openai") return askOpenAI(system, user, signal);
   if (PROVIDER === "gemini") return askGemini(system, user, signal);
@@ -181,7 +220,7 @@ async function ask(system, user) {
       signal,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`Anthropic said: ${data?.error?.message ?? res.status}`);
+    if (!res.ok) throw failure(`Anthropic said: ${data?.error?.message ?? res.status}`, res);
     usage.push({ input: data.usage?.input_tokens ?? 0, output: data.usage?.output_tokens ?? 0 });
     return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   }
@@ -228,7 +267,7 @@ async function ask(system, user) {
     } catch {
       // not JSON: shown below
     }
-    if (!res.ok) throw new Error(`GitHub Models said: ${data?.error?.message ?? data?.message ?? `${res.status} ${raw.slice(0, 200)}`}`);
+    if (!res.ok) throw failure(`GitHub Models said: ${data?.error?.message ?? data?.message ?? `${res.status} ${raw.slice(0, 200)}`}`, res);
     usage.push({ input: data.usage?.prompt_tokens ?? 0, output: data.usage?.completion_tokens ?? 0 });
     const choice = data.choices?.[0];
     if (choice?.finish_reason && choice.finish_reason !== "stop")
