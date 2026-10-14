@@ -11,12 +11,16 @@ import { AGENTS, DEPARTMENTS } from "../data";
 //
 // isValid (optional): a saved choice that no longer makes sense (a team or
 // person that was removed) shows as the default instead.
-export default function useSavedState(name, initial, isValid) {
+// session (optional): only remembered while this tab stays open (refreshing
+// and moving between pages keep it); after the browser or tab is closed it
+// starts on the default again.
+export default function useSavedState(name, initial, isValid, { session = false } = {}) {
   const { me } = useData();
   const key = `filter:${me?.id ?? "anyone"}:${name}`;
+  const storage = () => (session ? sessionStorage : localStorage);
   const [value, setValue] = useState(() => {
     try {
-      const saved = localStorage.getItem(key);
+      const saved = storage().getItem(key);
       return saved === null ? initial : JSON.parse(saved);
     } catch {
       return initial; // private browsing, or something unreadable
@@ -27,7 +31,7 @@ export default function useSavedState(name, initial, isValid) {
     const chosen = typeof next === "function" ? next(value) : next;
     setValue(chosen);
     try {
-      localStorage.setItem(key, JSON.stringify(chosen));
+      storage().setItem(key, JSON.stringify(chosen));
     } catch {
       // Private browsing: it just isn't remembered
     }

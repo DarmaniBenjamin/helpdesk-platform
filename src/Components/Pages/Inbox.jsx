@@ -103,12 +103,15 @@ export default function Inbox() {
   const [tab, setTab] = useSavedState("inbox.tab", "active");
   const [priority, setPriority] = useSavedState("inbox.priority", "any");
   const [department, setDepartment] = useSavedState("inbox.department", "any", isTeam);
-  // Agents start on their own tickets, Admins on everyone's; whatever they
-  // pick after that is remembered (savedState.js)
+  // Agents start on their own tickets every time they come back (another
+  // choice lasts while the tab is open); Admins start on everyone's, and
+  // their choice is remembered (savedState.js)
+  const agent = me?.role === "agent";
   const [assignee, setAssignee] = useSavedState(
     "inbox.assignee",
-    me?.role === "agent" ? String(me.id) : "any",
+    agent ? String(me.id) : "any",
     isAgent,
+    { session: agent },
   );
   const [sort, setSort] = useSavedState("inbox.sort", "newest");
   const [showFilters, setShowFilters] = useState(false); // phones only
