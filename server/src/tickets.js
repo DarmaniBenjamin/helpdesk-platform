@@ -802,9 +802,9 @@ ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
   const fileKeys = await filesOfTicket(ticket.id);
   await db.delete(tickets).where(eq(tickets.id, ticket.id));
   removeFiles(fileKeys);
-  // Its number is free again: the next new ticket takes the lowest free
-  // number (the database does this, see next_ticket_id() in migration
-  // 0013), so deleting #2 of #1-#3 means the next ticket is #2.
+  // New tickets get the highest number + 1 (the database does this:
+  // next_ticket_id(), migration 0015), so deleting the newest ticket frees
+  // its number again: deleting #3 of #1-#3 means the next ticket is #3.
   res.json({ ok: true });
 });
 

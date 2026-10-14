@@ -238,7 +238,7 @@ try {
   }
 
   // New customers carry on numbering after the highest one (new tickets
-  // take the lowest free number by themselves, next_ticket_id())
+  // do the same by themselves, next_ticket_id())
   await db.execute(
     sql`select setval(pg_get_serial_sequence('customers', 'id'), (select max(id) from customers))`,
   );

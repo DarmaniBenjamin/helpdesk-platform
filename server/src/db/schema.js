@@ -130,8 +130,8 @@ export const tickets = pgTable(
   "tickets",
   {
     // Kept the same as Freshdesk's ticket numbers when importing. A new
-    // ticket gets the lowest free number (next_ticket_id(), in migration
-    // 0013), so numbers left by deleted tickets are used again.
+    // ticket gets the highest number + 1 (next_ticket_id(), migration
+    // 0015), so after an import new tickets carry on after the last one.
     id: integer("id")
       .primaryKey()
       .default(sql`next_ticket_id()`),

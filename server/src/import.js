@@ -292,8 +292,9 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
     }
   }
 
-  // Tickets made in this app afterwards take the lowest free number
-  // (next_ticket_id()), so they never clash with an imported Freshdesk one
+  // Tickets made in this app afterwards carry on after the highest number
+  // (next_ticket_id(), migration 0015): imported tickets #256-#8123 mean
+  // the next new one is #8124, and never clash with an imported one
 
   res.json({ added, updated, skipped, problems });
 });

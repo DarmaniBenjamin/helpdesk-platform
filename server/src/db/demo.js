@@ -172,13 +172,12 @@ async function remove() {
   );
 }
 
-// The lowest n ticket numbers nobody is using (gaps left by deleted
-// tickets first). Given to each batch, so 500 tickets go in at once.
+// The next n ticket numbers, after the highest one (as new tickets get:
+// next_ticket_id(), migration 0015). Given to each batch, so 500 tickets
+// go in at once.
 async function freeNumbers(n) {
   const { rows } = await pool.query(
-    `select g as id from generate_series(1, (select coalesce(max(id), 0) from tickets) + $1) g
-      where not exists (select 1 from tickets t where t.id = g)
-      order by g limit $1`,
+    `select (select coalesce(max(id), 0) from tickets) + g as id from generate_series(1, $1) g order by g`,
     [n],
   );
   return rows.map((r) => r.id);
