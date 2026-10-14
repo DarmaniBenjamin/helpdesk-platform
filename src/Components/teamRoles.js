@@ -92,6 +92,11 @@ export const PERMISSIONS = [
     roles: ADMINS_UP,
   },
   {
+    key: "ownIntegrations",
+    label: "Integrations: their own email and WhatsApp",
+    roles: STAFF_ROLES,
+  },
+  {
     key: "maintenance",
     label: "Maintenance: errors and bug reports",
     roles: ADMINS_UP,

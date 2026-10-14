@@ -19,6 +19,7 @@ import {
 } from "./integrationParts";
 import { api } from "../api";
 import { timeAgo } from "../data";
+import { embeddedSignup, loadFacebook } from "./whatsappSignup";
 
 // Integrations → WhatsApp (server/src/whatsapp.js). Each agent's WhatsApp
 // Business number is connected once, through Meta's own window ("Embedded
@@ -26,31 +27,6 @@ import { timeAgo } from "../data";
 // app on their phone, and the helpdesk gets a copy of every message, both
 // ways. Customers' messages become tickets for that agent; what the agent
 // sends from the app goes on the ticket as their reply.
-
-// Facebook's sign-in script, loaded once (Meta's window needs it)
-let facebook = null;
-function loadFacebook(appId, version) {
-  facebook ??= new Promise((resolve, reject) => {
-    window.fbAsyncInit = () => resolve(window.FB);
-    const script = document.createElement("script");
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.onerror = () => {
-      facebook = null;
-      reject(
-        new Error(
-          "Facebook's sign-in didn't load. Check the connection, or turn off an ad blocker for this site.",
-        ),
-      );
-    };
-    document.body.appendChild(script);
-  });
-  return facebook.then((FB) => {
-    FB.init({ appId, autoLogAppEvents: true, xfbml: false, version });
-    return FB;
-  });
-}
 
 // Setting up the Meta app, step by step (once)
 function MetaAppSetup({ info, onSaved }) {
@@ -475,79 +451,16 @@ export default function WhatsAppIntegration() {
     if (!fb) return;
     setError("");
     setConnecting(true);
-    // Meta's window tells this page which number was connected, separately
-    // from the sign-in code
-    let session = null;
-    const listen = (event) => {
-      let host;
-      try {
-        host = new URL(event.origin).hostname;
-      } catch {
-        return;
-      }
-      if (!/(^|\.)facebook\.com$/.test(host)) return;
-      let data = event.data;
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch {
-          return;
-        }
-      }
-      if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
-      if (String(data.event).startsWith("FINISH")) session = data.data ?? {};
-      else if (data.event === "CANCEL")
-        session = { cancelled: true, step: data.data?.current_step };
-      else if (data.event === "ERROR")
-        session = { error: data.data?.error_message };
-    };
-    window.addEventListener("message", listen);
-
-    fb.login(
-      (response) => {
-        // The number's details can arrive just after this
-        setTimeout(async () => {
-          window.removeEventListener("message", listen);
-          const code = response?.authResponse?.code;
-          try {
-            if (session?.error) throw new Error(`Meta said: ${session.error}`);
-            if (!code || session?.cancelled)
-              throw new Error(
-                "The window was closed before the end, so nothing was connected.",
-              );
-            if (!session?.phone_number_id)
-              throw new Error(
-                "Meta didn't say which number was connected. Try again, and go through every step.",
-              );
-            setInfo(
-              await api("/whatsapp/numbers/signup", {
-                method: "POST",
-                body: {
-                  code,
-                  phoneNumberId: session.phone_number_id,
-                  wabaId: session.waba_id,
-                  userId: connectFor || null,
-                },
-              }),
-            );
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setConnecting(false);
-          }
-        }, 1500);
-      },
-      {
-        config_id: info.configId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: "whatsapp_business_app_onboarding",
-          sessionInfoVersion: "3",
-        },
-      },
-    );
+    embeddedSignup(fb, info.configId)
+      .then((session) =>
+        api("/whatsapp/numbers/signup", {
+          method: "POST",
+          body: { ...session, userId: connectFor || null },
+        }),
+      )
+      .then(setInfo)
+      .catch((err) => setError(err.message))
+      .finally(() => setConnecting(false));
   }
 
   const live = Boolean(info?.numbers.some((n) => n.enabled));

@@ -10,6 +10,9 @@ import BackupAlerts from "../BackupAlerts";
 import EmailIntegration from "../EmailIntegration";
 import PhoneIntegration from "../PhoneIntegration";
 import WhatsAppIntegration from "../WhatsAppIntegration";
+import MyIntegrations from "../MyIntegrations";
+import { can } from "../teamRoles";
+import useData from "../../useData";
 import { inputClass, labelClass, secondaryButton } from "../formStyles";
 
 // Integrations: every way customers can reach the helpdesk, in one
@@ -187,6 +190,9 @@ function WebsiteForm() {
 }
 
 export default function Integrations() {
+  const { me } = useData();
+  // Agents: only their own email and WhatsApp
+  if (!can(me?.role, "integrations")) return <MyIntegrations />;
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       <div>

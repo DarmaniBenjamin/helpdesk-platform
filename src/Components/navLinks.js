@@ -53,7 +53,9 @@ export const moreLinks = [
     label: "Integrations",
     path: "/integrations",
     icon: Blocks,
-    permission: "integrations",
+    // Everyone on the team: agents see only their own email and WhatsApp
+    // (MyIntegrations.jsx), Admins everything
+    permission: "ownIntegrations",
   },
   {
     label: "Maintenance",

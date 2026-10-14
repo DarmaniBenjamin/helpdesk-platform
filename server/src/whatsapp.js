@@ -50,7 +50,7 @@ import {
   whatsappNumbers,
 } from "./db/schema.js";
 import { requireRole } from "./auth.js";
-import { ADMINS } from "./permissions.js";
+import { ADMINS, STAFF } from "./permissions.js";
 import { MAX_FILE_SIZE } from "./attachments.js";
 import { BadInput } from "./validate.js";
 import { seal, unseal } from "./secrets.js";
@@ -483,6 +483,71 @@ whatsappRouter.post("/webhook", async (req, res) => {
 
 // ---------- Settings (Admins) ----------
 
+// ---------- An agent's own numbers (Integrations, for agents) ----------
+// Every member of staff can connect their own WhatsApp Business number
+// (once an Admin has set up the Meta app), turn it on or off, or remove
+// it. Other people's numbers and the Meta app are for Admins, below.
+
+const mine = requireRole(...STAFF);
+
+async function myNumbers(user) {
+  const config = await loadSettings();
+  const numbers = await db
+    .select()
+    .from(whatsappNumbers)
+    .where(eq(whatsappNumbers.userId, user.id))
+    .orderBy(whatsappNumbers.id);
+  return {
+    // Ready for "Connect my number": the Meta app is set up
+    ready: Boolean(config.appId && config.configId && open(config.appSecret)),
+    appId: config.appId,
+    configId: config.configId,
+    graphVersion: GRAPH.split("/").pop(),
+    numbers: numbers.map((n) => ({
+      id: n.id,
+      displayNumber: n.displayNumber,
+      name: n.name,
+      coexistence: n.coexistence,
+      enabled: n.enabled,
+      lastMessageAt: n.lastMessageAt?.getTime() ?? null,
+    })),
+  };
+}
+
+async function myNumber(id, user) {
+  const [number] = await db
+    .select()
+    .from(whatsappNumbers)
+    .where(and(eq(whatsappNumbers.id, Number(id) || 0), eq(whatsappNumbers.userId, user.id)));
+  if (!number) throw new BadInput("That number isn't yours.", 404);
+  return number;
+}
+
+whatsappRouter.get("/mine", mine, async (req, res) => {
+  res.json(await myNumbers(req.user));
+});
+
+whatsappRouter.post("/mine/signup", mine, async (req, res) => {
+  await signUpNumber(req.body, req.user.id);
+  res.json(await myNumbers(req.user));
+});
+
+whatsappRouter.patch("/mine/numbers/:id", mine, async (req, res) => {
+  const number = await myNumber(req.params.id, req.user);
+  if (req.body?.enabled !== undefined)
+    await db
+      .update(whatsappNumbers)
+      .set({ enabled: Boolean(req.body.enabled) })
+      .where(eq(whatsappNumbers.id, number.id));
+  res.json(await myNumbers(req.user));
+});
+
+whatsappRouter.delete("/mine/numbers/:id", mine, async (req, res) => {
+  const number = await myNumber(req.params.id, req.user);
+  await db.delete(whatsappNumbers).where(eq(whatsappNumbers.id, number.id));
+  res.json(await myNumbers(req.user));
+});
+
 whatsappRouter.use(requireRole(...ADMINS));
 
 async function view() {
@@ -580,13 +645,20 @@ async function addNumber({ phoneNumberId, wabaId, token, userId, coexistence }) 
 // The agent finished Meta's window ("Embedded Signup"): the page sends the
 // one-time code it got, which becomes the number's lasting token
 whatsappRouter.post("/numbers/signup", async (req, res) => {
+  await signUpNumber(req.body, req.body?.userId || null);
+  res.json(await view());
+});
+
+// The agent finished Meta's window: the one-time code becomes the
+// number's lasting token. userId: whose number it is.
+async function signUpNumber(body, userId) {
   const config = await loadSettings();
   const secret = open(config.appSecret);
   if (!config.appId || !secret)
     throw new BadInput("Save the Meta app's details first.");
-  const code = String(req.body?.code ?? "");
-  const phoneNumberId = String(req.body?.phoneNumberId ?? "");
-  const wabaId = String(req.body?.wabaId ?? "");
+  const code = String(body?.code ?? "");
+  const phoneNumberId = String(body?.phoneNumberId ?? "");
+  const wabaId = String(body?.wabaId ?? "");
   if (!code || !/^\d+$/.test(phoneNumberId) || !/^\d+$/.test(wabaId))
     throw new BadInput(
       "Meta's window didn't finish. Try again, and go through every step to the end.",
@@ -600,11 +672,10 @@ whatsappRouter.post("/numbers/signup", async (req, res) => {
     phoneNumberId,
     wabaId,
     token: exchanged.access_token,
-    userId: req.body?.userId || null,
+    userId,
     coexistence: true,
   });
-  res.json(await view());
-});
+}
 
 // A number added by hand: its Phone number ID and a lasting token (a
 // System User token from Meta Business Settings)

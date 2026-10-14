@@ -1397,6 +1397,12 @@ emailRouter.get("/oauth/callback", async (req, res) => {
       .select()
       .from(mailboxes)
       .where(eq(mailboxes.address, address));
+    // An agent connecting their own mailbox (Integrations, for agents):
+    // one that's someone else's stays theirs
+    if (started.mine && existing && existing.assigneeId !== started.userId)
+      throw new BadInput(
+        `${address} is already connected by someone else. Ask an Admin if it should be yours.`,
+      );
     let saved;
     if (existing) {
       [saved] = await db
@@ -1412,7 +1418,12 @@ emailRouter.get("/oauth/callback", async (req, res) => {
     } else {
       [saved] = await db
         .insert(mailboxes)
-        .values({ ...box, secret: seal(data.refresh_token) })
+        .values({
+          ...box,
+          secret: seal(data.refresh_token),
+          // An agent's own mailbox: its new tickets are theirs
+          ...(started.mine ? { assigneeId: started.userId } : {}),
+        })
         .returning();
     }
     accessTokens.set(saved.id, {
@@ -1424,6 +1435,85 @@ emailRouter.get("/oauth/callback", async (req, res) => {
   } catch (err) {
     back({ emailError: explain(err) });
   }
+});
+
+// ---------- An agent's own mailboxes (Integrations, for agents) ----------
+// Every member of staff can connect, check, test and remove their own
+// mailboxes: the ones whose new tickets go to them. Everything else
+// (other people's mailboxes, teams, filters, the sign-in apps) is for
+// Admins, below.
+
+const mine = requireRole(...STAFF);
+
+async function myMailboxes(user) {
+  const apps = await loadApps();
+  const boxes = await db
+    .select()
+    .from(mailboxes)
+    .where(eq(mailboxes.assigneeId, user.id))
+    .orderBy(asc(mailboxes.id));
+  return {
+    // Which sign-ins an Admin has set up (otherwise only "Other email")
+    signIns: {
+      microsoft: Boolean(apps.microsoft?.clientId && apps.microsoft?.secret),
+      google: Boolean(apps.google?.clientId && apps.google?.secret),
+    },
+    mailboxes: boxes.map(publicMailbox),
+  };
+}
+
+async function myMailbox(id, user) {
+  const box = await findMailbox(id);
+  if (box.assigneeId !== user.id) throw new BadInput("That mailbox isn't yours.", 404);
+  return box;
+}
+
+emailRouter.get("/mine", mine, async (req, res) => {
+  res.json(await myMailboxes(req.user));
+});
+
+emailRouter.post("/mine/oauth/start", mine, async (req, res) => {
+  res.json(await startSignIn(req, { mine: true }));
+});
+
+emailRouter.post("/mine/mailboxes", mine, async (req, res) => {
+  await addImapMailbox(req.body, { assigneeId: req.user.id });
+  res.status(201).json(await myMailboxes(req.user));
+});
+
+// Only the sender name, on/off, and a new password: who gets its tickets,
+// its team and who may email it are an Admin's choice
+emailRouter.patch("/mine/mailboxes/:id", mine, async (req, res) => {
+  const box = await myMailbox(req.params.id, req.user);
+  const b = req.body ?? {};
+  const changes = {};
+  if ("name" in b) changes.name = String(b.name ?? "").trim().slice(0, 100);
+  if ("enabled" in b) changes.enabled = Boolean(b.enabled);
+  if (b.password && box.provider === "imap") {
+    const password = String(b.password);
+    await tryMailbox(box, { user: box.username, pass: password });
+    changes.secret = seal(password);
+    changes.lastError = null;
+  }
+  if (Object.keys(changes).length)
+    await db.update(mailboxes).set(changes).where(eq(mailboxes.id, box.id));
+  res.json(await myMailboxes(req.user));
+});
+
+emailRouter.delete("/mine/mailboxes/:id", mine, async (req, res) => {
+  const box = await myMailbox(req.params.id, req.user);
+  await db.delete(mailboxes).where(eq(mailboxes.id, box.id));
+  accessTokens.delete(box.id);
+  res.json(await myMailboxes(req.user));
+});
+
+emailRouter.post("/mine/mailboxes/:id/check", mine, async (req, res) => {
+  await checkMailbox(await myMailbox(req.params.id, req.user));
+  res.json(await myMailboxes(req.user));
+});
+
+emailRouter.post("/mine/mailboxes/:id/test", mine, async (req, res) => {
+  res.json(await sendTest(await myMailbox(req.params.id, req.user), req.user));
 });
 
 emailRouter.use(requireRole("owner", "admin"));
@@ -1565,6 +1655,10 @@ emailRouter.put("/apps/:provider", async (req, res) => {
 // Start signing in to a Microsoft/Google mailbox: the page sends the
 // browser to the URL this returns
 emailRouter.post("/oauth/start", async (req, res) => {
+  res.json(await startSignIn(req, { mine: false }));
+});
+
+async function startSignIn(req, { mine }) {
   const provider = String(req.body?.provider ?? "");
   if (!PROVIDERS[provider]) throw new BadInput("Unknown sign-in.");
   let origin;
@@ -1589,6 +1683,7 @@ emailRouter.post("/oauth/start", async (req, res) => {
     redirectUri,
     origin: origin.origin,
     userId: req.user.id,
+    mine,
     until: Date.now() + 15 * 60 * 1000,
   });
   const url = new URL(PROVIDERS[provider].authorize(app.tenant));
@@ -1600,8 +1695,8 @@ emailRouter.post("/oauth/start", async (req, res) => {
     state,
     ...PROVIDERS[provider].extra,
   });
-  res.json({ url: url.toString() });
-});
+  return { url: url.toString() };
+}
 
 async function feedbackSetting() {
   const [row] = await db
@@ -1683,7 +1778,13 @@ emailRouter.put("/default", async (req, res) => {
 
 // Add an "Other" mailbox: email address and password
 emailRouter.post("/mailboxes", async (req, res) => {
-  const b = req.body ?? {};
+  await addImapMailbox(req.body);
+  res.status(201).json(await overview());
+});
+
+// assigneeId: whose it is (an agent adding their own)
+async function addImapMailbox(body, { assigneeId = null } = {}) {
+  const b = body ?? {};
   const address = cleanAddress(b.address);
   const password = String(b.password ?? "");
   if (!password)
@@ -1708,11 +1809,11 @@ emailRouter.post("/mailboxes", async (req, res) => {
   await tryMailbox(box, { user: box.username, pass: password });
   const [saved] = await db
     .insert(mailboxes)
-    .values({ ...box, secret: seal(password) })
+    .values({ ...box, secret: seal(password), assigneeId })
     .returning();
   await checkMailbox(saved);
-  res.status(201).json(await overview());
-});
+  return saved;
+}
 
 // Change a mailbox: sender name, agent, team, on/off, or a new password
 emailRouter.patch("/mailboxes/:id", async (req, res) => {
@@ -1778,20 +1879,23 @@ emailRouter.post("/mailboxes/:id/check", async (req, res) => {
 
 // Send a test email to yourself from this mailbox
 emailRouter.post("/mailboxes/:id/test", async (req, res) => {
-  const box = await findMailbox(req.params.id);
+  res.json(await sendTest(await findMailbox(req.params.id), req.user));
+});
+
+async function sendTest(box, user) {
   try {
     const auth = await authFor(box);
     await smtpTransport(box, auth).sendMail({
       from: { name: box.name || box.address, address: box.address },
-      to: req.user.email,
+      to: user.email,
       subject: "Test email from the helpdesk",
       text: `This is a test from the helpdesk, sent with ${box.address}.\n\nIf you can read this, replies to email tickets will reach your customers.`,
     });
   } catch (err) {
     throw new BadInput(`Sending didn't work: ${explain(err, box)}`);
   }
-  res.json({ ok: true, to: req.user.email });
-});
+  return { ok: true, to: user.email };
+}
 
 // ============================================================
 // Email review: emails waiting for someone to decide (all staff)

@@ -434,7 +434,9 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
 
 // ---------- Adding an "Other" mailbox ----------
 
-function OtherMailbox({ onClose, onAdded }) {
+// endpoint: where it's added (an agent adding their own uses
+// /email/mine/mailboxes: MyIntegrations.jsx)
+export function OtherMailbox({ onClose, onAdded, endpoint = "/email/mailboxes" }) {
   const [form, setForm] = useState({
     address: "",
     password: "",
@@ -475,7 +477,7 @@ function OtherMailbox({ onClose, onAdded }) {
     setBusy(true);
     setError("");
     try {
-      onAdded(await api("/email/mailboxes", { method: "POST", body: form }));
+      onAdded(await api(endpoint, { method: "POST", body: form }));
       onClose();
     } catch (err) {
       setError(err.message);
