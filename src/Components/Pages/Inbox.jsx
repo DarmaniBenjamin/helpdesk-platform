@@ -94,7 +94,7 @@ function AssigneeLabel({ id }) {
 
 export default function Inbox() {
   const navigate = useNavigate();
-  const { tickets, heldCount } = useData();
+  const { tickets, heldCount, me } = useData();
 
   // The search lives in the URL (?search=...), so the top bar search can send you here
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,7 +103,13 @@ export default function Inbox() {
   const [tab, setTab] = useSavedState("inbox.tab", "active");
   const [priority, setPriority] = useSavedState("inbox.priority", "any");
   const [department, setDepartment] = useSavedState("inbox.department", "any", isTeam);
-  const [assignee, setAssignee] = useSavedState("inbox.assignee", "any", isAgent);
+  // Agents start on their own tickets, Admins on everyone's; whatever they
+  // pick after that is remembered (savedState.js)
+  const [assignee, setAssignee] = useSavedState(
+    "inbox.assignee",
+    me?.role === "agent" ? String(me.id) : "any",
+    isAgent,
+  );
   const [sort, setSort] = useSavedState("inbox.sort", "newest");
   const [showFilters, setShowFilters] = useState(false); // phones only
   // Which page, and how many per page (30, 50 or 100)
