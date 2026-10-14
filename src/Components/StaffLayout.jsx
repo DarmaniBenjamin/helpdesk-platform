@@ -1,4 +1,4 @@
-import { Suspense, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
@@ -9,6 +9,7 @@ import PushPrompt from "./PushPrompt";
 import JobAlert from "./JobAlert";
 import ErrorBoundary from "./ErrorBoundary";
 import { canOpen } from "./navLinks";
+import useSwipeMenu from "./useSwipeMenu";
 import useData from "../useData";
 
 // The frame around every staff page: sidebar, top bar, and the page itself.
@@ -20,6 +21,11 @@ export default function StaffLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   // Is the sidebar shrunk to icons on desktop?
   const [collapsed, setCollapsed] = useState(false);
+  const openMenu = useCallback(() => setMenuOpen(true), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  // Phones/tablets: swipe right from the left side to open the menu, left
+  // to close it
+  useSwipeMenu({ open: menuOpen, onOpen: openMenu, onClose: closeMenu });
 
   // Still checking with the server whether you're signed in
   if (!authChecked) return <LoadingScreen />;
@@ -35,13 +41,13 @@ export default function StaffLayout() {
     <div className="flex min-h-dvh bg-page lg:h-screen">
       <Sidebar
         open={menuOpen}
-        onClose={() => setMenuOpen(false)}
+        onClose={closeMenu}
         collapsed={collapsed}
       />
 
       <div className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
         <Topbar
-          onMenuClick={() => setMenuOpen(true)}
+          onMenuClick={openMenu}
           onToggleSidebar={() => setCollapsed((c) => !c)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:overflow-y-auto">
