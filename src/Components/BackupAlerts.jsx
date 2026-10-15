@@ -21,11 +21,12 @@ import useData from "../useData";
 // Integrations → Backup alerts (server/src/backupAlerts.js).
 // The backup gateway sends its alerts here (malware found, a computer
 // gone quiet, off-site copies failing, its disk filling up...), and each
-// problem becomes one ticket. Alerts about the same problem are added to
-// its ticket, and when the problem clears the ticket resolves itself.
+// problem becomes one alert on the Alerts page (Pages/Alerts.jsx). Alerts
+// about the same problem are counted on it, and when the problem clears it
+// resolves itself. Critical ones also make a ticket by themselves.
 //
 // Each client on a gateway is matched to a customer here, once. Until
-// then its tickets go to a customer made for it, marked on the list.
+// then its alerts go to a customer made for it, marked on the list.
 
 function Alert({ tone = "error", children }) {
   const styles = {
@@ -134,9 +135,9 @@ function LinkModal({ client, onClose, onSaved }) {
           <strong className="text-ink">
             {client.client || `the gateway "${client.gateway}" itself`}
           </strong>{" "}
-          will go on this customer's tickets.
-          {client.tickets > 0 &&
-            ` Its ${client.tickets} ticket${client.tickets === 1 ? "" : "s"} so far move${client.tickets === 1 ? "s" : ""} over too.`}
+          will be for this customer.
+          {client.alerts + client.tickets > 0 &&
+            ` Its alerts so far, and their tickets, move over too.`}
           {client.madeCustomer &&
             ` "${client.customer?.name}", made for these alerts, is removed once nothing else uses it.`}
         </p>
@@ -199,10 +200,11 @@ export default function BackupAlerts() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Backup alerts</h2>
             <p className="text-sm text-muted">
-              Problems your backup gateways find become tickets: malware,
+              Problems your backup gateways find go to the Alerts page: malware,
               computers that stop checking in, failing off-site copies, a disk
-              filling up. More alerts about the same problem are added to its
-              ticket, and it resolves itself when the problem clears.
+              filling up. More alerts about the same problem are counted on it,
+              and it resolves itself when the problem clears. Critical ones also
+              make a ticket by themselves.
             </p>
           </div>
         </div>
@@ -314,7 +316,7 @@ export default function BackupAlerts() {
             <span>
               Team{" "}
               <span className="font-normal text-muted">
-                (who backup tickets go to)
+                (told about high and critical alerts, and gets the tickets made from them)
               </span>
             </span>
             <select
@@ -342,7 +344,7 @@ export default function BackupAlerts() {
                 {info.clients.length === 0
                   ? "Each client appears here with its first alert. Then link it to one of your customers."
                   : unlinked > 0
-                    ? `${unlinked} not linked yet: their tickets go to a customer made for them until you link them.`
+                    ? `${unlinked} not linked yet: their alerts go to a customer made for them until you link them.`
                     : "Every client is linked to a customer."}
               </p>
             </div>
@@ -379,8 +381,8 @@ export default function BackupAlerts() {
                         ) : (
                           "Its customer was deleted: link it again"
                         )}
-                        {c.openTickets > 0 &&
-                          `, ${c.openTickets} open ticket${c.openTickets === 1 ? "" : "s"}`}
+                        {c.openAlerts > 0 &&
+                          `, ${c.openAlerts} open alert${c.openAlerts === 1 ? "" : "s"}`}
                         {`, last alert ${timeAgo(c.lastSeenAt)}`}
                       </p>
                     </div>

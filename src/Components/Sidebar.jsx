@@ -10,7 +10,8 @@ import { mainLinks, moreLinks, linksFor } from "./navLinks";
 import { ROLES, can } from "./teamRoles";
 import useData from "../useData";
 
-function SidebarLink({ link, onClick, collapsed }) {
+// badge: { open, critical } (Alerts): how many are open, red if any are critical
+function SidebarLink({ link, onClick, collapsed, badge }) {
   const Icon = link.icon;
 
   return (
@@ -49,6 +50,16 @@ function SidebarLink({ link, onClick, collapsed }) {
             >
               {link.label}
             </span>
+            {badge?.open > 0 && (
+              <span
+                className={`ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white ${
+                  badge.critical > 0 ? "bg-red-500" : "bg-amber-500"
+                } ${collapsed ? "lg:absolute lg:right-1 lg:top-1" : ""}`}
+                aria-label={`${badge.open} open`}
+              >
+                {badge.open > 99 ? "99+" : badge.open}
+              </span>
+            )}
           </>
         )}
       </NavLink>
@@ -154,7 +165,7 @@ function AccountMenu({ collapsed, onNavigate }) {
 }
 
 export default function Sidebar({ open, onClose, collapsed }) {
-  const { me } = useData();
+  const { me, alertCount } = useData();
   // Close the menu when Escape is pressed
   useEffect(() => {
     function handleKey(e) {
@@ -208,6 +219,7 @@ export default function Sidebar({ open, onClose, collapsed }) {
                 link={link}
                 onClick={onClose}
                 collapsed={collapsed}
+                badge={link.path === "/alerts" ? alertCount : null}
               />
             ))}
           </ul>

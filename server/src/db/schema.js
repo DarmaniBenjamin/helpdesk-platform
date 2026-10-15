@@ -385,8 +385,8 @@ export const notifications = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // newTicket, assigned, customerReply, dueSoon, overdue, automation
-    // or activity (a change on your ticket, see activity.js)
+    // newTicket, assigned, customerReply, dueSoon, overdue, automation,
+    // alert (alerts.js) or activity (a change on your ticket, activity.js)
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),
@@ -555,6 +555,75 @@ export const backupEvents = pgTable(
     receivedAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.gatewayId, t.eventId] })],
+);
+
+// ---------- Alerts ----------
+
+// Alerts from other systems (the backup gateway: backupAlerts.js), on the
+// Alerts page (alerts.js) instead of the Inbox. One row per problem: more
+// alerts about the same problem on the same device (the same "key") while
+// it's open are counted on it. "Back to normal" resolves it. Critical ones
+// also make a ticket by themselves; others only with "Make a ticket".
+export const alerts = pgTable(
+  "alerts",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    source: text("source").notNull(), // "backup"
+    key: text("key").notNull(), // gateway | device | kind of problem
+    kind: text("kind").notNull().default(""), // malware, offline, disk...
+    title: text("title").notNull(),
+    severity: text("severity").notNull(), // info, low, medium, high, critical
+    status: text("status").notNull().default("open"), // open, acknowledged, resolved
+    device: text("device"),
+    customerId: customerId("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    clientId: integer("client_id").references(() => backupClients.id, {
+      onDelete: "set null",
+    }),
+    // The ticket made from it (critical ones, or "Make a ticket")
+    ticketId: integer("ticket_id").references(() => tickets.id, {
+      onDelete: "set null",
+    }),
+    count: integer("count").notNull().default(1),
+    // The latest alert, written out
+    details: text("details").notNull().default(""),
+    acknowledgedById: text("acknowledged_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    acknowledgedAt: time("acknowledged_at"),
+    resolvedById: text("resolved_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    resolvedAt: time("resolved_at"),
+    firstSeenAt: createdAt(),
+    lastSeenAt: time("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("alerts_key_idx").on(t.key, t.status),
+    index("alerts_status_idx").on(t.status, t.lastSeenAt),
+    index("alerts_customer_idx").on(t.customerId),
+  ],
+);
+
+// What happened to each alert: fired, again, back to normal,
+// acknowledged, resolved, reopened, ticket made
+export const alertEvents = pgTable(
+  "alert_events",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    alertId: integer("alert_id")
+      .notNull()
+      .references(() => alerts.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    actorId: text("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorName: text("actor_name").notNull().default(""),
+    body: text("body").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [index("alert_events_alert_idx").on(t.alertId, t.createdAt)],
 );
 
 // ---------- Settings, sign-in sessions and invites ----------

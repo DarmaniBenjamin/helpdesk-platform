@@ -42,6 +42,7 @@ const PortalTicket = lazy(() => import("./Components/Portal/PortalTicket"));
 const Integrations = lazy(() => import("./Components/Pages/Integrations"));
 const ComingSoon = lazy(() => import("./Components/Pages/ComingSoon"));
 const Maintenance = lazy(() => import("./Components/Pages/Maintenance"));
+const Alerts = lazy(() => import("./Components/Pages/Alerts"));
 
 // Three parts:
 // 1. Pages anyone can open: sign in, accepting an invite, and the
@@ -93,6 +94,7 @@ export default function App() {
             />
             <Route path="/reports" element={<Reports />} />
             <Route path="/maintenance" element={<Maintenance />} />
+            <Route path="/alerts" element={<Alerts />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />

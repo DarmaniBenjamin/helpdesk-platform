@@ -13,6 +13,7 @@ import {
   Settings,
   CalendarDays,
   Wrench,
+  Siren,
 } from "lucide-react";
 import { can } from "./teamRoles";
 
@@ -23,6 +24,8 @@ import { can } from "./teamRoles";
 export const mainLinks = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Inbox", path: "/inbox", icon: Inbox },
+  // Alerts from other systems (the backup gateway), not tickets
+  { label: "Alerts", path: "/alerts", icon: Siren, permission: "alerts" },
   { label: "Calendar", path: "/calendar", icon: CalendarDays },
   { label: "Customers", path: "/customers", icon: BookUser },
   {

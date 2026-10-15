@@ -66,7 +66,8 @@ documentation are the exclusive property of the author.
   - the caller is matched to the customer by phone number
   - works through voicemail emails, a call webhook, and ready-made
     FreePBX scripts (`deploy/pbx`)
-- **Backup alerts:** alerts from the backup gateway become tickets.
+- **Backup alerts:** alerts from the backup gateway go to the **Alerts**
+  page (critical ones also make a ticket).
 
 ### Customers
 
@@ -74,6 +75,21 @@ documentation are the exclusive property of the author.
   and ticket history.
 - **Customer portal:** customers can sign in to see their tickets, reply,
   and send new requests.
+
+### Alerts
+
+- **Alerts page:** problems other systems report (today the backup gateway:
+  malware, computers that stop checking in, failing off-site copies, a disk
+  filling up), instead of tickets in the Inbox. So they don't take ticket
+  numbers or count in the reports. Everyone on staff sees it, with a count
+  of open alerts in the sidebar.
+- **One alert per problem, per device:** repeats are counted on it, and it
+  resolves itself when the system says it's back to normal.
+- **Open → someone's on it → resolved,** with the full history of each.
+- **Critical alerts also make a ticket by themselves;** others with
+  **Make a ticket**. High and critical alerts notify the backup alerts'
+  team (Integrations → Backup alerts), or everyone on staff.
+- **A customer's latest alerts** show on their page.
 
 ### The team
 

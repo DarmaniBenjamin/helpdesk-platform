@@ -40,6 +40,10 @@ export default function DataProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   // How many emails wait in Email review (server/src/email.js)
   const [heldCount, setHeldCount] = useState(0);
+  // Open alerts, for the sidebar (Alerts page): { open, critical }
+  const [alertCount, setAlertCount] = useState({ open: 0, critical: 0 });
+  // Goes up whenever alerts change, so the Alerts page loads them again
+  const [alertsVersion, setAlertsVersion] = useState(0);
   // Goes up whenever someone changes a job, so the calendar loads again
   const [jobsVersion, setJobsVersion] = useState(0);
   // Who's on which page right now: [{ userId, path, since }]
@@ -175,6 +179,16 @@ export default function DataProvider({ children }) {
     if (isStaff) loadHeldCount();
   }, [isStaff, me?.id]);
 
+  // Open alerts, for the sidebar's count (alerts.js)
+  function loadAlertCount() {
+    return api("/alerts/count")
+      .then(setAlertCount)
+      .catch(() => {});
+  }
+  useEffect(() => {
+    if (isStaff) loadAlertCount();
+  }, [isStaff, me?.id]);
+
   // Tell the server which page this tab is on
   function reportPage(path) {
     if (!connectionId.current) return;
@@ -196,10 +210,13 @@ export default function DataProvider({ children }) {
       if (isStaff) reportPage(window.location.pathname);
       // Reconnected after a drop: catch up on anything missed
       if (connectedBefore) {
-        if (isStaff)
+        if (isStaff) {
           api("/notifications")
             .then(setNotifications)
             .catch(() => {});
+          loadAlertCount();
+          setAlertsVersion((v) => v + 1);
+        }
         api("/tickets")
           .then(takeTicketList)
           .catch(() => {});
@@ -335,6 +352,11 @@ export default function DataProvider({ children }) {
         break;
       case "heldEmails":
         if (role !== "customer") later("heldEmails", loadHeldCount);
+        break;
+      case "alerts":
+        if (role === "customer") break;
+        later("alerts", loadAlertCount);
+        setAlertsVersion((v) => v + 1);
         break;
       case "backup":
         // A restore replaced everything: start fresh
@@ -980,6 +1002,8 @@ export default function DataProvider({ children }) {
         tickets,
         loadConversation,
         heldCount,
+        alertCount,
+        alertsVersion,
         setHeldCount,
         jobsVersion,
         customers,

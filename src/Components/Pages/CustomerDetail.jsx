@@ -29,6 +29,7 @@ import { can } from "../teamRoles";
 import useData from "../../useData";
 import { isDone, isOverdue, timeAgo } from "../../data";
 import CustomerLocation from "../CustomerLocation";
+import CustomerAlerts from "../CustomerAlerts";
 
 // A list of emails or phone numbers: the main one first, then any extras.
 // Every one can be changed or removed (removing asks first), an extra
@@ -673,6 +674,9 @@ export default function CustomerDetail() {
             onSave={(location) => save({ location })}
           />
         </div>
+
+        {/* Their alerts (the backup gateway), if they have any */}
+        <CustomerAlerts customerId={customer.id} />
 
         {/* Their tickets */}
         <div className="rounded-xl border border-line bg-white p-4 sm:p-5">

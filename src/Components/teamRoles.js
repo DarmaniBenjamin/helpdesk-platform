@@ -97,6 +97,11 @@ export const PERMISSIONS = [
     roles: STAFF_ROLES,
   },
   {
+    key: "alerts",
+    label: "Alerts: from the backup gateway and other systems",
+    roles: STAFF_ROLES,
+  },
+  {
     key: "maintenance",
     label: "Maintenance: errors and bug reports",
     roles: ADMINS_UP,

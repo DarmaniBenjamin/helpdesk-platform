@@ -9,19 +9,22 @@
 //   POST /api/integrations/backup/secret     makes a new secret (shown once)
 //   POST /api/integrations/backup/clients/:id  { customerId }  which customer a client is
 //
-// How alerts become tickets:
-//   - One ticket per problem, per device: "malware on reception-pc", "front-desk
-//     offline". More alerts about the same problem while that ticket is open are
-//     added to it as notes, instead of making more tickets.
-//   - "Back to normal" (a device back online, disk space back) adds a note and
-//     resolves the ticket.
-//   - Priority from the alert: critical = Urgent, high = High, medium = Medium.
-//     Low and info alerts don't make tickets.
-//   - The ticket is for the customer the gateway's client is linked to. A client
-//     nobody has linked yet gets a customer made with its name; linking it later
-//     moves its tickets to the real customer.
-//   - They're for the team only: customers don't see them in the customer portal,
-//     and they don't get "we got your request" or "how did we do?" emails.
+// Where alerts go (alerts.js): the Alerts page, not the Inbox.
+//   - One alert per problem, per device: "malware on reception-pc",
+//     "front-desk offline". More alerts about the same problem while it's
+//     open are counted on it, and the most serious severity wins.
+//   - "Back to normal" (a device back online, disk space back) resolves it.
+//   - Critical alerts also make a ticket by themselves (for the team chosen
+//     here); the others only when someone presses "Make a ticket".
+//   - High and critical alerts notify that team (or everyone on staff).
+//   - The alert is for the customer the gateway's client is linked to. A
+//     client nobody has linked yet gets a customer made with its name;
+//     linking it later moves its alerts and tickets to the real customer.
+//   - Tickets made from alerts are for the team only: customers don't see
+//     them in the customer portal, and they don't get "we got your request"
+//     or "how did we do?" emails.
+//   - Tickets made from alerts before the Alerts page existed stay as they
+//     are; new alerts no longer add to them.
 //
 // Security: the gateway signs each request with the secret made here
 // (HMAC-SHA256 of "timestamp.body"). Anything not signed with it, or more than
@@ -32,6 +35,7 @@ import { Router } from "express";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import {
+  alerts,
   backupAlerts,
   backupClients,
   backupEvents,
@@ -46,19 +50,24 @@ import { requireRole } from "./auth.js";
 import { ADMINS } from "./permissions.js";
 import { BadInput } from "./validate.js";
 import { seal, unseal } from "./secrets.js";
-import { getSla } from "./sla.js";
 import { recordEvent } from "./activity.js";
 import { afterTicketEvent } from "./automation.js";
-import { onTicketCreated } from "./notify.js";
 import { sendToEveryone } from "./live.js";
+import {
+  addEvent,
+  announce as announceAlert,
+  makeTicket,
+  makesTicket,
+  openAlert,
+  registerAlertSource,
+  tell,
+  worse,
+} from "./alerts.js";
 
 export const backupAlertsRouter = Router();
 
-const HOUR = 60 * 60 * 1000;
 const MAX_AGE_MS = 5 * 60 * 1000;
 const SETTING = "backupAlerts";
-const PRIORITY = { critical: 4, high: 3, medium: 2 };
-const PRIORITY_NAMES = { 1: "Low", 2: "Medium", 3: "High", 4: "Urgent" };
 const isDone = (status) => status === "resolved" || status === "closed";
 
 // ---------- Settings ----------
@@ -217,7 +226,7 @@ async function customerFor(row) {
   return c;
 }
 
-// ---------- Turning one alert into a ticket, a note, or "resolved" ----------
+// ---------- Turning alerts into an alert on the Alerts page ----------
 
 async function addNote(ticketId, author, body, at = new Date()) {
   await db
@@ -232,166 +241,139 @@ async function addNote(ticketId, author, body, at = new Date()) {
     });
 }
 
-function announce(ticket) {
-  sendToEveryone("changed", {
-    resource: "tickets",
-    id: ticket.id,
-    customerId: ticket.customerId,
-  });
-}
-
-async function openAlertFor(key) {
-  const rows = await db
-    .select({ alert: backupAlerts, ticket: tickets })
-    .from(backupAlerts)
-    .innerJoin(tickets, eq(backupAlerts.ticketId, tickets.id))
-    .where(and(eq(backupAlerts.key, key), eq(backupAlerts.open, true)));
-  for (const r of rows) {
-    if (!isDone(r.ticket.status)) return r;
-    // Someone resolved or closed it by hand: a new alert makes a new ticket
-    await db
-      .update(backupAlerts)
-      .set({ open: false })
-      .where(eq(backupAlerts.ticketId, r.ticket.id));
-  }
-  return null;
-}
-
 const keyOf = (e, gateway) =>
   `${gateway.id}|${e.deviceId ?? "-"}|${groupOf(e.kind)}`;
 
+// The team chosen for backup alerts (if it still exists)
+async function alertTeam() {
+  const config = (await setting(SETTING)) ?? {};
+  if (!config.departmentId) return null;
+  const [d] = await db
+    .select({ id: departments.id })
+    .from(departments)
+    .where(eq(departments.id, config.departmentId));
+  return d?.id ?? null;
+}
+registerAlertSource("backup", async () => ({ departmentId: await alertTeam() }));
+
+// The ticket made from an alert, if it's still open: it hears about the
+// alert too (a note), and is resolved with it
+async function openTicketOf(alert) {
+  if (!alert.ticketId) return null;
+  const [ticket] = await db.select().from(tickets).where(eq(tickets.id, alert.ticketId));
+  return ticket && !isDone(ticket.status) ? ticket : null;
+}
+
 // Several alerts about the same problem on the same device, sent together
-// (all "back to normal", or all not): one ticket, note, or resolve
-async function handleEvent(list, gateway) {
-  const rank = ["info", "low", "medium", "high", "critical"];
-  const e = list.reduce(
-    (a, x) => (rank.indexOf(x.severity) > rank.indexOf(a.severity) ? x : a),
-    list[0],
-  );
+// (all "back to normal", or all not): a new alert, counted on the open
+// one, or resolved. (Exported for its tests.)
+export async function handleEvent(list, gateway) {
+  const e = list.reduce((a, x) => (worse(a.severity, x.severity) === x.severity ? x : a), list[0]);
   const author = `Backup gateway (${gateway.name})`;
   const group = groupOf(e.kind);
   const key = keyOf(e, gateway);
-  const open = await openAlertFor(key);
+  const alert = await openAlert(key);
   const now = new Date();
+  const details = describeAll(list, gateway.name);
 
-  // Back to normal: note it and resolve the ticket
+  // Back to normal: resolve it (and its ticket)
   if (isRecovery(e)) {
-    if (!open) return "nothing open";
-    const { ticket } = open;
-    await addNote(
-      ticket.id,
-      author,
-      `Back to normal: ${describe(e, gateway.name)}`,
-      now,
-    );
+    if (!alert) return "nothing open";
     await db
-      .update(tickets)
-      .set({ status: "resolved", resolvedAt: now, updatedAt: now })
-      .where(eq(tickets.id, ticket.id));
-    await db
-      .update(backupAlerts)
-      .set({ open: false, lastEventAt: now })
-      .where(eq(backupAlerts.ticketId, ticket.id));
-    await recordEvent({
-      ticket,
+      .update(alerts)
+      .set({ status: "resolved", resolvedAt: now, resolvedById: null, lastSeenAt: now })
+      .where(eq(alerts.id, alert.id));
+    await addEvent(alert.id, "back to normal", {
       actor: { id: null, name: author },
-      type: "status:resolved",
-      body: "changed status to Resolved: the problem cleared by itself",
-      at: new Date(now.getTime() + 1),
+      body: `Back to normal: ${describe(e, gateway.name)}`,
+      at: now,
     });
-    await afterTicketEvent(ticket.id, "statusChanged", "resolved");
-    announce(ticket);
-    return "resolved";
-  }
-
-  // Low and info alerts don't make tickets, but are added to an open one
-  const priority = PRIORITY[e.severity];
-  if (!priority) {
-    if (!open) return "too minor";
-    await addNote(open.ticket.id, author, describeAll(list, gateway.name), now);
-    return "noted";
-  }
-
-  // The same problem again: add it to the open ticket
-  if (open) {
-    const { ticket, alert } = open;
-    await addNote(ticket.id, author, describeAll(list, gateway.name), now);
-    const raise = priority > ticket.priority;
-    await db
-      .update(tickets)
-      .set({ updatedAt: now, ...(raise ? { priority } : {}) })
-      .where(eq(tickets.id, ticket.id));
-    await db
-      .update(backupAlerts)
-      .set({ count: alert.count + list.length, lastEventAt: now })
-      .where(eq(backupAlerts.ticketId, ticket.id));
-    if (raise)
+    const ticket = await openTicketOf(alert);
+    if (ticket) {
+      await addNote(ticket.id, author, `Back to normal: ${describe(e, gateway.name)}`, now);
+      await db
+        .update(tickets)
+        .set({ status: "resolved", resolvedAt: now, updatedAt: now })
+        .where(eq(tickets.id, ticket.id));
       await recordEvent({
         ticket,
         actor: { id: null, name: author },
-        type: "priority",
-        body: `changed priority to ${PRIORITY_NAMES[priority]}: a more serious alert came in`,
+        type: "status:resolved",
+        body: "changed status to Resolved: the problem cleared by itself",
+        at: new Date(now.getTime() + 1),
       });
-    announce(ticket);
+      await afterTicketEvent(ticket.id, "statusChanged", "resolved");
+      sendToEveryone("changed", { resource: "tickets", id: ticket.id, customerId: ticket.customerId });
+    }
+    announceAlert(alert.id);
+    return "resolved";
+  }
+
+  // The same problem again: counted on the open alert
+  if (alert) {
+    const severity = worse(alert.severity, e.severity);
+    const raised = severity !== alert.severity;
+    const [updated] = await db
+      .update(alerts)
+      .set({
+        count: alert.count + list.length,
+        lastSeenAt: now,
+        severity,
+        details,
+        ...(raised ? { title: e.title.slice(0, 300) } : {}),
+      })
+      .where(eq(alerts.id, alert.id))
+      .returning();
+    await addEvent(alert.id, raised ? "worse" : "again", {
+      actor: { id: null, name: author },
+      body: raised ? `Now ${severity}: ${details}` : details,
+      at: now,
+    });
+    const ticket = await openTicketOf(updated);
+    if (ticket) await addNote(ticket.id, author, details, now);
+    // It just became critical: a ticket, and people are told
+    if (raised) {
+      const departmentId = await alertTeam();
+      if (makesTicket(severity) && !ticket) {
+        const made = await makeTicket(updated, { departmentId, author });
+        updated.ticketId = made.id;
+      }
+      tell(updated, { departmentId });
+    }
+    announceAlert(alert.id);
     return "added";
   }
 
-  // Something new: a ticket
+  // Something new: an alert
   const client = await clientRow(gateway.id, gateway.name, e.client ?? "");
   const customer = await customerFor(client);
-  const config = (await setting(SETTING)) ?? {};
-  let departmentId = config.departmentId ?? null;
-  if (departmentId) {
-    const [d] = await db
-      .select({ id: departments.id })
-      .from(departments)
-      .where(eq(departments.id, departmentId));
-    if (!d) departmentId = null; // that team was deleted
-  }
-  const sla = await getSla();
-  const body = describeAll(list, gateway.name);
-  const [ticket] = await db
-    .insert(tickets)
+  const [created] = await db
+    .insert(alerts)
     .values({
-      subject: e.title.slice(0, 200),
-      description: body,
-      status: "open",
-      priority,
-      departmentId,
-      customerId: customer.id,
       source: "backup",
-      tags: ["backup", group].slice(0, 20),
-      firstResponseDue: new Date(
-        now.getTime() + sla[priority].firstResponse * HOUR,
-      ),
-      dueBy: new Date(now.getTime() + sla[priority].resolve * HOUR),
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
-  await db
-    .insert(backupAlerts)
-    .values({
-      ticketId: ticket.id,
       key,
+      kind: group,
+      title: e.title.slice(0, 300),
+      severity: e.severity,
+      status: "open",
+      device: e.device,
+      customerId: customer.id,
       clientId: client.id,
       count: list.length,
-      openedAt: now,
-      lastEventAt: now,
-    });
-  await addNote(ticket.id, author, body, now);
-  await recordEvent({
-    ticket,
-    actor: { id: null, name: author },
-    type: "created",
-    body: "made this ticket from a backup alert",
-    at: new Date(now.getTime() + 1),
-  });
-  // Assignment rules, automations, and the Admins' "New ticket" notification
-  await afterTicketEvent(ticket.id, "created");
-  onTicketCreated(ticket, customer.name, { id: null });
-  announce(ticket);
-  return "ticket";
+      details,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    })
+    .returning();
+  await addEvent(created.id, "fired", { actor: { id: null, name: author }, body: details, at: now });
+  const departmentId = await alertTeam();
+  if (makesTicket(created.severity)) {
+    const made = await makeTicket(created, { departmentId, author });
+    created.ticketId = made.id;
+  }
+  tell(created, { departmentId, customerName: customer.name });
+  announceAlert(created.id);
+  return makesTicket(created.severity) ? "alert and ticket" : "alert";
 }
 
 // One request at a time, so two at once can't both make a ticket for the
@@ -544,6 +526,16 @@ async function view() {
     t.total += c.n;
     if (c.open) t.open += c.n;
   }
+  // Alerts on the Alerts page, per client
+  const alertCounts = await db
+    .select({
+      clientId: alerts.clientId,
+      open: sql`count(*) filter (where ${alerts.status} <> 'resolved')::int`,
+      total: count(),
+    })
+    .from(alerts)
+    .groupBy(alerts.clientId);
+  const alertTally = Object.fromEntries(alertCounts.map((c) => [c.clientId, c]));
   return {
     enabled: Boolean(config.enabled),
     hasSecret: Boolean(config.secret),
@@ -560,7 +552,9 @@ async function view() {
         ? { id: customer.id, name: customer.name, company: customer.company }
         : null,
       lastSeenAt: client.lastSeenAt.getTime(),
-      openTickets: tally[client.id]?.open ?? 0,
+      openAlerts: alertTally[client.id]?.open ?? 0,
+      alerts: alertTally[client.id]?.total ?? 0,
+      // Tickets made from its alerts before the Alerts page
       tickets: tally[client.id]?.total ?? 0,
     })),
   };
@@ -623,10 +617,22 @@ backupAlertsRouter.post("/clients/:id", async (req, res) => {
   if (old === customer.id) return res.json(await view());
 
   await db.transaction(async (tx) => {
-    const mine = await tx
-      .select({ id: backupAlerts.ticketId })
-      .from(backupAlerts)
-      .where(eq(backupAlerts.clientId, row.id));
+    // Its alerts, and the tickets made from them (now or before the Alerts
+    // page), go to the real customer
+    await tx
+      .update(alerts)
+      .set({ customerId: customer.id })
+      .where(eq(alerts.clientId, row.id));
+    const fromAlerts = await tx
+      .select({ id: alerts.ticketId })
+      .from(alerts)
+      .where(and(eq(alerts.clientId, row.id), sql`${alerts.ticketId} is not null`));
+    const mine = (
+      await tx
+        .select({ id: backupAlerts.ticketId })
+        .from(backupAlerts)
+        .where(eq(backupAlerts.clientId, row.id))
+    ).concat(fromAlerts);
     if (mine.length)
       await tx
         .update(tickets)
@@ -666,5 +672,6 @@ backupAlertsRouter.post("/clients/:id", async (req, res) => {
   });
   sendToEveryone("changed", { resource: "customers", id: customer.id });
   sendToEveryone("changed", { resource: "tickets", id: null });
+  announceAlert();
   res.json(await view());
 });

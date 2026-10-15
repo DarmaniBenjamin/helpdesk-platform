@@ -149,9 +149,11 @@ async function pushTo(userIds, rows) {
         url:
           row.kind === "job" || row.kind === "jobNow"
             ? "/calendar"
-            : row.ticketId
-              ? `/tickets/${row.ticketId}`
-              : "/",
+            : row.kind === "alert"
+              ? "/alerts"
+              : row.ticketId
+                ? `/tickets/${row.ticketId}`
+                : "/",
         // Same ticket and kind: the newer one replaces the older pop-up
         tag: `${row.kind}-${row.ticketId ?? row.id}`,
         // "It's time" for a job: stays on screen and vibrates (public/sw.js)

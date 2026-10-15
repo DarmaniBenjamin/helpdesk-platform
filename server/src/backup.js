@@ -59,6 +59,9 @@ const TABLES = [
   "incidents",
   "incident_events",
   "tickets",
+  // The Alerts page (after tickets and backup clients, which they point to)
+  "alerts",
+  "alert_events",
   "messages",
   "backup_alerts",
   "phone_calls",
