@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { and, asc, eq, ne, or, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
-import { customers, tickets, users } from "./db/schema.js";
+import { customers, freeTicketNumbers, tickets, users } from "./db/schema.js";
 import { publicUser, requireAuth, requireRole } from "./auth.js";
 import { makeInviteToken } from "./team.js";
 import { ADMINS, STAFF } from "./permissions.js";
@@ -272,10 +272,16 @@ customersRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
     // Messages, file records and notifications about these tickets are
     // deleted with them (set up in the database tables)
     await tx.delete(tickets).where(eq(tickets.customerId, customer.id));
+    // Their ticket numbers are free for new tickets (next_ticket_id(),
+    // migration 0016)
+    if (theirTickets.length)
+      await tx
+        .insert(freeTicketNumbers)
+        .values(theirTickets.map((t) => ({ number: t.id })))
+        .onConflictDoNothing();
     // Their portal login (and its sign-ins) goes with the customer
     await tx.delete(customers).where(eq(customers.id, customer.id));
   });
   removeFiles(fileKeys);
-  // Their ticket numbers are free again for new tickets (next_ticket_id())
   res.json({ ok: true, tickets: theirTickets.length });
 });

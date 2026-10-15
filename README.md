@@ -35,8 +35,8 @@ documentation are the exclusive property of the author.
   page), and the full history of every change.
 - **Ticket numbers:** a new ticket gets the highest number + 1. Tickets
   imported from Freshdesk keep their numbers, so after an import new
-  tickets carry on after the last one (#8123 → #8124). Deleting the newest
-  ticket frees its number again.
+  tickets carry on after the last one (#8123 → #8124). Deleting a ticket
+  frees its number: the next new ticket takes it.
 - **SLAs:** each priority has first-reply and resolve targets, which set
   the due times on every ticket. Due-soon and overdue tickets are flagged.
 - **Ticket Review:** where Admins check finished tickets and mark them
