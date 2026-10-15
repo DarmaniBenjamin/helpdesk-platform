@@ -35,7 +35,10 @@
 //   SERVER_IP       optional. This server's public IP, shown as what the
 //                   A record should point to. Found by itself if empty.
 //   SSL_MODE        optional. "server" or "render", to override the
-//                   automatic choice.
+//                   automatic choice, or "host": a hosting company that
+//                   manages the domain and SSL in its own panel
+//                   (SiteGround's Node.js Projects: docs/siteground.md).
+//                   Then this page only says where to do it.
 //   RENDER_API_KEY  Render only. Render → Account Settings → API Keys.
 //                   It can change everything on your Render account, so
 //                   it only ever lives in the environment.
@@ -61,7 +64,7 @@ import { syncCaddy, caddyStatus, setDomainSource } from "./caddy.js";
 export const domainsRouter = Router();
 
 const MODE =
-  process.env.SSL_MODE === "render" || process.env.SSL_MODE === "server"
+  ["render", "server", "host"].includes(process.env.SSL_MODE)
     ? process.env.SSL_MODE
     : process.env.RENDER
       ? "render"
@@ -551,7 +554,21 @@ function requireRenderConnected() {
 // The routes
 // ============================================================
 
-const list = () => (MODE === "render" ? listRender() : listOwn());
+// A hosting company that manages domains and SSL itself: nothing to list
+// or change here (Settings → Domain & SSL says where to do it)
+const HOSTED = {
+  mode: "host",
+  host: String(process.env.HOSTING_COMPANY || "").slice(0, 60) || null,
+  domains: [],
+};
+const notHere = () => {
+  throw new BadInput(
+    "Your hosting company manages this site's domains and SSL, in its own control panel.",
+  );
+};
+
+const list = () =>
+  MODE === "host" ? HOSTED : MODE === "render" ? listRender() : listOwn();
 
 // Caddy's question: "may I get a certificate for this domain?"
 // 200 = yes, 404 = no. It's only answered for requests made on this
@@ -580,6 +597,7 @@ domainsRouter.get("/", async (req, res) => {
 });
 
 domainsRouter.post("/", async (req, res) => {
+  if (MODE === "host") notHere();
   const name = cleanDomain(req.body?.name);
   if (MODE === "render") {
     requireRenderConnected();
@@ -591,6 +609,7 @@ domainsRouter.post("/", async (req, res) => {
 });
 
 domainsRouter.post("/:name/check", async (req, res) => {
+  if (MODE === "host") notHere();
   const name = cleanDomain(req.params.name);
   if (MODE === "render") {
     requireRenderConnected();
@@ -607,6 +626,7 @@ domainsRouter.post("/:name/check", async (req, res) => {
 });
 
 domainsRouter.delete("/:name", async (req, res) => {
+  if (MODE === "host") notHere();
   const name = cleanDomain(req.params.name);
   if (MODE === "render") {
     requireRenderConnected();

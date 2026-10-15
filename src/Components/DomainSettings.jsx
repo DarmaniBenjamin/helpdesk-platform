@@ -725,6 +725,27 @@ export default function DomainSettings() {
     );
   }
 
+  // A hosting company manages the domain and SSL in its own panel
+  // (SSL_MODE=host: SiteGround's Node.js Projects, docs/siteground.md)
+  if (info.mode === "host") {
+    return (
+      <Card title="Domain & SSL">
+        <div className="flex flex-col gap-2 text-sm">
+          <p>
+            {info.host ?? "Your hosting company"} manages this site's domain and
+            its SSL certificate (the padlock), in its own control panel, so there's
+            nothing to set up here.
+          </p>
+          <p className="text-muted">
+            On SiteGround: the domain is in Client Area → Websites → Node.js
+            Projects → your project. The certificate is in its Site Tools →
+            Security → SSL Manager, with HTTPS Enforce turned on.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       {info.mode === "server" && !info.caddy?.configured && (

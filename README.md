@@ -269,6 +269,12 @@ it, the copies can't be opened.
 
 ---
 
+### On SiteGround instead
+
+SiteGround's **Node.js Projects** (GrowBig, GoGeek and Cloud plans) can run
+the whole platform, with a PostgreSQL database from Site Tools and
+SiteGround looking after the domain and SSL: `docs/siteground.md`.
+
 ## Maintenance and AI investigations
 
 **Maintenance** (in the sidebar, for Admins) records every error the app

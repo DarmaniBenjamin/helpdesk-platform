@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "npm --prefix server start",
+    "build:siteground": "vite build && npm --prefix server ci --omit=dev"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -30,6 +32,6 @@
     "vite": "^8.3.0"
   },
   "engines": {
-    "node": "22.x"
+    "node": ">=22"
   }
 }

@@ -22,7 +22,8 @@ import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
 import { liveRouter, sendToEveryone } from "./live.js";
-import { attachmentsRouter, startFileCleanUp } from "./attachments.js";
+import { attachmentsRouter, startFileCleanUp, UPLOAD_DIR } from "./attachments.js";
+import { KEY_FILE } from "./secrets.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { offsiteRouter, startOffsiteCopies } from "./offsite.js";
@@ -308,6 +309,24 @@ app.use((err, req, res, next) => {
 // which Render needs. On your own server, set HOST=127.0.0.1 so only
 // Caddy (on the same server) can reach it, and everyone goes through
 // https.
+// On a hosting company's Node.js hosting (SSL_MODE=host, e.g. SiteGround),
+// each deployment can be a fresh copy of the code: uploaded files and the
+// encryption key kept inside it would be lost on the next one. Say so in
+// the log, so UPLOAD_DIR and SECRET_KEY_FILE get pointed somewhere that's
+// kept (docs/siteground.md).
+if (process.env.SSL_MODE === "host") {
+  const appRoot = path.resolve(import.meta.dirname, "../..");
+  const inside = (p) => !path.relative(appRoot, p).startsWith("..");
+  for (const [name, where] of [
+    ["UPLOAD_DIR", UPLOAD_DIR],
+    ["SECRET_KEY_FILE", KEY_FILE],
+  ])
+    if (inside(where))
+      console.warn(
+        `Warning: ${name} is inside the app's folder (${where}). On hosting that deploys a fresh copy each time, it's lost on the next deployment: set ${name} to a folder that's kept (docs/siteground.md).`,
+      );
+}
+
 const port = Number(process.env.PORT) || 4000;
 const host = process.env.HOST || "0.0.0.0";
 app.listen(port, host, () => {
