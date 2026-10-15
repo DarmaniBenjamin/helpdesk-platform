@@ -59,8 +59,6 @@ const TABLES = [
   "incidents",
   "incident_events",
   "tickets",
-  // Numbers freed by deleting tickets, so a restore keeps handing them out
-  "free_ticket_numbers",
   "messages",
   "backup_alerts",
   "phone_calls",

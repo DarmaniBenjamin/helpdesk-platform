@@ -130,9 +130,8 @@ export const tickets = pgTable(
   "tickets",
   {
     // Kept the same as Freshdesk's ticket numbers when importing. A new
-    // ticket gets a number freed by deleting a ticket, else the highest
-    // number + 1 (next_ticket_id(), migration 0016), so after an import
-    // new tickets carry on after the last one.
+    // ticket gets the highest number + 1 (next_ticket_id(), migration
+    // 0015), so after an import new tickets carry on after the last one.
     id: integer("id")
       .primaryKey()
       .default(sql`next_ticket_id()`),
@@ -283,14 +282,6 @@ export const jobs = pgTable(
     index("jobs_ticket_idx").on(t.ticketId),
   ],
 );
-
-// Ticket numbers freed by deleting a ticket in the helpdesk: the next new
-// ticket takes the lowest of these, before the highest + 1
-// (next_ticket_id(), migration 0016)
-export const freeTicketNumbers = pgTable("free_ticket_numbers", {
-  number: integer("number").primaryKey(),
-  freedAt: time("freed_at").notNull().defaultNow(),
-});
 
 // Who does each job
 export const jobAgents = pgTable(

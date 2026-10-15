@@ -17,7 +17,6 @@ import {
   departments,
   users,
   emailMessages,
-  freeTicketNumbers,
 } from "./db/schema.js";
 import { requireAuth, requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
@@ -801,13 +800,11 @@ ticketsRouter.delete("/:id", requireRole(...ADMINS), async (req, res) => {
   // Its files are removed from the uploads folder too. Messages and
   // file records are deleted with it (set up in the database tables).
   const fileKeys = await filesOfTicket(ticket.id);
-  await db.transaction(async (tx) => {
-    await tx.delete(tickets).where(eq(tickets.id, ticket.id));
-    // Its number is free for the next new ticket (next_ticket_id(),
-    // migration 0016): deleting #500 means the next new ticket is #500
-    await tx.insert(freeTicketNumbers).values({ number: ticket.id }).onConflictDoNothing();
-  });
+  await db.delete(tickets).where(eq(tickets.id, ticket.id));
   removeFiles(fileKeys);
+  // New tickets get the highest number + 1 (the database does this:
+  // next_ticket_id(), migration 0015), so deleting the newest ticket frees
+  // its number again: deleting #3 of #1-#3 means the next ticket is #3.
   res.json({ ok: true });
 });
 
