@@ -31,5 +31,7 @@
   },
   "engines": {
     "node": "22.x"
-  }
+  },
+  "build": "vite build && npm --prefix server ci --omit=dev",
+  "start": "npm --prefix server start"
 }
