@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "npm --prefix server start",
-    "build:siteground": "vite build && npm --prefix server ci --omit=dev"
+    "build:siteground": "vite build && npm --prefix server ci --omit=dev",
+    "sgbuild": "vite build && npm --prefix server ci --omit=dev"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

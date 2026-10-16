@@ -55,7 +55,7 @@ Then, in the project's **Site Tools → Node.js → Deployment Options**, set:
 | Framework preset | **Express** (or "Node.js" / "Other": anything that runs a server, **not Vite**: Vite makes it a plain website, and the server never starts) |
 | Node version | **22** or newer |
 | Package manager | **npm** |
-| Build command | `npm run build:siteground` (builds the website and installs the server's packages) |
+| Build command | `npm run sgbuild` (builds the website and installs the server's packages) |
 | Output directory | leave empty; if it must be filled in, `dist` |
 | Start command (if it asks) | `npm start` |
 
