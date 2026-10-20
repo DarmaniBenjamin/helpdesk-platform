@@ -303,7 +303,9 @@ if (fs.existsSync(path.join(site, "index.html"))) {
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
     res.set("Cache-Control", "no-cache");
-    res.sendFile(path.join(site, "index.html"));
+    // root + dotfiles: some hosts keep apps in a hidden folder (e.g.
+    // ~/.nodejs/...), which sendFile refuses by default ("Not Found")
+    res.sendFile("index.html", { root: site, dotfiles: "allow" });
   });
 }
 
@@ -313,10 +315,21 @@ app.use(handleBadInput);
 // Anything else: show a short message instead of crashing
 // (recorded as an incident first, with the request's ID, which is sent
 // back so whoever saw the error can quote it)
+// A page (not /api) that fails gets a plain page instead, with nothing
+// about the server on it.
+const ERROR_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Uplink</title>
+<style>body{font-family:system-ui,sans-serif;background:#f5f6f8;color:#101828;margin:0;display:grid;place-items:center;min-height:100vh;padding:16px}
+main{background:#fff;border:1px solid #eaecf0;border-radius:16px;padding:24px;max-width:420px;text-align:center}
+h1{font-size:20px;margin:0 0 8px}p{color:#667085;line-height:1.5;margin:0 0 16px}
+a{display:inline-block;background:#00b67a;color:#fff;text-decoration:none;border-radius:8px;padding:10px 18px}</style></head>
+<body><main><h1>This page didn't load</h1><p>Please try again in a moment.</p><a href="/">Go to the helpdesk</a></main></body></html>`;
 app.use((err, req, res, next) => {
   captureRequestError(err, req);
   console.error(err);
   if (res.headersSent) return next(err);
+  if (!req.path.startsWith("/api/") && !req.path.startsWith("/freshdesk-api"))
+    return res.status(500).type("html").send(ERROR_PAGE);
   res.status(500).json({
     error: "Something went wrong on the server.",
     requestId: req.id,

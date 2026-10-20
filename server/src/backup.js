@@ -316,7 +316,7 @@ backupRouter.get("/saved/:name", (req, res) => {
   const name = String(req.params.name);
   if (!NAME_PATTERN.test(name) || !fs.existsSync(path.join(BACKUP_DIR, name)))
     throw new BadInput("That backup doesn't exist.", 404);
-  res.download(path.join(BACKUP_DIR, name), name);
+  res.download(path.join(BACKUP_DIR, name), name, { dotfiles: "allow" });
 });
 
 // The backup file itself is the body of the request

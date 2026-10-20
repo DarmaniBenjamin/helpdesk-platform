@@ -307,7 +307,7 @@ attachmentsRouter.get("/:id", requireAuth, async (req, res) => {
       "Content-Disposition",
       res.get("Content-Disposition").replace(/^attachment/, "inline"),
     );
-  res.sendFile(where);
+  res.sendFile(where, { dotfiles: "allow" }); // (apps in hidden folders)
 });
 
 // ---------- Tidying up ----------
