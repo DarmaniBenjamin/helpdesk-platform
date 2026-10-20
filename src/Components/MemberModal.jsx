@@ -42,6 +42,8 @@ export default function MemberModal({ member, onClose }) {
   // Maintenance access (only the Super Admin sets it): the developer who
   // looks after the helpdesk, listed apart and never given tickets
   const [maintenance, setMaintenance] = useState(Boolean(member?.maintenance));
+  // Only the real Super Admin (not someone with maintenance access) gives it
+  const isRealOwner = (me.realRole ?? me.role) === "owner";
   const [error, setError] = useState("");
   // After inviting, show a "done" screen with their link instead of the form
   const [invited, setInvited] = useState(null); // { member, link }
@@ -105,7 +107,7 @@ export default function MemberModal({ member, onClose }) {
           title: title.trim(),
           role,
           departments,
-          ...(me.role === "owner" ? { maintenance } : {}),
+          ...(isRealOwner ? { maintenance } : {}),
         });
         document.activeElement?.blur();
         onClose();
@@ -117,7 +119,7 @@ export default function MemberModal({ member, onClose }) {
         title,
         role,
         departments,
-        maintenance: me.role === "owner" && maintenance,
+        maintenance: isRealOwner && maintenance,
       });
       document.activeElement?.blur();
       setInvited({
@@ -413,7 +415,7 @@ export default function MemberModal({ member, onClose }) {
       </div>
 
       {/* Only the Super Admin gives (and takes away) maintenance access */}
-      {me.role === "owner" && member?.id !== me.id && (
+      {isRealOwner && member?.id !== me.id && (
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3 text-sm">
           <input
             type="checkbox"
@@ -424,9 +426,9 @@ export default function MemberModal({ member, onClose }) {
           <span>
             <span className="font-medium">Maintenance access</span>
             <span className="block text-muted">
-              For the developer who looks after the helpdesk. Listed under
-              Maintenance access on this page, and never given tickets. Untick
-              it, or remove them, to end it.
+              For the developer who looks after the helpdesk: the same access as
+              the Super Admin. Listed under Maintenance access on this page, and
+              never given tickets. Untick it, or remove them, to end it.
             </span>
           </span>
         </label>

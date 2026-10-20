@@ -652,9 +652,10 @@ export default function Team() {
       {maintenanceMembers.length > 0 && (
         <Card title="Maintenance access">
           <p className="-mt-2 mb-3 text-sm text-muted">
-            The developer who looks after the helpdesk: updates and fixes. They
-            aren't given tickets. Only the Super Admin can give or end this
-            access (edit or remove them here).
+            The developer who looks after the helpdesk: updates and fixes, with
+            the same access as the Super Admin. They aren't given tickets. Only
+            the Super Admin can give or end this access (edit or remove them
+            here).
           </p>
           <ul className="divide-y divide-line rounded-lg border border-line">
             {maintenanceMembers.map((m) => (

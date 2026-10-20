@@ -141,7 +141,13 @@ export default function DataProvider({ children }) {
   }, []);
 
   // The signed-in person (null when nobody is)
-  const me = team.find((m) => m.id === auth.userId) ?? null;
+  // Maintenance access: the same access as the Super Admin (the server
+  // does the same, auth.js); realRole is what they really are
+  const found = team.find((m) => m.id === auth.userId) ?? null;
+  const me =
+    found?.maintenance && found.role !== "customer"
+      ? { ...found, realRole: found.role, role: "owner" }
+      : found;
 
   // Everyone on the staff who can be given tickets: active members who
   // aren't customers (or maintenance accounts). Every "Assigned to" list

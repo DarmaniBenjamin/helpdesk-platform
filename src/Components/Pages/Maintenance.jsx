@@ -543,7 +543,7 @@ export default function Maintenance() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
         <section
           className={`rounded-xl border border-line bg-white ${selected ? "hidden lg:block" : ""}`}
         >

@@ -256,7 +256,7 @@ export default function PortalTicket() {
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         {/* Details: on the right on big screens, on top on phones */}
         <aside className="flex h-fit flex-col gap-4 lg:order-last">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-line bg-white p-5 text-sm lg:grid-cols-1">

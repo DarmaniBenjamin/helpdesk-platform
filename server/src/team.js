@@ -167,7 +167,9 @@ teamRouter.post("/invite", requireRole(...ADMINS), async (req, res) => {
       status: "invited",
       invitedAt: new Date(),
       // Maintenance access: only the Super Admin gives it (db/schema.js)
-      maintenance: req.user.role === "owner" && Boolean(req.body?.maintenance),
+      maintenance:
+        (req.user.realRole ?? req.user.role) === "owner" &&
+        Boolean(req.body?.maintenance),
     })
     .returning();
   const departmentIds = await cleanDepartments(req.body?.departments);
@@ -228,7 +230,7 @@ teamRouter.patch("/:id", requireRole(...ADMINS), async (req, res) => {
   }
 
   if ("maintenance" in req.body && user.role !== "customer") {
-    if (req.user.role !== "owner")
+    if ((req.user.realRole ?? req.user.role) !== "owner")
       throw new BadInput(
         "Only the Super Admin can change maintenance access.",
         403,

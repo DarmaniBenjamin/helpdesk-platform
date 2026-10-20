@@ -143,7 +143,13 @@ export async function loadSession(req, res, next) {
     );
 
   if (row && row.user.status === "active") {
-    req.user = row.user;
+    // Maintenance access (db/schema.js): the same access as the Super
+    // Admin everywhere. realRole keeps what they really are, for the few
+    // things only the real Super Admin may do (giving maintenance access).
+    req.user =
+      row.user.maintenance && row.user.role !== "customer"
+        ? { ...row.user, realRole: row.user.role, role: "owner" }
+        : row.user;
     req.sessionHash = tokenHash;
   }
   next();
