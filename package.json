@@ -8,9 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "npm --prefix server start",
-    "build:siteground": "vite build && npm --prefix server ci --omit=dev",
-    "sgbuild": "vite build && npm --prefix server ci --omit=dev"
+    "start": "node server.js",
+    "build:siteground": "npm install --include=dev --no-audit --no-fund && vite build && npm --prefix server ci --omit=dev --no-audit --no-fund",
+    "sgbuild": "npm install --include=dev --no-audit --no-fund && vite build && npm --prefix server ci --omit=dev --no-audit --no-fund"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -34,5 +34,6 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "main": "server.js"
 }

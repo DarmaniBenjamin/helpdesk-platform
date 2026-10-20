@@ -10,6 +10,7 @@
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db, pool } from "./index.js";
+import { explainDatabaseError } from "../config.js";
 import { departments, users, settings } from "./schema.js";
 
 const STARTING_DEPARTMENTS = [
@@ -82,7 +83,9 @@ try {
   await seed();
   console.log("Done.");
 } catch (err) {
+  // Drizzle wraps the database's own error (err.cause), which says why
   console.error("Seeding failed:", err.message);
+  console.error(explainDatabaseError(err.cause ?? err));
   process.exitCode = 1;
 } finally {
   await pool.end(); // close the connection so the command finishes

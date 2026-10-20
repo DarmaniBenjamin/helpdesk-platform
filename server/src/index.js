@@ -3,11 +3,15 @@
 // website itself, so everything comes from one address.
 //
 // Run with: npm run dev   (restarts by itself when you save a file)
+// On a live site, npm start runs start.js, which updates the database
+// first and then starts this.
+import "./config.js"; // .env files, hosting presets, the database link
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db/index.js";
+import { explainDatabaseError } from "./config.js";
 import { tickets } from "./db/schema.js";
 import { authRouter, loadSession } from "./auth.js";
 import {
@@ -22,7 +26,11 @@ import { answersRouter } from "./answers.js";
 import { rulesRouter, automationsRouter, settingsRouter } from "./setup.js";
 import { importRouter } from "./import.js";
 import { liveRouter, sendToEveryone } from "./live.js";
-import { attachmentsRouter, startFileCleanUp, UPLOAD_DIR } from "./attachments.js";
+import {
+  attachmentsRouter,
+  startFileCleanUp,
+  UPLOAD_DIR,
+} from "./attachments.js";
 import { KEY_FILE } from "./secrets.js";
 import { startAutomations } from "./automation.js";
 import { backupRouter, startAutomaticBackups } from "./backup.js";
@@ -105,7 +113,10 @@ app.use(
   express.raw({ type: "*/*", limit: "5mb" }),
 );
 // Calls from the phone system can come as a plain web form (phone.js)
-app.use("/api/phone/hook", express.urlencoded({ extended: false, limit: "1mb" }));
+app.use(
+  "/api/phone/hook",
+  express.urlencoded({ extended: false, limit: "1mb" }),
+);
 app.use(express.json({ limit: "1mb" })); // read JSON sent by the front end
 
 // ---------- Safety settings for browsers ----------
@@ -205,9 +216,11 @@ app.get("/api/health", async (req, res) => {
     await db.execute(sql`select 1`);
     res.json({ server: "ok", database: "connected" });
   } catch (err) {
-    res
-      .status(503)
-      .json({ server: "ok", database: "not connected", error: err.message });
+    res.status(503).json({
+      server: "ok",
+      database: "not connected",
+      error: explainDatabaseError(err),
+    });
   }
 });
 
@@ -323,14 +336,18 @@ if (process.env.SSL_MODE === "host") {
   ])
     if (inside(where))
       console.warn(
-        `Warning: ${name} is inside the app's folder (${where}). On hosting that deploys a fresh copy each time, it's lost on the next deployment: set ${name} to a folder that's kept (docs/siteground.md).`,
+        `Warning: ${name} is inside the app's folder (${where}). On hosting that deploys a fresh copy each time, it's lost on the next deployment: set DATA_DIR to a folder that's kept (docs/siteground.md).`,
       );
 }
 
-const port = Number(process.env.PORT) || 4000;
+// Some hosts hand the app a socket file in PORT instead of a number
+const port = process.env.PORT || "4000";
 const host = process.env.HOST || "0.0.0.0";
-app.listen(port, host, () => {
-  console.log(`Server running on ${host}:${port}`);
+const target = /^\d+$/.test(port) ? [Number(port), host] : [port];
+app.listen(...target, () => {
+  console.log(
+    `Server running on ${target.length > 1 ? `${host}:${port}` : port}`,
+  );
   // Every 5 minutes: warn about tickets that are due soon or overdue
   startDueTimeChecks();
   // Every hour: clear out files that were uploaded but never sent
