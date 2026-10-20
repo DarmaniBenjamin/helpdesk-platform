@@ -16,7 +16,7 @@ import { timeAgo } from "../data";
 // system) is for Admins (Pages/Integrations.jsx).
 // Server: /api/email/mine (email.js) and /api/whatsapp/mine (whatsapp.js).
 
-const PROVIDER = { microsoft: "Microsoft", google: "Google", imap: "Other" };
+const PROVIDER = { microsoft: "Microsoft", google: "Google", imap: "Email" };
 
 function Card({ icon: Icon, tint, title, hint, on, children }) {
   return (
@@ -198,28 +198,17 @@ function MyEmail() {
                 Sign in with Microsoft
               </button>
             )}
-            {info.signIns.google && (
-              <button
-                type="button"
-                disabled={Boolean(busy)}
-                onClick={() => signIn("google")}
-                className={`${primaryButton} flex basis-auto items-center justify-center gap-2 disabled:opacity-60`}
-              >
-                {busy === "google" && <Droplets className="h-4 w-4" />}
-                Sign in with Google
-              </button>
-            )}
             <button
               type="button"
               onClick={() => setAdding(true)}
               className={`${secondaryButton} flex basis-auto items-center justify-center gap-2`}
             >
-              <Plus className="h-4 w-4" /> Other email (password)
+              <Plus className="h-4 w-4" /> Sign in with email
             </button>
           </div>
-          {!info.signIns.microsoft && !info.signIns.google && (
+          {!info.signIns.microsoft && (
             <p className="text-xs text-muted">
-              For a Microsoft 365 or Google Workspace mailbox, ask an Admin to set up the sign-in (Integrations → Email).
+              For a Microsoft 365 mailbox, ask an Admin to set up the Microsoft sign-in (Integrations → Email).
             </p>
           )}
         </>

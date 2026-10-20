@@ -26,14 +26,16 @@ import Droplets from "./Droplets";
 // Integrations → Email: connect mailboxes, so customers' emails become
 // tickets and replies go back by email (server/src/email.js).
 // Everything is set up from here, nothing in server/.env:
-//   - mailboxes: Sign in with Microsoft / Google, or Other (address +
-//     password), each with who its new tickets go to
-//   - the Microsoft and Google sign-in apps: their Client ID and secret
+//   - mailboxes: Sign in with Microsoft, or Sign in with email (address
+//     + password), each with who its new tickets go to
+//   - the Microsoft sign-in app: its Client ID and secret
+// (Mailboxes connected earlier with Google sign-in keep working; there's
+// no button to add new ones that way.)
 
 const PROVIDER_LABEL = {
   microsoft: "Microsoft",
   google: "Google",
-  imap: "Other",
+  imap: "Email",
 };
 
 // Server settings for common providers, filled in from the address
@@ -488,7 +490,7 @@ export function OtherMailbox({ onClose, onAdded, endpoint = "/email/mailboxes" }
 
   return (
     <Modal
-      title="Connect a mailbox"
+      title="Sign in with email"
       onClose={busy ? () => {} : onClose}
       onSubmit={submit}
       footer={
@@ -617,7 +619,7 @@ export function OtherMailbox({ onClose, onAdded, endpoint = "/email/mailboxes" }
   );
 }
 
-// ---------- The Microsoft and Google sign-in apps ----------
+// ---------- The Microsoft sign-in app ----------
 
 const APP_GUIDES = {
   microsoft: {
@@ -629,17 +631,6 @@ const APP_GUIDES = {
       "After it's made: copy the Application (client) ID into Client ID here.",
       "Certificates & secrets → New client secret → copy its Value into Client secret here.",
       "API permissions → Add → APIs my organization uses → Office 365 Exchange Online → Delegated: IMAP.AccessAsUser.All and SMTP.Send. Then Grant admin consent if you're the admin.",
-    ],
-  },
-  google: {
-    title: "Google sign-in",
-    steps: [
-      'Go to console.cloud.google.com and create a project (e.g. "Helpdesk").',
-      "APIs & Services → Library → turn on the Gmail API.",
-      "OAuth consent screen: Internal if it's only for your Google Workspace, otherwise External (then add the mailboxes you'll connect as test users).",
-      "Credentials → Create credentials → OAuth client ID → Web application.",
-      "Authorized redirect URIs: paste the address below.",
-      "Copy the Client ID and Client secret into the fields here.",
     ],
   },
 };
@@ -1133,8 +1124,8 @@ export default function EmailIntegration() {
                 ? "Add another mailbox"
                 : "Connect a mailbox"}
             </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {["microsoft", "google"].map((provider) => (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {["microsoft"].map((provider) => (
                 <button
                   key={provider}
                   type="button"
@@ -1156,17 +1147,16 @@ export default function EmailIntegration() {
                 onClick={() => setAdding(true)}
                 className={`${secondaryButton} flex w-full items-center justify-center gap-2`}
               >
-                Other mailbox
+                Sign in with email
               </button>
             </div>
             {signInError && <Alert>{signInError}</Alert>}
-            {(!info.apps.microsoft.ready || !info.apps.google.ready) && (
-              <p className="text-xs text-muted">
-                The Microsoft and Google buttons work once their sign-in is set
-                up below (once per helpdesk, with your company's Microsoft or
-                Google account).
-              </p>
-            )}
+            <p className="text-xs text-muted">
+              Sign in with email: the mailbox's address and password (for
+              Gmail, an app password).{" "}
+              {!info.apps.microsoft.ready &&
+                "Microsoft 365 / Outlook mailboxes need Sign in with Microsoft, which works once its sign-in is set up below (once per helpdesk)."}
+            </p>
           </div>
 
           {/* The sign-in apps */}
@@ -1175,12 +1165,6 @@ export default function EmailIntegration() {
             <AppSetup
               provider="microsoft"
               app={info.apps.microsoft}
-              redirectUri={redirectUri}
-              onSaved={setInfo}
-            />
-            <AppSetup
-              provider="google"
-              app={info.apps.google}
               redirectUri={redirectUri}
               onSaved={setInfo}
             />
