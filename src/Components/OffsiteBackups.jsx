@@ -433,9 +433,10 @@ export default function OffsiteBackups() {
         <p className="text-sm text-muted">
           If this server is ever lost, the backups on it go too. With this on, a
           copy of everything is locked with your backup password and sent to
-          cloud storage within 10 minutes of any change, and each attached file
-          once. Every copy from the last 2 days is kept, then one a day for a
-          month, then one a week for 3 months.
+          cloud storage by itself, about half a minute after any change (a
+          new ticket, a note, an attached file...), and each attached file
+          once. Every copy from the last 6 hours is kept, then one an hour for
+          2 days, one a day for a month, then one a week for 3 months.
         </p>
 
         {config.enabled && !editing ? (

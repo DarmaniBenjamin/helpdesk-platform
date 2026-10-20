@@ -113,10 +113,11 @@ documentation are the exclusive property of the author.
   from Let's Encrypt (through Caddy, set up by the app itself).
 - **Settings → Backup & Restore:**
   - backups of everything, and restoring
-  - encrypted copies in Backblaze B2, made within 10 minutes of any
-    change
-  - old versions thinned out by themselves: every copy for 48 hours,
-    then one a day for 30 days, then one a week for 3 months
+  - encrypted copies in Backblaze B2, made by themselves about half a
+    minute after any change (at most one every 2 minutes)
+  - old versions thinned out by themselves: every copy for 6 hours, then
+    one an hour for 48 hours, one a day for 30 days, one a week for 3
+    months
 - **Settings → Import from Freshdesk:** brings customers and tickets over
   from Freshdesk.
 - **Maintenance:** every error the app runs into, and bugs staff report

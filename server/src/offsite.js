@@ -4,10 +4,10 @@
 // Copies go to cloud storage: Backblaze B2 (10 GB free), Cloudflare R2
 // (10 GB free), Wasabi, Amazon S3, or anything else that speaks "S3".
 //
-// When: within 10 minutes of any change (a new ticket, a reply, a new
-// customer...), at most once every 10 minutes, so at worst 10 minutes of
-// work could ever be lost. Also with every backup saved on the server
-// (every day or week, or "Save on the server"), and with "Copy now".
+// When: by itself, about half a minute after any change (a new ticket, a
+// reply or note, an attached file, a new customer...), at most once every
+// 2 minutes; nothing to press. Also with every backup saved on the
+// server (every day or week, or "Save on the server"), and "Copy now".
 //
 // What, in the folder in the bucket:
 //   helpdesk-backup-<date>.uplink   the whole database and this server's
@@ -18,9 +18,10 @@
 //                                   once, when it's new (not again with
 //                                   every copy)
 //
-// Versions: every copy from the last 48 hours is kept, then one a day for
-// 30 days, then one a week for 3 months; older ones are deleted. Lots of
-// recent versions to go back to, while the storage stays small.
+// Versions: every copy from the last 6 hours is kept, then one an hour
+// until 48 hours, one a day for 30 days, then one a week for 3 months;
+// older ones are deleted. Lots of recent versions to go back to, while
+// the storage stays small.
 //
 // Each copy and file is locked with a backup password (AES-256-GCM, with
 // the key made from the password by scrypt) before it leaves the server,
@@ -49,7 +50,6 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { pipeline } from "node:stream/promises";
 import { eq } from "drizzle-orm";
 import {
@@ -67,6 +67,7 @@ import { seal, unseal, currentKey, replaceKey } from "./secrets.js";
 import { UPLOAD_DIR } from "./attachments.js";
 import { onEveryChange } from "./live.js";
 import { BACKUP_DIR, afterBackupSaved, makeBackup, restore } from "./backup.js";
+import { extractTarGz, writeTarGz } from "./tarball.js";
 
 export const offsiteRouter = Router();
 offsiteRouter.use(requireRole("owner"));
@@ -221,20 +222,7 @@ async function unlockFile(from, to, password) {
 }
 
 // ---------- Packing: backup + key, in one .tar.gz ----------
-
-function run(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
-    let errors = "";
-    child.stderr.on("data", (d) => (errors += d));
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`${command} failed: ${errors.slice(0, 300)}`)),
-    );
-  });
-}
+// (made with Node's own code, tarball.js: no "tar" program needed)
 
 // A fresh folder to work in, removed afterwards
 async function workFolder() {
@@ -244,14 +232,11 @@ async function workFolder() {
 
 // The database and key (attached files go up on their own, see syncFiles)
 async function pack(backupFile, into) {
-  const stage = path.join(into, "stage");
-  await fs.promises.mkdir(stage);
-  await fs.promises.copyFile(backupFile, path.join(stage, "backup.json"));
-  await fs.promises.writeFile(path.join(stage, "secret-key"), currentKey(), {
-    mode: 0o600,
-  });
   const archive = path.join(into, "copy.tar.gz");
-  await run("tar", ["-czf", archive, "-C", stage, "backup.json", "secret-key"]);
+  await writeTarGz(archive, [
+    { name: "backup.json", data: await fs.promises.readFile(backupFile) },
+    { name: "secret-key", data: currentKey() },
+  ]);
   return { archive };
 }
 
@@ -266,30 +251,29 @@ function cloudName(d) {
 
 let copying = false;
 
-// Which copies to delete: every copy from the last 48 hours stays, then
-// the newest of each day for 30 days, then the newest of each week for
-// about 3 months (and always the 3 newest)
+// Which copies to delete: every copy from the last 6 hours stays, then
+// the newest of each hour until 48 hours, the newest of each day for 30
+// days, then the newest of each week for about 3 months (and always the
+// 3 newest)
 function oldVersions(copies, now = Date.now()) {
   const HOUR = 60 * 60 * 1000;
   const keep = new Set(copies.slice(0, 3).map((c) => c.name));
-  const days = new Set();
-  const weeks = new Set();
+  const seen = new Set();
+  // Keeps the newest copy in each slot (copies are newest first)
+  const newestIn = (slot, c) => {
+    if (!seen.has(slot)) {
+      seen.add(slot);
+      keep.add(c.name);
+    }
+  };
   for (const c of copies) {
     const age = now - c.at;
-    if (age <= 48 * HOUR) keep.add(c.name);
-    else if (age <= 30 * 24 * HOUR) {
-      const day = new Date(c.at).toDateString();
-      if (!days.has(day)) {
-        days.add(day);
-        keep.add(c.name);
-      }
-    } else if (age <= 91 * 24 * HOUR) {
-      const week = Math.floor(c.at / (7 * 24 * HOUR));
-      if (!weeks.has(week)) {
-        weeks.add(week);
-        keep.add(c.name);
-      }
-    }
+    if (age <= 6 * HOUR) keep.add(c.name);
+    else if (age <= 48 * HOUR) newestIn(`h${Math.floor(c.at / HOUR)}`, c);
+    else if (age <= 30 * 24 * HOUR)
+      newestIn(`d${new Date(c.at).toDateString()}`, c);
+    else if (age <= 91 * 24 * HOUR)
+      newestIn(`w${Math.floor(c.at / (7 * 24 * HOUR))}`, c);
   }
   return copies.filter((c) => !keep.has(c.name));
 }
@@ -499,14 +483,23 @@ afterBackupSaved(async (file) => {
   await syncFiles();
 });
 
-// Soon after any change: a fresh copy of the database (at most every 10
-// minutes), and any new attached files
-const SNAPSHOT_EVERY = 10 * 60 * 1000;
-let changed = false;
+// Soon after every change (a new ticket, a reply or note, an attached
+// file, a new customer...): a fresh copy of the database, by itself.
+// It waits until things have been quiet for QUIET, so a burst of changes
+// (e.g. a reply with 3 photos) is one copy, not four, and copies are at
+// least MIN_GAP apart. Attached files go up within a minute (syncFiles).
+// After a restart (e.g. a new version was deployed) one copy is made
+// anyway, in case a change had been waiting.
+const QUIET = 30 * 1000;
+const MIN_GAP = 2 * 60 * 1000;
+let changed = true;
+let lastChangeAt = 0;
 let lastSnapshotAt = 0;
 onEveryChange((data) => {
   // (restoring a backup isn't new work to copy)
-  if (data?.resource !== "backup") changed = true;
+  if (data?.resource === "backup") return;
+  changed = true;
+  lastChangeAt = Date.now();
 });
 
 async function snapshot() {
@@ -523,7 +516,12 @@ async function snapshot() {
 
 async function copyIfChanged() {
   if (copying || !(await loadConfig())) return;
-  if (changed && Date.now() - lastSnapshotAt >= SNAPSHOT_EVERY) {
+  const now = Date.now();
+  if (
+    changed &&
+    now - lastChangeAt >= QUIET &&
+    now - lastSnapshotAt >= MIN_GAP
+  ) {
     changed = false;
     try {
       await snapshot();
@@ -541,7 +539,7 @@ export function startOffsiteCopies() {
       console.error("Off-site copy:", err.message),
     );
   setTimeout(run, 30 * 1000).unref();
-  setInterval(run, 60 * 1000).unref();
+  setInterval(run, 15 * 1000).unref();
 }
 
 // ---------- The routes ----------
@@ -676,7 +674,7 @@ offsiteRouter.post("/restore", async (req, res) => {
     await unlockFile(locked, archive, unseal(config.password));
     const unpacked = path.join(job, "unpacked");
     await fs.promises.mkdir(unpacked);
-    await run("tar", ["-xzf", archive, "-C", unpacked]);
+    await extractTarGz(archive, unpacked);
 
     // The key first: the restored settings were locked with it
     const keyFile = path.join(unpacked, "secret-key");
