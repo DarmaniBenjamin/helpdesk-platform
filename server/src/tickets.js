@@ -341,7 +341,7 @@ function cleanDate(value) {
 }
 
 async function cleanDepartment(value) {
-  if (value === null || value === "") return null;
+  if (value == null || value === "") return null; // (missing, null or empty: none)
   const [d] = await db
     .select({ id: departments.id })
     .from(departments)
@@ -352,7 +352,7 @@ async function cleanDepartment(value) {
 
 // Only active staff can be given tickets
 async function cleanAssignee(value) {
-  if (value === null || value === "") return null;
+  if (value == null || value === "") return null; // (missing, null or empty: none)
   const [u] = await db
     .select({ id: users.id })
     .from(users)

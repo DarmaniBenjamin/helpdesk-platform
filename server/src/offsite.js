@@ -51,7 +51,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   S3Client,
   ListObjectsV2Command,
@@ -514,6 +514,13 @@ async function snapshot() {
   }
 }
 
+async function isEmpty() {
+  const { rows } = await db.execute(
+    sql`select (select count(*) from tickets) + (select count(*) from customers) as n`,
+  );
+  return Number(rows[0]?.n ?? 0) === 0;
+}
+
 async function copyIfChanged() {
   if (copying || !(await loadConfig())) return;
   const now = Date.now();
@@ -523,6 +530,10 @@ async function copyIfChanged() {
     now - lastSnapshotAt >= MIN_GAP
   ) {
     changed = false;
+    // A brand-new helpdesk with nothing in it yet (e.g. just set up to
+    // restore a lost site): no automatic copy, so an empty one never
+    // becomes the newest copy in the cloud. "Copy now" still makes one.
+    if (await isEmpty()) return;
     try {
       await snapshot();
     } catch (err) {

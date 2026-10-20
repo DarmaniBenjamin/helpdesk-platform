@@ -955,8 +955,10 @@ export default function TicketDetail() {
             <PriorityBadge priority={ticket.priority} />
             <DueLabel ticket={ticket} />
             <span className="text-sm text-muted">
-              Opened {timeAgo(ticket.createdAt)} via{" "}
-              {SOURCES[ticket.source] ?? ticket.source}
+              Opened {timeAgo(ticket.createdAt)}{" "}
+              {ticket.source === "agent"
+                ? "by the team"
+                : `via ${SOURCES[ticket.source] ?? ticket.source}`}
             </span>
           </div>
           {/* Tags, e.g. brought over from Freshdesk */}

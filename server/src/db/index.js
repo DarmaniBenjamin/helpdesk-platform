@@ -19,14 +19,11 @@ if (!process.env.DATABASE_URL) {
 const schemaName = process.env.DB_SCHEMA;
 if (schemaName && !/^[a-z_][a-z0-9_]*$/.test(schemaName))
   throw new Error("DB_SCHEMA can only have small letters, numbers and _.");
-export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-// Set on every new connection, as its first command (some hosts' database
-// proxies drop settings sent any other way)
-if (schemaName)
-  pool.on("connect", (client) => {
-    client
-      .query(`set search_path to "${schemaName}", public`)
-      .catch((err) => console.error("Setting the tables' area:", err.message));
-  });
+// The area is given when each connection starts (start.js also makes it
+// this database user's default, for any connection that misses it)
+export const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ...(schemaName ? { options: `-c search_path=${schemaName},public` } : {}),
+});
 
 export const db = drizzle(pool, { schema });

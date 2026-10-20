@@ -505,7 +505,11 @@ export default function OffsiteBackups() {
             )}
 
             <div>
-              <p className="mb-2 text-sm font-medium">In the cloud</p>
+              <p className="text-sm font-medium">In the cloud</p>
+              <p className="mb-2 text-xs text-muted">
+                To bring everything back from one of these (e.g. on a new
+                site), press its Restore. It replaces everything here.
+              </p>
               {copies === null ? (
                 <p className="flex items-center gap-2 text-sm text-muted">
                   <Droplets className="h-4 w-4" />
@@ -565,10 +569,20 @@ export default function OffsiteBackups() {
               setEditing(false);
               setMessage({
                 tone: "ok",
-                text: "Saved, and the storage accepted the details. Press Copy now for the first copy.",
+                text: "Saved, and the storage accepted the details.",
               });
               api("/backup/offsite/copies")
-                .then(setCopies)
+                .then((found) => {
+                  setCopies(found);
+                  // Copies already there (e.g. setting up a new site after
+                  // the old one was lost): say how to bring them back
+                  setMessage({
+                    tone: "ok",
+                    text: found.length
+                      ? `Saved. ${found.length} cop${found.length === 1 ? "y is" : "ies are"} already in the cloud, listed below: to bring everything back, press Restore on the newest one.`
+                      : "Saved. The first copy is made by itself after the next change, or press Copy now.",
+                  });
+                })
                 .catch(() => {});
             }}
             onCancel={config.enabled ? () => setEditing(false) : null}

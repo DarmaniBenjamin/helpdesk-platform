@@ -51,5 +51,11 @@ export function cleanPhoto(value) {
 export function handleBadInput(err, req, res, next) {
   if (err instanceof BadInput)
     return res.status(err.status).json({ error: err.message });
+  // What was sent couldn't be read (broken JSON) or was too big: the
+  // sender's problem, not a server error
+  if (err?.type === "entity.parse.failed")
+    return res.status(400).json({ error: "That request couldn't be read." });
+  if (err?.type === "entity.too.large")
+    return res.status(413).json({ error: "That's too big to send." });
   next(err);
 }

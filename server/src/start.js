@@ -64,6 +64,11 @@ async function pickSchema() {
     );
     if (r.has || !r.can) {
       await client.query("create schema if not exists uplink");
+      // Also this user's default, so every connection finds the tables
+      // (allowed for your own user; skipped if the host says no)
+      await client
+        .query("alter role current_user set search_path to uplink, public")
+        .catch(() => {});
       process.env.DB_SCHEMA = "uplink";
       console.log('Tables are in the database\'s "uplink" area.');
     }
