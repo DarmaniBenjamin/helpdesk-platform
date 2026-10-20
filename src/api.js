@@ -25,12 +25,25 @@ export function setTabId(id) {
 const NOT_OUR_SERVER =
   "The helpdesk server didn't answer. If this is the live site, make sure you're on the Web Service's address (open /api/health there to check).";
 
+// Important actions need a code from the person's email first
+// (server/src/confirm.js). ConfirmGate.jsx registers how to ask for it:
+// a function that gets { action, method, error } and resolves with
+// { code } or { password }, or null if they cancel.
+let askForConfirmation = null;
+export function setConfirmationAsker(fn) {
+  askForConfirmation = fn;
+}
+
 // e.g. await api("/auth/login", { method: "POST", body: { email, password } })
 // `raw`: send a file as it is (e.g. a backup), instead of `body`
-export async function api(path, { method = "GET", body, raw } = {}) {
+export async function api(path, { method = "GET", body, raw } = {}, confirmed) {
   const headers = {};
   if (body || raw) headers["Content-Type"] = "application/json";
   if (tabId) headers["X-Tab-Id"] = tabId;
+  if (confirmed?.code) headers["X-Confirm-Code"] = confirmed.code;
+  // (encoded: headers can't carry letters like é as they are)
+  if (confirmed?.password)
+    headers["X-Confirm-Password"] = encodeURIComponent(confirmed.password);
   let res;
   try {
     res = await fetch(`/api${path}`, {
@@ -47,6 +60,12 @@ export async function api(path, { method = "GET", body, raw } = {}) {
   // empty answer) means something in between answered instead.
   const isJson = (res.headers.get("content-type") ?? "").includes("json");
   const data = isJson ? await res.json().catch(() => null) : null;
+  // An important action: ask for the code, then send it again with it
+  if (res.status === 428 && data?.confirm && askForConfirmation) {
+    const answer = await askForConfirmation(data);
+    if (!answer) throw new ApiError("Cancelled: nothing was changed.", 428);
+    return api(path, { method, body, raw }, answer);
+  }
   if (!res.ok) {
     // No message from our server usually means it isn't running
     const message =

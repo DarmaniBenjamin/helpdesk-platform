@@ -14,6 +14,7 @@ import { db } from "./db/index.js";
 import { explainDatabaseError } from "./config.js";
 import { tickets } from "./db/schema.js";
 import { authRouter, loadSession } from "./auth.js";
+import { confirmRouter, requireConfirmation } from "./confirm.js";
 import {
   teamRouter,
   meRouter,
@@ -146,6 +147,8 @@ app.use((req, res, next) => {
 
 // Work out who is signed in (from their session cookie) on every request
 app.use(loadSession);
+// Important actions need a code from the person's email first (confirm.js)
+app.use("/api", requireConfirmation);
 
 // ---------- Live updates ----------
 // After anything is changed (added, edited, deleted), every open tab of
@@ -239,6 +242,7 @@ app.use("/api/auth/me", (req, res, next) => {
 
 // ---------- The API ----------
 app.use("/api/auth", authRouter); // signing in and out
+app.use("/api/confirm", confirmRouter); // codes for important actions
 app.use("/api/me", meRouter); // your own profile
 app.use("/api/team", teamRouter); // the team, invites, access levels
 app.use("/api/invites", inviteRouter); // accepting an invite

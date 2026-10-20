@@ -4,6 +4,7 @@ import StaffLayout from "./Components/StaffLayout";
 import PortalLayout from "./Components/Portal/PortalLayout";
 import LoadingScreen from "./Components/LoadingScreen";
 import ScrollToTop from "./Components/ScrollToTop";
+import ConfirmGate from "./Components/ConfirmGate";
 
 // Each page is its own small file that's only downloaded when it's first
 // opened ("lazy"), instead of the whole app downloading at once. So the
@@ -55,6 +56,8 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      {/* Asks for the emailed code before important actions (confirm.js) */}
+      <ConfirmGate />
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/login" element={<Login />} />

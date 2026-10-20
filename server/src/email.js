@@ -974,6 +974,18 @@ export async function canSendEmail(user) {
   return Boolean(await senderFor(user.id));
 }
 
+// Is there a company mailbox that system emails (invites, codes...) can
+// go out from? (confirm.js)
+export async function companyMailboxReady() {
+  const id = await defaultMailboxId();
+  if (!id) return false;
+  const [box] = await db
+    .select({ id: mailboxes.id })
+    .from(mailboxes)
+    .where(and(eq(mailboxes.id, id), eq(mailboxes.enabled, true)));
+  return Boolean(box);
+}
+
 // An email from the helpdesk itself (an invite, a password reset link,
 // "we got your request"), sent from the company mailbox. Never throws:
 // returns { sent: true }, or { sent: false, why } in plain words, so the
