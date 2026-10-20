@@ -16,6 +16,26 @@ html {
   color: var(--color-ink);
 }
 
+/* Long words never push a box (or the page) wider than the screen: a
+   long file path, link, email address or error code wraps onto the next
+   line instead, anywhere it has to. Tables keep their words whole (they
+   scroll sideways inside their own box), and text in pre blocks wraps
+   too. Last, the page itself never scrolls sideways, so a phone never
+   has to zoom out. */
+body {
+  overflow-wrap: anywhere;
+}
+table {
+  overflow-wrap: normal;
+}
+pre {
+  white-space: pre-wrap;
+}
+html,
+body {
+  overflow-x: clip;
+}
+
 /* ============================================================
    Dark mode
    The "dark" class on <html> (set by theme.js) swaps the colours.
