@@ -214,7 +214,13 @@ app.use("/api", (req, res, next) => {
 app.get("/api/health", async (req, res) => {
   try {
     await db.execute(sql`select 1`);
-    res.json({ server: "ok", database: "connected" });
+    // The tables too, not just the connection
+    await db.execute(sql`select count(*) from users`);
+    res.json({
+      server: "ok",
+      database: "connected",
+      tables: process.env.DB_SCHEMA || "public",
+    });
   } catch (err) {
     res.status(503).json({
       server: "ok",
