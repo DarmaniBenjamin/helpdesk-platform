@@ -18,6 +18,9 @@ import { explainDatabaseError } from "./config.js";
 
 const SERVER_DIR = path.resolve(import.meta.dirname, "..");
 const RETRY_EVERY = 30 * 1000;
+// Anyone can open the site, so why the database isn't working only goes
+// in the log, unless SHOW_ERRORS=on (handy while setting a server up)
+const SHOW_ERRORS = /^(on|yes|true|1)$/i.test(process.env.SHOW_ERRORS ?? "");
 
 // Runs one of the database scripts. Resolves with its output, or rejects
 // with an error holding it.
@@ -118,9 +121,9 @@ function waitingPage(reason) {
 main{background:#fff;border:1px solid #eaecf0;border-radius:16px;padding:24px;max-width:520px}
 h1{font-size:20px;margin:0 0 8px}p{color:#667085;line-height:1.5}
 code{display:block;background:#fef3f2;color:#b42318;border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-word}</style></head>
-<body><main><h1>The helpdesk can't reach its database yet</h1>
-<code>${safe}</code>
-<p>Fix the setting, then restart the app (or wait: it tries again every 30 seconds, and this page reloads by itself).</p></main></body></html>`;
+<body><main><h1>The helpdesk is starting</h1>
+${SHOW_ERRORS ? `<code>${safe}</code>` : ""}
+<p>${SHOW_ERRORS ? "Fix the setting, then restart the app (or wait: it tries again every 30 seconds, and this page reloads by itself)." : "It'll be ready in a moment. This page reloads by itself."}</p></main></body></html>`;
 }
 
 function listenTarget() {
@@ -141,7 +144,7 @@ function startWaitingServer() {
         JSON.stringify({
           server: "ok",
           database: "not connected",
-          error: reason,
+          ...(SHOW_ERRORS ? { error: reason } : {}),
         }),
       );
     }

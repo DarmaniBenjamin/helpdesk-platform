@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { Check, CircleAlert, TriangleAlert } from "lucide-react";
+import { Navigate, useNavigate, useParams } from "react-router";
+import { Check, TriangleAlert } from "lucide-react";
 import AuthShell from "../AuthShell";
 import Droplets from "../Droplets";
 import PasswordInput from "../PasswordInput";
@@ -37,7 +37,6 @@ export default function SetupOwner() {
   const { setupOwner } = useData();
   const navigate = useNavigate();
   const [state, setState] = useState("loading"); // "loading", "ready", "invalid"
-  const [why, setWhy] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,11 +48,7 @@ export default function SetupOwner() {
     let cancelled = false;
     api(`/setup-owner/${code}`)
       .then(() => !cancelled && setState("ready"))
-      .catch((err) => {
-        if (cancelled) return;
-        setWhy(err.message);
-        setState("invalid");
-      });
+      .catch(() => !cancelled && setState("invalid"));
     return () => {
       cancelled = true;
     };
@@ -85,24 +80,9 @@ export default function SetupOwner() {
       </AuthShell>
     );
 
-  if (state === "invalid")
-    return (
-      <AuthShell title="Set up">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-            <CircleAlert className="h-6 w-6" />
-          </span>
-          <h1 className="text-2xl font-semibold">This link doesn't work</h1>
-          <p className="text-sm text-muted">{why}</p>
-          <Link
-            to="/login"
-            className="mt-2 flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-medium text-white transition hover:bg-brand/90"
-          >
-            Go to sign in
-          </Link>
-        </div>
-      </AuthShell>
-    );
+  // Not a working setup link (wrong code, setup switched off, or there's
+  // already a Super Admin): nothing to see here, just the sign-in page
+  if (state === "invalid") return <Navigate to="/login" replace />;
 
   return (
     <AuthShell title="Set up">

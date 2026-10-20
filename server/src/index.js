@@ -209,23 +209,23 @@ app.use("/api", (req, res, next) => {
 });
 
 // ---------- Health check ----------
-// Open /api/health in the browser to see if the server and the database
-// are both working. Render also checks it to know the site is up.
+// Open /api/health to see if the server and the database are working
+// (uptime monitors check it too). Anyone can open it, so it only says
+// yes or no; why not goes in the server's log. SHOW_ERRORS=on in the
+// environment adds the reason here too, while setting a server up.
+const showErrors = /^(on|yes|true|1)$/i.test(process.env.SHOW_ERRORS ?? "");
 app.get("/api/health", async (req, res) => {
   try {
     await db.execute(sql`select 1`);
     // The tables too, not just the connection
     await db.execute(sql`select count(*) from users`);
-    res.json({
-      server: "ok",
-      database: "connected",
-      tables: process.env.DB_SCHEMA || "public",
-    });
+    res.json({ server: "ok", database: "connected" });
   } catch (err) {
+    console.error("Health check:", explainDatabaseError(err));
     res.status(503).json({
       server: "ok",
       database: "not connected",
-      error: explainDatabaseError(err),
+      ...(showErrors ? { error: explainDatabaseError(err) } : {}),
     });
   }
 });

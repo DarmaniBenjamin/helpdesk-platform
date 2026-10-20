@@ -40,17 +40,11 @@ function codeMatches(code) {
   );
 }
 
+// Wrong code, no SETUP_CODE set, or already a Super Admin: all the same
+// plain "not found", so the link gives nothing away about the server
 async function check(code) {
-  if (!codeMatches(code))
-    throw new BadInput(
-      "This setup link isn't right. Use the one the install script printed.",
-      404,
-    );
-  if (await hasOwner())
-    throw new BadInput(
-      "This helpdesk already has a Super Admin. Sign in instead.",
-      409,
-    );
+  if (!codeMatches(code) || (await hasOwner()))
+    throw new BadInput("Not found.", 404);
 }
 
 setupOwnerRouter.get("/:code", async (req, res) => {

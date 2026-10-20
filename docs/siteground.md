@@ -79,9 +79,10 @@ Server running on 0.0.0.0:<port>
 Then open `https://<the project's address>/api/health`:
 
 - `{"server":"ok","database":"connected"}`: all good.
-- `"database":"not connected"` with an `error`: it says what's wrong in
-  plain words (wrong password, no database with that name, not
-  PostgreSQL...). The website shows the same message. Fix the variable and
+- `"database":"not connected"`: the reason is in Site Tools → Statistics →
+  Error Log (wrong password, no database with that name, not
+  PostgreSQL...). To see it on the page instead while you set things up,
+  add `SHOW_ERRORS=on`, and remove it once it works. Fix the variable and
   restart/redeploy; it also tries again by itself every 30 seconds.
 - Nothing answers at all: the server isn't being started. Check the
   framework preset isn't Vite, and the build log for errors.
