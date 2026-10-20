@@ -38,13 +38,15 @@ function SidebarLink({ link, onClick, collapsed, badge }) {
                 isActive ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0"
               }`}
             />
+            {/* shrink-0: a long name (Performance & Feedback) never
+                squeezes the icon away, e.g. when the menu has a scrollbar */}
             <Icon
-              className={`h-4 w-4 transition-transform duration-200 ${
+              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
                 isActive ? "scale-110" : "group-hover:scale-110"
               }`}
             />
             <span
-              className={`whitespace-nowrap transition-transform duration-200 group-hover:translate-x-0.5 ${
+              className={`min-w-0 truncate whitespace-nowrap transition-transform duration-200 group-hover:translate-x-0.5 ${
                 collapsed ? "lg:hidden" : ""
               }`}
             >
@@ -123,7 +125,7 @@ function AccountMenu({ collapsed, onNavigate }) {
                   onClick={go}
                   className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted transition hover:bg-brand/10 hover:text-brand"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   {link.label}
                 </Link>
               );
