@@ -81,8 +81,9 @@ export default function SetupOwner() {
     );
 
   // Not a working setup link (wrong code, setup switched off, or there's
-  // already a Super Admin): nothing to see here, just the sign-in page
-  if (state === "invalid") return <Navigate to="/login" replace />;
+  // already a Super Admin): nothing to see here. Off to the app (or the
+  // sign-in page, if not signed in), without signing anyone out
+  if (state === "invalid") return <Navigate to="/" replace />;
 
   return (
     <AuthShell title="Set up">
