@@ -153,7 +153,14 @@ export async function staffList() {
   return db
     .select({ id: users.id, name: users.name, email: users.email })
     .from(users)
-    .where(and(inArray(users.role, STAFF), eq(users.status, "active")))
+    .where(
+      and(
+        inArray(users.role, STAFF),
+        eq(users.status, "active"),
+        // (maintenance accounts don't get tickets, db/schema.js)
+        sql`coalesce(${users.maintenance}, false) = false`,
+      ),
+    )
     .orderBy(users.name);
 }
 
@@ -224,7 +231,9 @@ export async function createInboundTicket({
       customerId: customer.id,
       source,
       tags: tags.slice(0, 20),
-      firstResponseDue: new Date(at.getTime() + sla[priority].firstResponse * HOUR),
+      firstResponseDue: new Date(
+        at.getTime() + sla[priority].firstResponse * HOUR,
+      ),
       dueBy: new Date(at.getTime() + sla[priority].resolve * HOUR),
       createdAt: at,
       updatedAt: at,
@@ -435,7 +444,12 @@ const ENDINGS = {
     "pptx",
 };
 export const endingForType = (type) =>
-  ENDINGS[String(type ?? "").split(";")[0].trim().toLowerCase()] ?? "bin";
+  ENDINGS[
+    String(type ?? "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase()
+  ] ?? "bin";
 
 // "0:42", "3:05", "1:02:10"
 export function formatDuration(seconds) {

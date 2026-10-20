@@ -72,6 +72,7 @@ export async function publicUser(user, departmentIds) {
     role: user.role,
     status: user.status,
     customerId: user.customerId,
+    maintenance: Boolean(user.maintenance), // see db/schema.js
     departments,
     invitedAt: ms(user.invitedAt),
     joinedAt: ms(user.joinedAt),

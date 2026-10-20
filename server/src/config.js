@@ -16,7 +16,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const SERVER_DIR = path.resolve(import.meta.dirname, "..");
+// (import.meta.dirname is missing when drizzle-kit loads this through
+// drizzle.config.js; it runs in the server folder, so that is used then)
+const SERVER_DIR = import.meta.dirname
+  ? path.resolve(import.meta.dirname, "..")
+  : process.cwd();
 const env = process.env;
 
 // ---------- 1. .env files ----------

@@ -369,7 +369,12 @@ export default function Team() {
   const [copiedId, setCopiedId] = useState(null);
 
   // Staff and customers are shown in separate sections
-  const staff = team.filter((m) => m.role !== "customer");
+  const staff = team.filter((m) => m.role !== "customer" && !m.maintenance);
+  // Maintenance access (the developer who looks after the helpdesk): in
+  // their own section below, never given tickets
+  const maintenanceMembers = team
+    .filter((m) => m.role !== "customer" && m.maintenance)
+    .sort((a, b) => displayName(a).localeCompare(displayName(b)));
   const portalCustomers = team
     .filter((m) => m.role === "customer")
     .map((m) => ({
@@ -642,6 +647,39 @@ export default function Team() {
             ))}
           </ul>
         </>
+      )}
+
+      {maintenanceMembers.length > 0 && (
+        <Card title="Maintenance access">
+          <p className="-mt-2 mb-3 text-sm text-muted">
+            The developer who looks after the helpdesk: updates and fixes. They
+            aren't given tickets. Only the Super Admin can give or end this
+            access (edit or remove them here).
+          </p>
+          <ul className="divide-y divide-line rounded-lg border border-line">
+            {maintenanceMembers.map((m) => (
+              <li
+                key={m.id}
+                className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  {avatarFor(m)}
+                  <div className="min-w-0">
+                    {nameFor(m)}
+                    <p className="truncate text-xs text-muted">{m.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <div className="flex flex-col items-start gap-1 sm:items-end">
+                    <RoleBadge role={m.role} />
+                    <StatusText member={m} />
+                  </div>
+                  <div className="shrink-0">{actionsFor(m)}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       <DepartmentsCard />

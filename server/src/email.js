@@ -1464,7 +1464,8 @@ async function myMailboxes(user) {
 
 async function myMailbox(id, user) {
   const box = await findMailbox(id);
-  if (box.assigneeId !== user.id) throw new BadInput("That mailbox isn't yours.", 404);
+  if (box.assigneeId !== user.id)
+    throw new BadInput("That mailbox isn't yours.", 404);
   return box;
 }
 
@@ -1487,7 +1488,10 @@ emailRouter.patch("/mine/mailboxes/:id", mine, async (req, res) => {
   const box = await myMailbox(req.params.id, req.user);
   const b = req.body ?? {};
   const changes = {};
-  if ("name" in b) changes.name = String(b.name ?? "").trim().slice(0, 100);
+  if ("name" in b)
+    changes.name = String(b.name ?? "")
+      .trim()
+      .slice(0, 100);
   if ("enabled" in b) changes.enabled = Boolean(b.enabled);
   if (b.password && box.provider === "imap") {
     const password = String(b.password);
@@ -1548,6 +1552,8 @@ async function overview() {
       and(
         inArray(users.role, ["owner", "admin", "agent"]),
         eq(users.status, "active"),
+        // (maintenance accounts don't get tickets, db/schema.js)
+        sql`coalesce(${users.maintenance}, false) = false`,
       ),
     )
     .orderBy(asc(users.name));

@@ -144,9 +144,12 @@ export default function DataProvider({ children }) {
   const me = team.find((m) => m.id === auth.userId) ?? null;
 
   // Everyone on the staff who can be given tickets: active members who
-  // aren't customers. Every "Assigned to" list in the app uses these.
+  // aren't customers (or maintenance accounts). Every "Assigned to" list
+  // in the app uses these.
   const agents = team
-    .filter((m) => m.role !== "customer" && m.status === "active")
+    .filter(
+      (m) => m.role !== "customer" && m.status === "active" && !m.maintenance,
+    )
     .map((m) => ({
       id: m.id,
       name: m.name,
@@ -631,10 +634,17 @@ export default function DataProvider({ children }) {
   // Invites someone. Returns { member, token }: the token makes the invite
   // link (/welcome/<token>), which the Admin copies and sends until
   // invite emails are set up.
-  async function inviteMember({ email, name, title, role, departments }) {
+  async function inviteMember({
+    email,
+    name,
+    title,
+    role,
+    departments,
+    maintenance = false,
+  }) {
     const result = await api("/team/invite", {
       method: "POST",
-      body: { email, name, title, role, departments },
+      body: { email, name, title, role, departments, maintenance },
     });
     setTeam((list) => [...list, result.member]);
     return result;

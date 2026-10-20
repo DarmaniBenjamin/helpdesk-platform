@@ -39,6 +39,9 @@ export default function MemberModal({ member, onClose }) {
   const [title, setTitle] = useState(member?.title ?? "");
   const [role, setRole] = useState(member?.role ?? "agent");
   const [departments, setDepartments] = useState(member?.departments ?? []);
+  // Maintenance access (only the Super Admin sets it): the developer who
+  // looks after the helpdesk, listed apart and never given tickets
+  const [maintenance, setMaintenance] = useState(Boolean(member?.maintenance));
   const [error, setError] = useState("");
   // After inviting, show a "done" screen with their link instead of the form
   const [invited, setInvited] = useState(null); // { member, link }
@@ -102,6 +105,7 @@ export default function MemberModal({ member, onClose }) {
           title: title.trim(),
           role,
           departments,
+          ...(me.role === "owner" ? { maintenance } : {}),
         });
         document.activeElement?.blur();
         onClose();
@@ -113,6 +117,7 @@ export default function MemberModal({ member, onClose }) {
         title,
         role,
         departments,
+        maintenance: me.role === "owner" && maintenance,
       });
       document.activeElement?.blur();
       setInvited({
@@ -406,6 +411,26 @@ export default function MemberModal({ member, onClose }) {
           </span>
         )}
       </div>
+
+      {/* Only the Super Admin gives (and takes away) maintenance access */}
+      {me.role === "owner" && member?.id !== me.id && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={maintenance}
+            onChange={(e) => setMaintenance(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+          />
+          <span>
+            <span className="font-medium">Maintenance access</span>
+            <span className="block text-muted">
+              For the developer who looks after the helpdesk. Listed under
+              Maintenance access on this page, and never given tickets. Untick
+              it, or remove them, to end it.
+            </span>
+          </span>
+        </label>
+      )}
 
       {saveError && (
         <p

@@ -166,6 +166,8 @@ teamRouter.post("/invite", requireRole(...ADMINS), async (req, res) => {
       role,
       status: "invited",
       invitedAt: new Date(),
+      // Maintenance access: only the Super Admin gives it (db/schema.js)
+      maintenance: req.user.role === "owner" && Boolean(req.body?.maintenance),
     })
     .returning();
   const departmentIds = await cleanDepartments(req.body?.departments);
@@ -223,6 +225,15 @@ teamRouter.patch("/:id", requireRole(...ADMINS), async (req, res) => {
     if (!pickableRoles(req.user.role).includes(role))
       throw new BadInput("You can't give that access level.", 403);
     changes.role = role;
+  }
+
+  if ("maintenance" in req.body && user.role !== "customer") {
+    if (req.user.role !== "owner")
+      throw new BadInput(
+        "Only the Super Admin can change maintenance access.",
+        403,
+      );
+    changes.maintenance = Boolean(req.body.maintenance);
   }
 
   const [updated] = Object.keys(changes).length

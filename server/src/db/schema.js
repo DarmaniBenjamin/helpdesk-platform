@@ -100,6 +100,11 @@ export const users = pgTable("users", {
   status: memberStatusEnum("status").notNull().default("invited"),
   // Never the password itself: a scrambled version that can only be checked
   passwordHash: text("password_hash"),
+  // Maintenance access: the developer who looks after the helpdesk. Set
+  // and removed by the Super Admin; listed in its own section on the Team
+  // page (seen by Admins and the Super Admin), and never given tickets.
+  // (Can be empty, so backups from before this existed still restore.)
+  maintenance: boolean("maintenance").default(false),
   // For customers: which customer record they are
   customerId: customerId("customer_id").references(() => customers.id, {
     onDelete: "cascade",

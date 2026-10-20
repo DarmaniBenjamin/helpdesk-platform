@@ -91,6 +91,8 @@ async function isActiveStaff(userId) {
         eq(users.id, userId),
         eq(users.status, "active"),
         inArray(users.role, STAFF),
+        // (maintenance accounts don't get tickets, db/schema.js)
+        sql`coalesce(${users.maintenance}, false) = false`,
       ),
     );
   return Boolean(u);

@@ -354,7 +354,7 @@ async function cleanDepartment(value) {
 async function cleanAssignee(value) {
   if (value == null || value === "") return null; // (missing, null or empty: none)
   const [u] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, maintenance: users.maintenance })
     .from(users)
     .where(
       and(
@@ -364,6 +364,8 @@ async function cleanAssignee(value) {
       ),
     );
   if (!u) throw new BadInput("That person can't be given tickets.");
+  if (u.maintenance)
+    throw new BadInput("Maintenance accounts aren't given tickets.");
   return u.id;
 }
 
