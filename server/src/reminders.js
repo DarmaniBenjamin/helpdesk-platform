@@ -6,7 +6,8 @@
 // one then moves on to its next time; a one-time one is done.
 //
 //   GET    /api/reminders        all of them, next first
-//   POST   /api/reminders        { title, notes, remindAt, repeat, everyone, userIds, timeZone }
+//   POST   /api/reminders        { title, notes, remindAt, allDay, repeat, everyone, userIds, timeZone }
+//          (allDay: no time picked; remindAt is then 8:00 AM that day)
 //   PATCH  /api/reminders/:id    any of those
 //   DELETE /api/reminders/:id
 import { Router } from "express";
@@ -37,6 +38,7 @@ function shape(r) {
     title: r.title,
     notes: r.notes,
     remindAt: ms(r.remindAt),
+    allDay: r.allDay,
     repeat: r.repeat,
     timeZone: r.timeZone,
     everyone: r.everyone,
@@ -118,6 +120,7 @@ async function clean(body, { partial = false } = {}) {
     if (Number.isNaN(at.getTime())) throw new BadInput("Pick when to remind.");
     fields.remindAt = at;
   }
+  if (!partial || "allDay" in b) fields.allDay = b.allDay === true;
   if (!partial || "repeat" in b) {
     fields.repeat = REPEATS.includes(b.repeat) ? b.repeat : "none";
   }

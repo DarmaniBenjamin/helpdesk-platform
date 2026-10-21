@@ -345,6 +345,9 @@ export const reminders = pgTable(
     notes: text("notes").notNull().default(""),
     // The next time it goes off
     remindAt: time("remind_at").notNull(),
+    // No time picked: it goes off at 8:00 AM on the day, and the page
+    // shows only the day
+    allDay: boolean("all_day").notNull().default(false),
     // none, daily, weekdays, weekly, monthly or yearly
     repeat: text("repeat").notNull().default("none"),
     // Where it was made (e.g. America/Grenada), so "weekdays" means the

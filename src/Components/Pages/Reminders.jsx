@@ -46,42 +46,40 @@ const timeValue = (t) => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// No time picked: it goes off at this hour on the day (server/src/reminders.js)
+const ALL_DAY_HOUR = 8;
+
 // "Today 9:00 AM", "Tomorrow 2:30 PM", "Fri, Oct 23, 9:00 AM"
-function whenText(time) {
+// (dayOnly: "Today", "Tomorrow", "Fri, Oct 23")
+function whenText(time, dayOnly = false) {
   const d = new Date(time);
-  const clock = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const clock = dayOnly
+    ? ""
+    : ` ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
   const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === today.toDateString()) return `Today ${clock}`;
-  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow ${clock}`;
+  if (d.toDateString() === today.toDateString()) return `Today${clock}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow${clock}`;
   return d.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     ...(d.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}),
-    hour: "numeric",
-    minute: "2-digit",
+    ...(dayOnly ? {} : { hour: "numeric", minute: "2-digit" }),
   });
 }
 
 function ReminderModal({ reminder, staff, onSaved, onClose }) {
   const isNew = !reminder;
-  // A new one: the next whole hour
-  const start =
-    reminder?.remindAt ??
-    (() => {
-      const d = new Date();
-      d.setHours(d.getHours() + 1, 0, 0, 0);
-      return d.getTime();
-    })();
+  // A new one: today, no time (the time is optional)
+  const [start] = useState(() => reminder?.remindAt ?? Date.now());
   const [title, setTitle] = useState(reminder?.title ?? "");
   const [notes, setNotes] = useState(reminder?.notes ?? "");
   const [date, setDate] = useState(dateValue(start));
-  const [time, setTime] = useState(timeValue(start));
+  const [time, setTime] = useState(
+    reminder && !reminder.allDay ? timeValue(start) : "",
+  );
   const [repeat, setRepeat] = useState(reminder?.repeat ?? "none");
   const [everyone, setEveryone] = useState(reminder?.everyone ?? true);
   const [people, setPeople] = useState(reminder?.userIds ?? []);
@@ -90,11 +88,12 @@ function ReminderModal({ reminder, staff, onSaved, onClose }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [openedAt] = useState(() => Date.now()); // for "that time has passed"
 
-  const remindAt = new Date(`${date}T${time}`);
+  // No time: 8:00 AM that day
+  const remindAt = new Date(`${date}T${time || `${pad(ALL_DAY_HOUR)}:00`}`);
   const inPast =
     !Number.isNaN(remindAt.getTime()) && remindAt.getTime() < openedAt;
   const ready =
-    title.trim() && date && time && (everyone || people.length > 0) && !busy;
+    title.trim() && date && (everyone || people.length > 0) && !busy;
 
   async function save(e) {
     e.preventDefault();
@@ -106,6 +105,7 @@ function ReminderModal({ reminder, staff, onSaved, onClose }) {
         title: title.trim(),
         notes: notes.trim(),
         remindAt: remindAt.getTime(),
+        allDay: !time,
         repeat,
         everyone,
         userIds: everyone ? [] : people,
@@ -232,16 +232,34 @@ function ReminderModal({ reminder, staff, onSaved, onClose }) {
           />
         </label>
         <label className={labelClass}>
-          Time
+          <span className="flex items-center justify-between gap-2">
+            <span>
+              Time <span className="font-normal text-muted">(optional)</span>
+            </span>
+            {time && (
+              <button
+                type="button"
+                onClick={() => setTime("")}
+                className="cursor-pointer text-xs font-normal text-brand hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </span>
           <input
             type="time"
-            required
             value={time}
             onChange={(e) => setTime(e.target.value)}
             className={`${inputClass} cursor-pointer`}
           />
         </label>
       </div>
+      {!time && (
+        <p className="text-xs text-muted">
+          No time: everyone it's for is reminded at {ALL_DAY_HOUR}:00 AM that
+          day.
+        </p>
+      )}
       {inPast && (
         <p className="text-xs text-amber-700">
           That time has passed:{" "}
@@ -352,7 +370,7 @@ function ReminderCard({ reminder, names, canEdit, onEdit, now }) {
             <CalendarClock className="h-3.5 w-3.5" />
             {reminder.done
               ? `Went off ${whenText(reminder.sentAt)}`
-              : whenText(reminder.remindAt)}
+              : whenText(reminder.remindAt, reminder.allDay)}
           </span>
           {reminder.repeat !== "none" && (
             <span className="flex items-center gap-1">

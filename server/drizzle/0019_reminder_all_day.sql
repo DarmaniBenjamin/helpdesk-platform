@@ -1,0 +1,1 @@
+ALTER TABLE "reminders" ADD COLUMN "all_day" boolean DEFAULT false NOT NULL;
