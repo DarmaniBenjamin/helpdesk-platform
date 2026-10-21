@@ -1,16 +1,10 @@
 import { useState } from "react";
-import {
-  Download,
-  TrendingUp,
-  TrendingDown,
-  TriangleAlert,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, TriangleAlert } from "lucide-react";
 import TicketVolumeChart from "../TicketVolumeChart";
 import ResponseTimeChart from "../ResponseTimeChart";
 import LatestTickets from "../LatestTickets";
-import { isOverdue, DAY, STATUSES, PRIORITIES } from "../../data";
+import { isOverdue, DAY } from "../../data";
 import useData from "../../useData";
-import { downloadCsv } from "../csv";
 
 // How far back "Created" and "Resolved" count
 const PERIODS = [7, 30, 90];
@@ -61,7 +55,7 @@ function StatCard({ label, value, note, warn, trend, upIsGood, trendWord }) {
 }
 
 export default function Dashboard() {
-  const { tickets, agents } = useData();
+  const { tickets } = useData();
   // The time when the page opened (the period counts back from here)
   const [now] = useState(() => Date.now());
   const [days, setDays] = useState(7);
@@ -115,51 +109,6 @@ export default function Dashboard() {
     },
   ];
 
-  // A spreadsheet of what's shown: the numbers, then every ticket made
-  // in the period
-  function exportDashboard() {
-    const date = (t) => (t ? new Date(t).toLocaleString() : "");
-    const who = (id) => agents.find((a) => a.id === id)?.name ?? "";
-    const made = tickets
-      .filter((t) => t.createdAt >= weekAgo && t.createdAt < now)
-      .sort((a, b) => b.createdAt - a.createdAt);
-    downloadCsv(
-      [
-        [`Dashboard, last ${days} days`, new Date(now).toLocaleString()],
-        [],
-        ["Open tickets", openCount],
-        ["Overdue", overdueCount],
-        ["Waiting on customer", waitingCount],
-        [`Created, last ${days} days`, createdThisWeek],
-        [`Created, the ${days} days before`, createdLastWeek],
-        [`Resolved, last ${days} days`, resolvedThisWeek],
-        [`Resolved, the ${days} days before`, resolvedLastWeek],
-        [],
-        [
-          "Ticket",
-          "Subject",
-          "Customer",
-          "Status",
-          "Priority",
-          "Assigned to",
-          "Created",
-          "Resolved",
-        ],
-        ...made.map((t) => [
-          `#${t.id}`,
-          t.subject,
-          t.requester?.name ?? "",
-          STATUSES[t.status]?.label ?? t.status,
-          PRIORITIES[t.priority]?.label ?? t.priority,
-          who(t.assignee),
-          date(t.createdAt),
-          date(t.resolvedAt),
-        ]),
-      ],
-      `dashboard-${days}-days-${new Date(now).toISOString().slice(0, 10)}.csv`,
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -189,16 +138,6 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={exportDashboard}
-            aria-label="Export"
-            title="Download these numbers and tickets (CSV)"
-            className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
-          >
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
         </div>
       </div>
 
