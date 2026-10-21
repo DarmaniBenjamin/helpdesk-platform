@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   CalendarDays,
   CalendarPlus,
@@ -12,7 +12,9 @@ import Avatar from "../Avatar";
 import Droplets from "../Droplets";
 import JobModal from "../JobModal";
 import { JOB_KINDS } from "../jobKinds";
+import useSavedState from "../savedState";
 import { api } from "../../api";
+import { isDone } from "../../data";
 import useData from "../../useData";
 
 // The calendar: who's doing which job, when (server/src/jobs.js).
@@ -25,6 +27,24 @@ import useData from "../../useData";
 // view) and drag its bottom edge to make it longer or shorter.
 // What's shown is kept in the address (?view=week&date=2026-10-05&agent=…),
 // so a refresh or a shared link shows the same thing.
+//
+// Open tickets show too, on their due date, for whoever has them (amber,
+// red once overdue, with a ticket icon). Click one to open the ticket;
+// drag it to change its due date (or, in Day view, onto someone else's
+// column to give it to them). "Ticket due dates" turns them off.
+
+// How tall a ticket's due date is drawn: the half hour before it's due
+const DUE_BLOCK = 30 * 60 * 1000;
+const DUE_COLOR = "#f59e0b";
+const OVERDUE_COLOR = "#ef4444";
+// The icon for a job, or a ticket's due date
+const iconFor = (item) =>
+  item.due ? Ticket : (JOB_KINDS[item.kind]?.icon ?? CalendarDays);
+// "9:00 AM–10:00 AM", or "Due 5:00 PM" for a ticket
+const timesFor = (item) =>
+  item.due
+    ? `Due ${timeLabel(item.end)}`
+    : `${timeLabel(item.start)}–${timeLabel(item.end)}`;
 
 const DAY = 24 * 60 * 60 * 1000;
 const FIRST_HOUR = 6; // the time grid runs 6:00 to 21:00
@@ -358,7 +378,7 @@ function TimeGrid({
                 const extra = dragging ? drag.dy : 0;
                 // Day view: each agent's own colour in their column
                 const color = colorOf(job, col.agentId);
-                const Icon = JOB_KINDS[job.kind]?.icon ?? CalendarDays;
+                const Icon = iconFor(job);
                 const h =
                   px(bottom - top) +
                   (dragging && drag.mode === "resize" ? extra : 0);
@@ -386,10 +406,10 @@ function TimeGrid({
                       left: `calc(${(lane / lanes) * 100}% + 2px)`,
                       width: `calc(${100 / lanes}% - 4px)`,
                       background: `${color}1f`,
-                      borderLeft: `3px solid ${color}`,
+                      borderLeft: `3px ${job.due ? "dashed" : "solid"} ${color}`,
                       touchAction: canMove(job) ? "none" : "auto",
                     }}
-                    title={`${job.title} · ${timeLabel(job.start)}–${timeLabel(job.end)}`}
+                    title={`${job.title} · ${timesFor(job)}`}
                   >
                     <p className="flex items-center gap-1 font-medium leading-tight">
                       {job.done ? (
@@ -404,7 +424,7 @@ function TimeGrid({
                       </span>
                     </p>
                     <p className="truncate text-[11px] text-muted">
-                      {timeLabel(job.start)}–{timeLabel(job.end)}
+                      {timesFor(job)}
                       {job.customerName ? ` · ${job.customerName}` : ""}
                     </p>
                     {!col.agentId && bottom - top >= 60 && (
@@ -412,7 +432,7 @@ function TimeGrid({
                         {job.agents.map(nameOf).join(", ")}
                       </p>
                     )}
-                    {canMove(job) && (
+                    {canMove(job) && !job.due && (
                       <div
                         onPointerDown={(e) => startDrag(e, job, ci, "resize")}
                         className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
@@ -480,7 +500,7 @@ function MonthGrid({ today, date, jobs, colorOf, onDay, onOpen }) {
                   }}
                 >
                   <span className="hidden sm:inline">
-                    {timeLabel(j.start)}{" "}
+                    {timeLabel(j.due ? j.end : j.start)}{" "}
                   </span>
                   {j.title}
                 </span>
@@ -512,7 +532,7 @@ function JobList({ today, from, jobs, colorOf, nameOf, team, onOpen }) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-4 py-14 text-center">
         <CalendarDays className="h-8 w-8 text-muted" />
-        <p className="font-medium">No jobs in these two weeks</p>
+        <p className="font-medium">Nothing in these two weeks</p>
         <p className="text-sm text-muted">Book one with the button above.</p>
       </div>
     );
@@ -531,7 +551,7 @@ function JobList({ today, from, jobs, colorOf, nameOf, team, onOpen }) {
           </h2>
           <ul className="flex flex-col gap-2">
             {list.map((j) => {
-              const Icon = JOB_KINDS[j.kind]?.icon ?? CalendarDays;
+              const Icon = iconFor(j);
               return (
                 <li key={j.id}>
                   <button
@@ -541,8 +561,19 @@ function JobList({ today, from, jobs, colorOf, nameOf, team, onOpen }) {
                     style={{ borderLeft: `4px solid ${colorOf(j)}` }}
                   >
                     <div className="w-16 shrink-0 text-sm">
-                      <p className="font-medium">{timeLabel(j.start)}</p>
-                      <p className="text-xs text-muted">{timeLabel(j.end)}</p>
+                      {j.due ? (
+                        <>
+                          <p className="text-xs text-muted">Due</p>
+                          <p className="font-medium">{timeLabel(j.end)}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium">{timeLabel(j.start)}</p>
+                          <p className="text-xs text-muted">
+                            {timeLabel(j.end)}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p
@@ -555,11 +586,19 @@ function JobList({ today, from, jobs, colorOf, nameOf, team, onOpen }) {
                         <span className="truncate">{j.title}</span>
                       </p>
                       <p className="truncate text-sm text-muted">
-                        {[JOB_KINDS[j.kind]?.label, j.customerName, j.location]
+                        {[
+                          j.due
+                            ? j.overdue
+                              ? "Ticket overdue"
+                              : "Ticket due"
+                            : JOB_KINDS[j.kind]?.label,
+                          j.customerName,
+                          j.location,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      {j.ticketId && (
+                      {j.ticketId && !j.due && (
                         <p className="flex items-center gap-1 text-xs text-muted">
                           <Ticket className="h-3 w-3" />#{j.ticketId}
                         </p>
@@ -597,8 +636,15 @@ function JobList({ today, from, jobs, colorOf, nameOf, team, onOpen }) {
 // ---------- The page ----------
 
 export default function Calendar() {
-  const { team, me, jobsVersion } = useData();
+  const { team, me, jobsVersion, tickets, updateTicket } = useData();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  // Show open tickets on their due dates? (remembered per person)
+  const [showDue, setShowDue] = useSavedState(
+    "calendar.due",
+    true,
+    (v) => typeof v === "boolean",
+  );
   const isAdmin = me.role === "owner" || me.role === "admin";
   const phone = typeof window !== "undefined" && window.innerWidth < 640;
 
@@ -644,12 +690,22 @@ export default function Calendar() {
   };
   // A job's colour: its first agent's (or the chosen agent's, if they're on it)
   const colorOf = (job, inColumnOf) =>
-    colors[
-      inColumnOf ??
-        (agent !== "all" && job.agents.includes(agent) ? agent : job.agents[0])
-    ] ?? "#64748b";
+    job.due
+      ? job.overdue
+        ? OVERDUE_COLOR
+        : DUE_COLOR
+      : (colors[
+          inColumnOf ??
+            (agent !== "all" && job.agents.includes(agent)
+              ? agent
+              : job.agents[0])
+        ] ?? "#64748b");
+  // (anyone on the team can change a ticket's due date)
   const canMove = (job) =>
-    isAdmin || job.agents.includes(me.id) || job.createdById === me.id;
+    job.due ||
+    isAdmin ||
+    job.agents.includes(me.id) ||
+    job.createdById === me.id;
 
   // The jobs in view
   const [from, to] = rangeFor(view, date);
@@ -665,9 +721,30 @@ export default function Calendar() {
     };
   }, [from, to, jobsVersion]);
 
-  const shown = (jobs ?? []).filter(
+  // Open tickets due in view, drawn like jobs (for whoever has them)
+  const dueItems = showDue
+    ? tickets
+        .filter((t) => !isDone(t) && t.dueBy && t.dueBy > from && t.dueBy <= to)
+        .map((t) => ({
+          id: `due-${t.id}`,
+          due: true,
+          ticketId: t.id,
+          title: `#${t.id} ${t.subject}`,
+          start: t.dueBy - DUE_BLOCK,
+          end: t.dueBy,
+          agents: t.assignee ? [t.assignee] : [],
+          customerName: t.requester?.name ?? "",
+          overdue: t.dueBy < now,
+        }))
+    : [];
+
+  const shown = [...(jobs ?? []), ...dueItems].filter(
     (j) => agent === "all" || j.agents.includes(agent),
   );
+
+  // A job opens its box; a ticket opens the ticket
+  const open = (item) =>
+    item.due ? navigate(`/tickets/${item.ticketId}`) : setEditing(item);
 
   // The job being booked or changed
   const [editing, setEditing] = useState(null);
@@ -685,6 +762,20 @@ export default function Calendar() {
 
   // Dragged on the calendar: shown straight away, put back if it fails
   async function move(job, changes) {
+    // A ticket: its new due date (and who has it, if dropped on someone
+    // else's column)
+    if (job.due) {
+      setError("");
+      try {
+        await updateTicket(job.ticketId, {
+          ...(changes.end ? { dueBy: changes.end } : {}),
+          ...(changes.agents ? { assignee: changes.agents[0] } : {}),
+        });
+      } catch (err) {
+        setError(err.message);
+      }
+      return;
+    }
     const before = jobs;
     setJobs((list) =>
       list.map((j) => (j.id === job.id ? { ...j, ...changes } : j)),
@@ -825,10 +916,19 @@ export default function Calendar() {
           ))}
         </div>
 
+        <label className="flex h-10 cursor-pointer items-center gap-2 text-sm text-muted sm:ml-auto">
+          <input
+            type="checkbox"
+            checked={showDue}
+            onChange={(e) => setShowDue(e.target.checked)}
+            className="h-4 w-4 cursor-pointer accent-brand"
+          />
+          Ticket due dates
+        </label>
         <select
           value={agent}
           onChange={(e) => go({ agent: e.target.value })}
-          className="h-10 cursor-pointer rounded-lg border border-line bg-white px-3 text-sm sm:ml-auto"
+          className="h-10 cursor-pointer rounded-lg border border-line bg-white px-3 text-sm"
           aria-label="Whose jobs"
         >
           <option value="all">Everyone</option>
@@ -853,7 +953,7 @@ export default function Calendar() {
           jobs={shown}
           colorOf={colorOf}
           onDay={(day) => go({ view: "day", date: isoDay(day) })}
-          onOpen={setEditing}
+          onOpen={open}
         />
       ) : view === "list" ? (
         <JobList
@@ -863,7 +963,7 @@ export default function Calendar() {
           colorOf={colorOf}
           nameOf={nameOf}
           team={team}
-          onOpen={setEditing}
+          onOpen={open}
         />
       ) : (
         <>
@@ -875,12 +975,12 @@ export default function Calendar() {
             nameOf={nameOf}
             canMove={canMove}
             onSlot={bookAt}
-            onOpen={setEditing}
+            onOpen={open}
             onMove={move}
           />
           <p className="text-xs text-muted">
             Click an empty time to book a job there. With a mouse, drag a job to
-            move it
+            move it (or a ticket, to change when it's due)
             {view === "day"
               ? " (onto someone else's column to give it to them)"
               : ""}

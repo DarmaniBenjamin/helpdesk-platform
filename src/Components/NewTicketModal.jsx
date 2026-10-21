@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, Plus } from "lucide-react";
 import Modal from "./Modal";
 import CustomerPicker from "./CustomerPicker";
 import CustomerFields from "./CustomerFields";
@@ -57,6 +57,9 @@ export default function NewTicketModal({ onClose }) {
   // After submitting: the new ticket, and whether the customer was new
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  // "Create & add another": the ticket just made, shown above the empty form
+  const [justMade, setJustMade] = useState(null);
+  const formRef = useRef(null);
 
   const businesses = [
     ...new Set(customers.map((c) => c.company).filter(Boolean)),
@@ -78,10 +81,38 @@ export default function NewTicketModal({ onClose }) {
     switchMode("existing");
   }
 
+  // Ready for the next ticket: everything cleared except the customer
+  // (often there's more than one thing to log for the same customer)
+  function startAnother(made, customer) {
+    formRef.current?.reset();
+    setPriority(2);
+    setDueBy(defaultDue(2));
+    setDueEdited(false);
+    setConfirm(true);
+    setNewCustomer(blankCustomer);
+    if (customer) {
+      setSelectedCustomer(customer);
+      setCustomerMode("existing");
+    }
+    setCustomerError("");
+    setDuplicate(null);
+    setResult(null);
+    setBusy(false);
+    setJustMade(made);
+    // Straight to the subject of the next one
+    setTimeout(
+      () => document.querySelector("form [name=subject]")?.focus(),
+      50,
+    );
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setCustomerError("");
     setDuplicate(null);
+    // Which button: "Create ticket", or "Create & add another"
+    const another = e.nativeEvent.submitter?.value === "another";
+    formRef.current = e.currentTarget;
     // Read the form now: after waiting for the server it may be gone
     const form = new FormData(e.currentTarget);
 
@@ -125,7 +156,8 @@ export default function NewTicketModal({ onClose }) {
         confirm: confirm && Boolean(customer.email),
       });
       document.activeElement?.blur();
-      setResult({ ticket, isNew });
+      if (another) startAnother({ ticket, isNew }, customer);
+      else setResult({ ticket, isNew });
     } catch (err) {
       setCustomerError(err.message);
       setBusy(false);
@@ -161,10 +193,20 @@ export default function NewTicketModal({ onClose }) {
             </button>
             <button
               type="button"
+              onClick={() => startAnother(result, result.ticket.requester)}
+              className={`${secondaryButton} flex items-center justify-center gap-1.5`}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Another</span>
+              <span className="hidden sm:inline">Add another ticket</span>
+            </button>
+            <button
+              type="button"
               onClick={viewInInbox}
               className={primaryButton}
             >
-              View in Inbox
+              <span className="sm:hidden">Inbox</span>
+              <span className="hidden sm:inline">View in Inbox</span>
             </button>
           </>
         }
@@ -211,8 +253,23 @@ export default function NewTicketModal({ onClose }) {
       onSubmit={handleSubmit}
       footer={
         <>
-          <button type="button" onClick={onClose} className={secondaryButton}>
-            Cancel
+          <button
+            type="button"
+            onClick={onClose}
+            className={`${secondaryButton} hidden sm:block`}
+          >
+            {justMade ? "Done" : "Cancel"}
+          </button>
+          <button
+            type="submit"
+            value="another"
+            disabled={busy}
+            title="Create this ticket and start the next one"
+            className={`${secondaryButton} flex items-center justify-center gap-1.5 disabled:cursor-wait disabled:opacity-70`}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="sm:hidden">Add another</span>
+            <span className="hidden sm:inline">Create &amp; add another</span>
           </button>
           <button
             type="submit"
@@ -224,6 +281,31 @@ export default function NewTicketModal({ onClose }) {
         </>
       }
     >
+      {/* The ticket just made with "Create & add another" */}
+      {justMade && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-lg bg-brand/10 px-3 py-2.5 text-sm text-brand"
+        >
+          <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="min-w-0 flex-1">
+            Ticket <strong>#{justMade.ticket.id}</strong> created for{" "}
+            {justMade.ticket.requester.name}
+            {justMade.ticket.confirmation?.sent ? " (emailed them)" : ""}. Add
+            the next one below.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              navigate(`/tickets/${justMade.ticket.id}`);
+            }}
+            className="shrink-0 cursor-pointer font-medium underline"
+          >
+            Open it
+          </button>
+        </div>
+      )}
       {/* Customer */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
