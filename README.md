@@ -1,7 +1,6 @@
 # Uplink — Helpdesk Platform
 
 **Uplink** is a private, custom-built customer support and ticket
-**Uplink** is a private, custom-built customer support and ticket
 management system: tickets from email, WhatsApp, the phone system, the
 website and the customer portal land in one Inbox, where the team works
 them, with automations, SLAs, a calendar, a knowledge base, reports, and
@@ -42,14 +41,18 @@ documentation are the exclusive property of the author.
 - **Ticket Review:** where Admins check finished tickets and mark them
   reviewed.
 - **Ratings:** customers rate finished tickets from a "how did we do?"
-  link.
+  link. The person who has the ticket is told about each rating (and the
+  Admins too, for 2 stars or less).
+- **Closing a ticket:** the customer gets an email with the ticket number
+  and title a minute later (on/off in Integrations → Email), and a
+  "Tell them on WhatsApp" button opens WhatsApp with the message ready.
 
 ### Where tickets come from (Integrations)
 
 - **Website form:** a public request form, which can also be embedded on
   your company website.
-- **Email:** connect mailboxes with Sign in with Microsoft, Sign in with
-  Google, or any IMAP/SMTP mailbox. Emails become tickets, and replies
+- **Email:** connect mailboxes with Sign in with Microsoft, or Sign in
+  with email (any IMAP/SMTP mailbox). Emails become tickets, and replies
   go back by email.
   - Newsletters, automatic emails and senders who aren't customers wait
     in **Email review** instead of becoming tickets: tick them all and
@@ -101,7 +104,12 @@ documentation are the exclusive property of the author.
 - **Calendar:** jobs booked for a time (a site visit, a remote session, a
   call), done by one or more agents, usually for a ticket.
 - **Knowledge Base:** saved answers (a problem and how it was fixed),
-  written by hand or saved straight from a ticket's note.
+  written by hand or saved from any note or reply. When a ticket is
+  resolved or closed, a box asks to save the fix (filled in from the
+  ticket's notes), so it isn't forgotten; the notes stay on the ticket.
+- **Reminders:** everyone on the team sees them; Admins make them, with
+  or without a time, once or repeating, for everyone or chosen people,
+  who get a notification when one is due.
 - **Performance & Feedback**, and **Report and Statistics:** response
   times, SLA results, ratings, and where tickets come from.
 - **Notifications:** the bell in the top bar, and real desktop and phone
@@ -124,6 +132,17 @@ documentation are the exclusive property of the author.
   (profile menu → Report a bug), as incidents. Optionally, an AI
   investigates serious ones on GitHub and proposes a fix as a pull
   request for a person to approve (see below).
+
+### Safety
+
+- **Important actions need a 6-digit code** emailed to the person doing
+  them (or their password while no company mailbox is connected):
+  removing someone, changing access, deleting a customer, restoring a
+  backup, and changing integrations, domains or AI & GitHub. After one
+  code, others in the next 10 minutes don't ask again.
+- Sign-in is slowed after wrong passwords, changes can only come from the
+  site's own pages, and every database query uses parameters (no SQL
+  injection).
 
 ### Who can do what
 
@@ -212,6 +231,10 @@ database.
 
 ## On a server
 
+There are two ways to host it: **SiteGround** (what's used now, see
+[Setting it up on SiteGround](#setting-it-up-on-siteground)), or your own
+Ubuntu/Debian server (below).
+
 ### Installing on a new server
 
 On a fresh Ubuntu or Debian server, as your normal user (not root):
@@ -270,11 +293,265 @@ it, the copies can't be opened.
 
 ---
 
-### On SiteGround instead
+## Setting it up on SiteGround
 
-SiteGround's **Node.js Projects** (GrowBig, GoGeek and Cloud plans) can run
-the whole platform, with a PostgreSQL database from Site Tools and
-SiteGround looking after the domain and SSL: `docs/siteground.md`.
+SiteGround's **Node.js Projects** run the whole of Uplink in one place: the
+website, the server and the database. SiteGround takes the code from
+GitHub, builds it, and starts it. The server then makes and updates the
+database tables by itself. SiteGround looks after the domain and the SSL
+certificate, so `deploy/install.sh`, `update-uplink` and Caddy aren't used
+there.
+
+It takes about 30 minutes the first time. Do the steps in order.
+
+### What you need
+
+- A SiteGround plan with Node.js Projects: **GrowBig** (up to 5
+  projects), **GoGeek** (up to 10) or **Cloud**. StartUp doesn't have
+  them.
+- Access to this repository on GitHub (it's private).
+- A **`live` branch** in the repository. SiteGround is linked to it, and
+  rebuilds the site on every push to it, so only tested code goes there.
+  Make it once, from your computer:
+
+      git checkout main
+      git pull origin main
+      git push origin main:live
+
+- Somewhere safe to write down passwords (a password manager).
+- If you're moving an existing helpdesk: your Backblaze details and the
+  **backup password** (step 9).
+
+### Step 1. Make the Node.js project
+
+1. SiteGround **Client Area → Websites → Node.js Projects → New
+   Project** (top right).
+2. Choose **Import Git repository → Continue**.
+3. The first time, GitHub asks you to authorize the **SiteGround** app.
+   Choose **Only select repositories → helpdesk-platform**, so SiteGround
+   can't see your other repositories. Each GitHub account can have this
+   app linked to one SiteGround Client Area only.
+4. Pick **helpdesk-platform** from the list (not there? use **Missing a
+   repository? → Click here**), then **Continue**.
+5. The first build may fail or show "The helpdesk is starting": that's
+   expected, because there's no database yet. Click **Go to Site Tools**.
+
+Keep the project's **temporary address** SiteGround shows (something like
+`https://abcd1.sg-host.com`). It's used until your own domain is connected
+in step 7.
+
+### Step 2. Make the PostgreSQL database
+
+Uplink needs **PostgreSQL**, not MySQL. In the project's **Site Tools →
+Site → PostgreSQL**:
+
+1. **Databases** tab → **Create Database**. Write down its full name
+   exactly as shown (SiteGround often adds a prefix, e.g. `db7xk2q1`).
+2. **Users** tab → **Create User**. Let it generate a long password, or
+   type one, and write down the user name and password.
+3. Still on **Users**: click **Add New Database** next to the user,
+   choose the database, **Confirm**.
+4. Click the database icon next to the user → **Manage Access** → give it
+   **all privileges** → save.
+
+You don't need **Remote** access: the app connects from the same server.
+If SiteGround doesn't let the user make tables in the database's usual
+area (`public`), the server notices and uses an area of its own called
+`uplink` instead.
+
+### Step 3. Deployment settings
+
+**Site Tools → Node.js → Deployment Options → Settings**:
+
+| Setting | Value |
+|---|---|
+| Framework preset | **Express** (or "Node.js" / "Other"). **Not Vite:** Vite only publishes the website and never starts the server, so nothing would work. |
+| Branch | **live** |
+| Node version | **22** or newer |
+| Package manager | **npm** |
+| Build command | `npm run sgbuild` |
+| Output directory | leave empty (if it must be filled in: `dist`) |
+| Start command (if asked) | `npm start` |
+
+### Step 4. Environment variables
+
+Same page, **Environment variables**. Add each one (name on the left,
+value on the right):
+
+| Name | Value | Needed? |
+|---|---|---|
+| `HOSTING` | `siteground` | Yes |
+| `DB_NAME` | the database's full name from step 2 | Yes |
+| `DB_USER` | the user's full name from step 2 | Yes |
+| `DB_PASSWORD` | that user's password (any symbols are fine) | Yes |
+| `DB_HOST` | only if SiteGround shows something other than `localhost` | Usually no |
+| `DB_PORT` | only if it isn't `5432` | Usually no |
+| `SUPER_ADMIN_NAME` | your full name | For step 6, option A |
+| `SUPER_ADMIN_EMAIL` | the email you'll sign in with | For step 6, option A |
+| `SUPER_ADMIN_PASSWORD` | a strong password, at least 8 characters | For step 6, option A |
+| `TIMEZONE` | `America/Grenada` (the default; change it if you move) | No |
+| `SHOW_ERRORS` | `on`, only while setting up (step 5), then remove | No |
+
+Don't add `PORT`: SiteGround gives it.
+
+What `HOSTING=siteground` does by itself:
+
+- turns on production mode (secure cookies, no error details shown)
+- shows "SiteGround manages the domain and SSL" in Settings → Domain & SSL
+- keeps attached files, saved backups and the secret key in your
+  account's home folder, **`~/uplink-data`**, outside the app's code, so a
+  new deployment never removes them. To use another folder, set
+  `DATA_DIR`.
+
+### Step 5. Deploy and check it's running
+
+1. Deploy again: push to `live` from your computer (or use the project's
+   deploy/redeploy option).
+
+       git push origin main:live
+
+2. **Site Tools → Node.js → Logs** → the newest entry → **View build
+   log**. A good start ends with:
+
+       ✓ Database is up to date
+       ✓ Departments: 4
+       ✓ Super Admin created: you@example.com
+       Server running on 0.0.0.0:<port>
+
+3. Open `https://<the project's address>/api/health`:
+
+| What it shows | What it means | What to do |
+|---|---|---|
+| `{"server":"ok","database":"connected"}` | All good | Go to step 6 |
+| `"database":"not connected"` | The server runs but can't reach the database | Add `SHOW_ERRORS=on` and reload: it says why in plain words (wrong password, no database with that name, it's MySQL...). Fix the variable and redeploy. It also tries again by itself every 30 seconds. Remove `SHOW_ERRORS` when it works. |
+| Nothing answers / an error page | The server isn't being started | Check the framework preset isn't Vite, the build command is `npm run sgbuild`, and the build log for red errors |
+
+### Step 6. The first Super Admin
+
+Pick one of these:
+
+- **Option A (easiest): with the variables from step 4.** The account
+  was made when the server started ("Super Admin created" in the log).
+  Open the site and sign in with `SUPER_ADMIN_EMAIL` and
+  `SUPER_ADMIN_PASSWORD`. Then **delete the `SUPER_ADMIN_PASSWORD`
+  variable**: it's only used to make the account once, and you change
+  your password in the app (My profile) from now on.
+- **Option B: a one-time setup link.** Instead of the `SUPER_ADMIN_*`
+  variables, add `SETUP_CODE` with a long random code you make up (30+
+  letters and numbers), redeploy, and open
+  `https://<the project's address>/setup/<that code>`. Make your account
+  there, then delete the `SETUP_CODE` variable. The link only works
+  while there's no Super Admin.
+
+### Step 7. Your own domain and SSL
+
+1. **Client Area → Websites → Node.js Projects →** your project's menu →
+   change its domain from the temporary one to yours (e.g.
+   `help.protonicsolutions.com`).
+2. DNS:
+   - **Domain on SiteGround's nameservers:** SiteGround points it, and
+     installs the SSL certificate by itself.
+   - **Domain elsewhere (e.g. only an A record):** point the record at
+     the IP SiteGround shows. The certificate may not be installed by
+     itself then: in **Site Tools → Security → SSL Manager**, install a
+     free Let's Encrypt certificate for the domain (or ask SiteGround
+     support).
+3. **Site Tools → Security → HTTPS Enforce** → on.
+4. Open `https://<your domain>/api/health` again to check.
+
+Webhooks from other services (WhatsApp, the phone system, the backup
+gateway, GitHub) need your real domain, not the temporary one. Email from
+SiteGround doesn't work on the temporary domain either.
+
+### Step 8. Set it up in the app
+
+Signed in as the Super Admin:
+
+1. **Integrations → Email:** connect the **company mailbox** (Sign in with
+   Microsoft, or Sign in with email) and make it the company mailbox.
+   Invites, password resets, ticket emails, and the 6-digit codes for
+   important actions are sent from it. Until it's connected, important
+   actions ask for your password instead of a code.
+2. **Settings → Backup & Restore → Copies in the cloud:** connect
+   Backblaze and choose a **backup password**. Keep the password in your
+   password manager, outside the helpdesk: without it the copies can't be
+   opened.
+3. **Team:** add your departments, then invite your Admins and agents.
+4. Optional: **Integrations → WhatsApp / Phone**, and **Settings → Import
+   from Freshdesk**.
+5. Allow notifications when the browser asks, on each computer and phone.
+
+### Step 9. Moving an existing helpdesk (restoring from Backblaze)
+
+Do steps 1 to 7 on the new SiteGround project (make a temporary Super
+Admin in step 6), then:
+
+1. **Settings → Backup & Restore → Copies in the cloud:** enter the same
+   Backblaze details and the **backup password** you used before.
+2. Press **Restore** on the newest copy. Type the code emailed to you (or
+   your password) when asked.
+3. Everything comes back: tickets, customers, the team, settings,
+   attachments, and the secret key that unlocks mailbox passwords. The
+   temporary Super Admin is replaced by the real one from the backup;
+   everyone signs in again.
+
+### Updating it later
+
+Work on `main`, then send it live. SiteGround rebuilds by itself on every
+push to `live`:
+
+    git push origin main
+    git checkout live
+    git merge main
+    git push origin live
+    git checkout main
+
+- The server applies any database changes as it starts.
+- Before an update that changes the database, make a backup first
+  (**Settings → Backup & Restore → Back up now**, or **Site Tools →
+  Security → Backups**).
+- To stop SiteGround deploying for a while: **Site Tools → Node.js →
+  Deployment Options →** menu **→ Pause**.
+
+### Where things are kept on SiteGround
+
+| What | Where |
+|---|---|
+| The code | SiteGround's copy of the `live` branch (replaced on every deployment) |
+| The database | Site Tools → Site → PostgreSQL |
+| Attached files, saved backups, the secret key | `~/uplink-data` in your SiteGround account (kept between deployments) |
+| Settings, mailboxes, integrations | In the database (they come back with a restore) |
+| Off-site copies | Backblaze, locked with your backup password |
+
+### If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| `/api/health` says the database isn't connected | Step 5: add `SHOW_ERRORS=on` to see why, fix the `DB_*` variables, redeploy |
+| "Couldn't reach the database" | `DB_HOST` and `DB_PORT` (usually `localhost` and `5432`, so leave them out) |
+| "The database user isn't allowed to make tables" | Step 2.4: give the user all privileges |
+| The site loads but every page is blank or "Not found" | The framework preset is Vite: change it to Express and redeploy |
+| Can't sign in: "Too many wrong passwords" | Wait 15 minutes (it's protection against guessing) |
+| No emails go out (invites, codes, resets) | Connect the company mailbox (step 8.1), and use your real domain, not the temporary one |
+| The 6-digit code doesn't arrive | Check spam, then press **Send a new code**. If there's no company mailbox yet, it asks for your password instead |
+| A deployment broke something | Push the previous good version to `live` again (`git push origin <old commit>:live --force`) or restore a backup |
+| The server lost the secret key (mailboxes say "Sign in again") | Restore from a Backblaze copy (it includes the key), or reconnect each mailbox |
+
+### Checklist
+
+- [ ] `live` branch made and pushed
+- [ ] Node.js project made from the GitHub repository
+- [ ] PostgreSQL database and user made, with all privileges
+- [ ] Deployment settings: Express, branch `live`, Node 22, `npm run sgbuild`
+- [ ] Environment variables: `HOSTING`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and the Super Admin ones
+- [ ] `/api/health` says `connected`
+- [ ] Signed in as the Super Admin, and `SUPER_ADMIN_PASSWORD` (or `SETUP_CODE`) deleted
+- [ ] Own domain connected, SSL on, HTTPS Enforce on
+- [ ] Company mailbox connected
+- [ ] Backblaze copies on, backup password saved in a password manager
+- [ ] Team invited
+
+---
 
 ## Maintenance and AI investigations
 
