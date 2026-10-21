@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-  Calendar,
-  Upload,
+  Download,
   TrendingUp,
   TrendingDown,
   TriangleAlert,
@@ -9,8 +8,12 @@ import {
 import TicketVolumeChart from "../TicketVolumeChart";
 import ResponseTimeChart from "../ResponseTimeChart";
 import LatestTickets from "../LatestTickets";
-import { isOverdue, DAY } from "../../data";
+import { isOverdue, DAY, STATUSES, PRIORITIES } from "../../data";
 import useData from "../../useData";
+import { downloadCsv } from "../csv";
+
+// How far back "Created" and "Resolved" count
+const PERIODS = [7, 30, 90];
 
 // % change from last week to this week (null if last week was 0)
 function percentChange(thisWeek, lastWeek) {
@@ -24,7 +27,7 @@ function countBetween(tickets, field, from, to) {
     .length;
 }
 
-function StatCard({ label, value, note, warn, trend, upIsGood }) {
+function StatCard({ label, value, note, warn, trend, upIsGood, trendWord }) {
   const hasTrend = trend !== undefined && trend !== null;
   const good = hasTrend && trend >= 0 === upIsGood;
   const TrendIcon = hasTrend && trend < 0 ? TrendingDown : TrendingUp;
@@ -42,7 +45,7 @@ function StatCard({ label, value, note, warn, trend, upIsGood }) {
               <TrendIcon className="h-4 w-4" />
               {Math.abs(trend)}%
             </span>
-            <span className="text-muted">vs last week</span>
+            <span className="text-muted">vs the {trendWord}</span>
           </>
         ) : (
           <span
@@ -58,11 +61,13 @@ function StatCard({ label, value, note, warn, trend, upIsGood }) {
 }
 
 export default function Dashboard() {
-  const { tickets } = useData();
-  // The time when the page opened (all the "this week" numbers count from here)
+  const { tickets, agents } = useData();
+  // The time when the page opened (the period counts back from here)
   const [now] = useState(() => Date.now());
-  const weekAgo = now - 7 * DAY;
-  const twoWeeksAgo = now - 14 * DAY;
+  const [days, setDays] = useState(7);
+  const weekAgo = now - days * DAY;
+  const twoWeeksAgo = now - 2 * days * DAY;
+  const trendWord = `${days} days before`;
 
   const openCount = tickets.filter((t) => t.status === "open").length;
   const overdueCount = tickets.filter(isOverdue).length;
@@ -95,18 +100,65 @@ export default function Dashboard() {
       note: "Waiting for a reply",
     },
     {
-      label: "Created This Week",
+      label: `Created, last ${days} days`,
       value: createdThisWeek,
       trend: percentChange(createdThisWeek, createdLastWeek),
       upIsGood: false,
+      trendWord,
     },
     {
-      label: "Resolved This Week",
+      label: `Resolved, last ${days} days`,
       value: resolvedThisWeek,
       trend: percentChange(resolvedThisWeek, resolvedLastWeek),
       upIsGood: true,
+      trendWord,
     },
   ];
+
+  // A spreadsheet of what's shown: the numbers, then every ticket made
+  // in the period
+  function exportDashboard() {
+    const date = (t) => (t ? new Date(t).toLocaleString() : "");
+    const who = (id) => agents.find((a) => a.id === id)?.name ?? "";
+    const made = tickets
+      .filter((t) => t.createdAt >= weekAgo && t.createdAt < now)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    downloadCsv(
+      [
+        [`Dashboard, last ${days} days`, new Date(now).toLocaleString()],
+        [],
+        ["Open tickets", openCount],
+        ["Overdue", overdueCount],
+        ["Waiting on customer", waitingCount],
+        [`Created, last ${days} days`, createdThisWeek],
+        [`Created, the ${days} days before`, createdLastWeek],
+        [`Resolved, last ${days} days`, resolvedThisWeek],
+        [`Resolved, the ${days} days before`, resolvedLastWeek],
+        [],
+        [
+          "Ticket",
+          "Subject",
+          "Customer",
+          "Status",
+          "Priority",
+          "Assigned to",
+          "Created",
+          "Resolved",
+        ],
+        ...made.map((t) => [
+          `#${t.id}`,
+          t.subject,
+          t.requester?.name ?? "",
+          STATUSES[t.status]?.label ?? t.status,
+          PRIORITIES[t.priority]?.label ?? t.priority,
+          who(t.assignee),
+          date(t.createdAt),
+          date(t.resolvedAt),
+        ]),
+      ],
+      `dashboard-${days}-days-${new Date(now).toISOString().slice(0, 10)}.csv`,
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -121,13 +173,31 @@ export default function Dashboard() {
         </div>
 
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          <button className="flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97] sm:flex-none">
-            <Calendar className="h-4 w-4 shrink-0" />
-            <span className="truncate">Last 7 days</span>
-          </button>
-          <button className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]">
-            <Upload className="h-4 w-4" />
-            Export
+          <div className="flex flex-1 rounded-lg border border-line bg-white p-1 text-sm sm:flex-none">
+            {PERIODS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDays(d)}
+                className={`flex-1 cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 transition active:scale-[0.97] sm:flex-none ${
+                  days === d
+                    ? "bg-brand/10 font-medium text-brand"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {d} days
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={exportDashboard}
+            aria-label="Export"
+            title="Download these numbers and tickets (CSV)"
+            className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export</span>
           </button>
         </div>
       </div>

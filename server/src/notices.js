@@ -130,7 +130,7 @@ passwordRouter.post("/forgot", async (req, res) => {
       user.name ? `Hi ${user.name.split(" ")[0]},` : "Hi,",
       "",
       "Someone (hopefully you) asked to reset your password. Open this link to choose a new one:",
-      `${siteAddress(req)}/reset/${token}`,
+      `${await siteForEmails(req)}/reset/${token}`,
       "",
       "The link works once, for 1 hour. If you didn't ask for this, you can ignore this email: your password stays the same.",
     ].join("\n"),
@@ -210,6 +210,14 @@ export async function rememberSite(req) {
   if (url === knownSite) return;
   knownSite = url;
   await saveSetting("siteAddress", { url }).catch(() => {});
+}
+
+// The address for a link in an email asked for by someone who isn't
+// signed in (e.g. "forgot password"): the one staff use, not whatever
+// address the request claims to be for, so a request made to look like
+// it came through another website can't put that website in the link.
+async function siteForEmails(req) {
+  return (await setting("siteAddress"))?.url ?? siteAddress(req);
 }
 
 // The link in the email: the ticket number and a signature, so it only

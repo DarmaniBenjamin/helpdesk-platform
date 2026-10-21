@@ -20,6 +20,7 @@ import DueLabel from "../DueLabel";
 import SlaTargetsModal from "../SlaTargetsModal";
 import { inputClass } from "../formStyles";
 import useData from "../../useData";
+import { downloadCsv } from "../csv";
 import {
   PRIORITIES,
   AGENTS,
@@ -169,26 +170,6 @@ function slaStats(tickets, from, to) {
     avgRating: average(ratings),
     happy: percent(ratings.filter((r) => r >= 4).length, ratings.length),
   };
-}
-
-// Downloads rows as a spreadsheet file (CSV)
-function downloadCsv(rows, filename) {
-  // Wrap each value in quotes so commas inside text don't break the columns
-  const csv = rows
-    .map((row) =>
-      row.map((v) => `"${String(v ?? "").replaceAll('"', '""')}"`).join(","),
-    )
-    .join("\n");
-  // "\uFEFF" at the start tells Excel the file is UTF-8, so letters like é show correctly
-  const url = URL.createObjectURL(
-    new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  // Give the browser a moment to start the download before cleaning up
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ---------- Small pieces ----------

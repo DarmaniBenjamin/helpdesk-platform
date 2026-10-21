@@ -22,6 +22,7 @@ import Card from "../Card";
 import Avatar from "../Avatar";
 import PriorityBadge from "../PriorityBadge";
 import useData from "../../useData";
+import { downloadCsv } from "../csv";
 import {
   STATUSES,
   PRIORITIES,
@@ -202,26 +203,6 @@ function trendBuckets(tickets, from, days) {
     });
   }
   return buckets;
-}
-
-// Downloads rows as a spreadsheet file (CSV)
-function downloadCsv(rows, filename) {
-  // Wrap each value in quotes so commas inside names don't break the columns
-  const csv = rows
-    .map((row) =>
-      row.map((v) => `"${String(v ?? "").replaceAll('"', '""')}"`).join(","),
-    )
-    .join("\n");
-  // "\uFEFF" at the start tells Excel the file is UTF-8, so letters like é show correctly
-  const url = URL.createObjectURL(
-    new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  // Give the browser a moment to start the download before cleaning up
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ---------- Small pieces ----------

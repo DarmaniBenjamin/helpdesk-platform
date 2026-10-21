@@ -83,6 +83,8 @@ import { alertsRouter } from "./alerts.js";
 installErrorCapture();
 
 const app = express();
+// Don't announce which server software this is (one less clue for attackers)
+app.disable("x-powered-by");
 
 // On Render, requests reach this server through Render's own proxy.
 // This tells Express to trust it, so it knows the site is on https.
@@ -148,6 +150,30 @@ app.use((req, res, next) => {
 
 // Work out who is signed in (from their session cookie) on every request
 app.use(loadSession);
+// Changes from a signed-in browser must come from this site's own pages.
+// A page on another website can't make your browser change things here
+// (e.g. delete a ticket) while you're signed in. Browsers always say
+// which site a request came from ("Origin"); webhooks and phone systems
+// don't send one, and aren't signed in, so they're not affected.
+app.use("/api", (req, res, next) => {
+  if (!req.user || ["GET", "HEAD", "OPTIONS"].includes(req.method))
+    return next();
+  const origin = req.get("origin");
+  if (!origin) return next();
+  let host = "";
+  try {
+    host = new URL(origin).host;
+  } catch {
+    // not a real address
+  }
+  // (behind a hosting proxy, the address people used can be in
+  // X-Forwarded-Host instead)
+  const ours = [req.get("host"), req.get("x-forwarded-host")?.split(",")[0]]
+    .filter(Boolean)
+    .map((h) => h.trim().toLowerCase());
+  if (host && ours.includes(host.toLowerCase())) return next();
+  res.status(403).json({ error: "That request didn't come from this site." });
+});
 // Important actions need a code from the person's email first (confirm.js)
 app.use("/api", requireConfirmation);
 
@@ -237,7 +263,8 @@ app.get("/api/health", async (req, res) => {
 // The site's address, for links in emails the server sends on its own
 // (e.g. feedback requests, see notices.js): noted whenever the app opens
 app.use("/api/auth/me", (req, res, next) => {
-  if (req.user) rememberSite(req);
+  // (staff only: their address is the one links in emails should use)
+  if (req.user && req.user.role !== "customer") rememberSite(req);
   next();
 });
 

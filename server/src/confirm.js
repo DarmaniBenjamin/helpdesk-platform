@@ -23,6 +23,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { requireAuth } from "./auth.js";
+import { ADMINS } from "./permissions.js";
 import { BadInput } from "./validate.js";
 import { sendSystemEmail, companyMailboxReady } from "./email.js";
 
@@ -193,6 +194,9 @@ async function checkCodeOrPassword(req) {
 // Runs on every /api request (index.js, after sign-in is worked out)
 export async function requireConfirmation(req, res, next) {
   if (!req.user || req.method === "GET") return next();
+  // Only Admins and the Super Admin can do these: anyone else gets the
+  // route's own "you don't have access", not a code to type
+  if (!ADMINS.includes(req.user.role)) return next();
   const what = importantAction(req);
   if (!what) return next();
   tidy();

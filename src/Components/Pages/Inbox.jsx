@@ -347,9 +347,28 @@ export default function Inbox() {
         <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-6 py-14 text-center">
           <InboxIcon className="h-8 w-8 text-muted" />
           <p className="font-medium">No tickets here</p>
-          <p className="text-sm text-muted">
-            Try another tab, or clear your search and filters.
-          </p>
+          {/* The search found some, just not in this tab (e.g. a
+              resolved ticket while on Active) */}
+          {tab !== "all" && filtered.length > 0 ? (
+            <>
+              <p className="text-sm text-muted">
+                {filtered.length === 1
+                  ? "1 ticket matches in another tab."
+                  : `${filtered.length} tickets match in other tabs.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => resetPage(setTab)("all")}
+                className="mt-1 h-9 cursor-pointer rounded-lg border border-line px-4 text-sm font-medium text-brand transition hover:border-brand/40 hover:bg-brand/5 active:scale-[0.97]"
+              >
+                Show {filtered.length === 1 ? "it" : "them"}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Try another tab, or clear your search and filters.
+            </p>
+          )}
         </div>
       ) : (
         <>

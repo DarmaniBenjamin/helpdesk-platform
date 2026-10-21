@@ -100,23 +100,29 @@ export async function startSession(res, userId) {
 }
 
 // ---------- Slowing down password guessing ----------
-// After 10 wrong passwords for the same email from the same place,
-// sign-in is blocked for 15 minutes.
+// After 10 wrong passwords for the same email from the same place, or
+// 50 from the same place for any emails (someone trying many accounts),
+// sign-in from there is blocked for 15 minutes.
 const MAX_ATTEMPTS = 10;
+const MAX_FROM_ONE_PLACE = 50;
 const ATTEMPT_WINDOW = 15 * 60 * 1000;
 const attempts = new Map();
 
-function isBlocked(key) {
+function isBlocked(key, max = MAX_ATTEMPTS) {
   const entry = attempts.get(key);
   if (!entry) return false;
   if (Date.now() - entry.since > ATTEMPT_WINDOW) {
     attempts.delete(key);
     return false;
   }
-  return entry.count >= MAX_ATTEMPTS;
+  return entry.count >= max;
 }
 
 function recordFailure(key) {
+  // Forget old ones now and then, so the list can't grow forever
+  if (attempts.size > 10000)
+    for (const [k, v] of attempts)
+      if (Date.now() - v.since > ATTEMPT_WINDOW) attempts.delete(k);
   const entry = attempts.get(key) ?? { count: 0, since: Date.now() };
   entry.count += 1;
   attempts.set(key, entry);
@@ -187,7 +193,8 @@ authRouter.post("/login", async (req, res) => {
   }
 
   const key = `${req.ip}|${email}`;
-  if (isBlocked(key)) {
+  const place = `${req.ip}|*`;
+  if (isBlocked(key) || isBlocked(place, MAX_FROM_ONE_PLACE)) {
     return res.status(429).json({
       error: "Too many wrong passwords. Wait 15 minutes and try again.",
     });
@@ -201,6 +208,7 @@ authRouter.post("/login", async (req, res) => {
 
   if (!user || !user.passwordHash || !matches) {
     recordFailure(key);
+    recordFailure(place);
     // The same message either way, so nobody can find out which emails
     // have accounts
     return res
