@@ -14,14 +14,28 @@ import { DEPARTMENTS } from "../data";
 // Create a new saved answer (no `answer` passed) or edit an existing one.
 // onSave and onDelete save to the database; the form only closes once
 // that worked, and shows the reason if it didn't.
-export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
-  const [title, setTitle] = useState(answer?.title ?? "");
+//   draft:       a new answer filled in already (e.g. from a ticket's notes)
+//   heading:     the box's title instead of "New saved answer"
+//   intro:       a line at the top, saying why it's asking
+//   cancelLabel: e.g. "Skip" instead of "Cancel"
+export default function AnswerModal({
+  answer,
+  draft,
+  heading,
+  intro,
+  cancelLabel = "Cancel",
+  onSave,
+  onDelete,
+  onClose,
+}) {
+  const start = answer ?? draft;
+  const [title, setTitle] = useState(start?.title ?? "");
   const [department, setDepartment] = useState(
-    answer?.department ?? DEPARTMENTS[0].id,
+    start?.department ?? DEPARTMENTS[0]?.id ?? "",
   );
-  const [problem, setProblem] = useState(answer?.problem ?? "");
-  const [solution, setSolution] = useState(answer?.solution ?? "");
-  const [keywords, setKeywords] = useState(answer?.keywords ?? []);
+  const [problem, setProblem] = useState(start?.problem ?? "");
+  const [solution, setSolution] = useState(start?.solution ?? "");
+  const [keywords, setKeywords] = useState(start?.keywords ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // Deleting takes two clicks: "Delete", then "Yes, delete it"
@@ -72,7 +86,7 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
 
   return (
     <Modal
-      title={answer ? "Edit saved answer" : "New saved answer"}
+      title={heading ?? (answer ? "Edit saved answer" : "New saved answer")}
       onClose={onClose}
       onSubmit={handleSubmit}
       footer={
@@ -112,7 +126,7 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
               </button>
             )}
             <button type="button" onClick={onClose} className={secondaryButton}>
-              Cancel
+              {cancelLabel}
             </button>
             <button
               type="submit"
@@ -125,6 +139,7 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
         )
       }
     >
+      {intro && <p className="text-sm text-muted">{intro}</p>}
       {error && (
         <p
           role="alert"
@@ -153,6 +168,9 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
           onChange={(e) => setDepartment(e.target.value)}
           className={`${inputClass} cursor-pointer`}
         >
+          {!DEPARTMENTS.some((d) => d.id === department) && (
+            <option value={department}>No team</option>
+          )}
           {DEPARTMENTS.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -180,7 +198,9 @@ export default function AnswerModal({ answer, onSave, onDelete, onClose }) {
           rows={4}
           value={solution}
           onChange={(e) => setSolution(e.target.value)}
-          placeholder="What did you do to resolve it?"
+          placeholder={
+            "What did you do to fix it? One step per line, e.g.\nRestarted the print spooler\nRe-added the printer by IP"
+          }
           className={`${inputClass} h-auto shrink-0 py-2.5`}
         />
       </label>

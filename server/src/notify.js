@@ -8,6 +8,8 @@
 //   - A customer replies on your ticket  -> you, or the Admins if nobody has it
 //   - Your ticket is due within an hour  -> you, or the Admins if nobody has it
 //   - Your ticket is overdue             -> you, or the Admins if nobody has it
+//   - The customer rated your ticket     -> you (2 stars or less: the Admins too)
+//   - A reminder is due                  -> who it's for (reminders.js)
 //   - Any other change to a ticket       -> see activity.js
 //
 // Each notification is saved (so the bell keeps it), sent down the live
@@ -151,9 +153,11 @@ async function pushTo(userIds, rows) {
             ? "/calendar"
             : row.kind === "alert"
               ? "/alerts"
-              : row.ticketId
-                ? `/tickets/${row.ticketId}`
-                : "/",
+              : row.kind === "reminder"
+                ? "/reminders"
+                : row.ticketId
+                  ? `/tickets/${row.ticketId}`
+                  : "/",
         // Same ticket and kind: the newer one replaces the older pop-up
         tag: `${row.kind}-${row.ticketId ?? row.id}`,
         // "It's time" for a job: stays on screen and vibrates (public/sw.js)
@@ -289,6 +293,25 @@ export function onCustomerReply(ticket, customerName, text) {
         kind: "customerReply",
         title: `${customerName} replied on #${ticket.id}`,
         body: short(text),
+        ticketId: ticket.id,
+      });
+    })(),
+  );
+}
+
+// The customer rated their finished ticket (feedback email or portal).
+// A low rating also goes to the Admins, so it can be followed up.
+export function onFeedback(ticket, customerName, rating, comment) {
+  inBackground(
+    (async () => {
+      const people = [
+        ...(ticket.assigneeId ? [ticket.assigneeId] : []),
+        ...(rating <= 2 || !ticket.assigneeId ? await adminIds() : []),
+      ];
+      await notify(people, {
+        kind: "feedback",
+        title: `${"★".repeat(rating)}${"☆".repeat(5 - rating)} from ${customerName} on #${ticket.id}`,
+        body: short(comment || ticket.subject),
         ticketId: ticket.id,
       });
     })(),

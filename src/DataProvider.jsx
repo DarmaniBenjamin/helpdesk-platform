@@ -44,6 +44,8 @@ export default function DataProvider({ children }) {
   const [alertCount, setAlertCount] = useState({ open: 0, critical: 0 });
   // Goes up whenever alerts change, so the Alerts page loads them again
   const [alertsVersion, setAlertsVersion] = useState(0);
+  // Goes up when a reminder changes or goes off (Reminders.jsx reloads)
+  const [remindersVersion, setRemindersVersion] = useState(0);
   // Goes up whenever someone changes a job, so the calendar loads again
   const [jobsVersion, setJobsVersion] = useState(0);
   // Who's on which page right now: [{ userId, path, since }]
@@ -361,6 +363,9 @@ export default function DataProvider({ children }) {
         break;
       case "heldEmails":
         if (role !== "customer") later("heldEmails", loadHeldCount);
+        break;
+      case "reminders":
+        if (role !== "customer") setRemindersVersion((v) => v + 1);
         break;
       case "alerts":
         if (role === "customer") break;
@@ -1020,6 +1025,7 @@ export default function DataProvider({ children }) {
         heldCount,
         alertCount,
         alertsVersion,
+        remindersVersion,
         setHeldCount,
         jobsVersion,
         customers,

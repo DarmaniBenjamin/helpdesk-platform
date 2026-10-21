@@ -6,6 +6,9 @@
 //   - "how did we do?": when a ticket is resolved, a link to rate it
 //     with 1-5 stars, no sign-in needed (can be switched off in
 //     Integrations → Email)
+//   - "ticket closed": when a ticket is closed, its number and title
+//     (with the rating link, if they weren't asked yet). Also can be
+//     switched off in Integrations → Email.
 // With no company mailbox set, nothing is sent: invite links can still
 // be copied from the page and sent another way.
 //
@@ -19,10 +22,22 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
-import { and, asc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  max,
+  ne,
+  or,
+} from "drizzle-orm";
 import { db } from "./db/index.js";
 import {
   customers,
+  messages,
   sessions,
   settings,
   tickets,
@@ -33,6 +48,7 @@ import { hashToken, newToken, publicUser, startSession } from "./auth.js";
 import { BadInput, cleanEmail, cleanPassword, cleanText } from "./validate.js";
 import { sign } from "./secrets.js";
 import { sendSystemEmail } from "./email.js";
+import { onFeedback } from "./notify.js";
 
 const APP_NAME = "Uplink";
 const HOUR = 60 * 60 * 1000;
@@ -222,6 +238,7 @@ async function askForFeedback() {
   asking = true;
   try {
     if ((await setting("feedbackEmail"))?.enabled === false) return;
+    const closedEmailOn = (await setting("closedEmail"))?.enabled !== false;
     const site = (await setting("siteAddress"))?.url;
     if (!site) return; // nobody has opened the app yet
     let since = (await setting("feedbackSince"))?.at;
@@ -242,6 +259,8 @@ async function askForFeedback() {
           // Backup alerts are for the team, not something to rate
           ne(tickets.source, "backup"),
           or(gt(tickets.resolvedAt, after), gt(tickets.closedAt, after)),
+          // Closed straight away: the "closed" email asks instead (below)
+          ...(closedEmailOn ? [ne(tickets.status, "closed")] : []),
         ),
       )
       .orderBy(asc(tickets.id))
@@ -286,9 +305,99 @@ async function askForFeedback() {
   }
 }
 
+// ---------- "Your ticket is closed" ----------
+
+// Every minute: tickets closed since the last look get an email with
+// the ticket number and title. Worked out from the "changed status to
+// Closed" lines, so a ticket that's reopened and closed again is told
+// again. Only closes at least a minute old, and only if the ticket is
+// still closed, so a close by mistake that's undone straight away sends
+// nothing. Closes from before this was added are never emailed.
+let tellingClosed = false;
+async function tellClosed() {
+  if (tellingClosed) return;
+  tellingClosed = true;
+  try {
+    if ((await setting("closedEmail"))?.enabled === false) return;
+    let lastId = (await setting("closedEmailAfter"))?.id;
+    if (lastId === undefined) {
+      // The first time: start from now
+      const [row] = await db.select({ id: max(messages.id) }).from(messages);
+      await saveSetting("closedEmailAfter", { id: row?.id ?? 0 });
+      return;
+    }
+    const site = (await setting("siteAddress"))?.url;
+    const askFeedback = (await setting("feedbackEmail"))?.enabled !== false;
+    const closes = await db
+      .select({ id: messages.id, ticket: tickets, customer: customers })
+      .from(messages)
+      .innerJoin(tickets, eq(messages.ticketId, tickets.id))
+      .innerJoin(customers, eq(tickets.customerId, customers.id))
+      .where(
+        and(
+          eq(messages.eventType, "status:closed"),
+          gt(messages.id, lastId),
+          lt(messages.createdAt, new Date(Date.now() - 60 * 1000)),
+        ),
+      )
+      .orderBy(asc(messages.id))
+      .limit(20);
+
+    for (const { id, ticket, customer } of closes) {
+      const tell =
+        ticket.status === "closed" &&
+        ticket.source !== "backup" &&
+        Boolean(customer.email);
+      if (tell) {
+        // The rating link too, if they haven't been asked yet
+        const withRating =
+          askFeedback &&
+          site &&
+          !ticket.feedbackRating &&
+          !ticket.feedbackRequestedAt;
+        const result = await sendSystemEmail({
+          to: customer.email,
+          ticketId: ticket.id,
+          subject: `Closed: ${ticket.subject} [#${ticket.id}]`,
+          text: [
+            `Hi ${customer.name.split(" ")[0]},`,
+            "",
+            `Your request #${ticket.id} is now closed:`,
+            `    ${ticket.subject}`,
+            "",
+            ...(withRating
+              ? [
+                  "How did we do? Rating us takes a few seconds:",
+                  `${site}/feedback/${feedbackToken(ticket)}`,
+                  "",
+                ]
+              : []),
+            "If you need anything else, just reply to this email and we'll open a new request.",
+          ].join("\n"),
+        });
+        // No company mailbox (yet): try again later
+        if (!result.sent && /company mailbox/i.test(result.why ?? "")) return;
+        if (!result.sent)
+          console.warn(`Closed email for #${ticket.id}: ${result.why}`);
+        if (result.sent && withRating)
+          await db
+            .update(tickets)
+            .set({ feedbackRequestedAt: new Date() })
+            .where(eq(tickets.id, ticket.id));
+      }
+      await saveSetting("closedEmailAfter", { id });
+    }
+  } finally {
+    tellingClosed = false;
+  }
+}
+
 export function startFeedbackEmails() {
   const run = () =>
-    askForFeedback().catch((err) => console.error("Feedback:", err));
+    tellClosed()
+      .catch((err) => console.error("Closed emails:", err))
+      .then(() => askForFeedback())
+      .catch((err) => console.error("Feedback:", err));
   setTimeout(run, 15 * 1000).unref();
   setInterval(run, 60 * 1000).unref();
 }
@@ -340,5 +449,6 @@ feedbackRouter.post("/:token", async (req, res) => {
     })
     .where(eq(tickets.id, row.ticket.id))
     .returning();
+  onFeedback(ticket, row.customer.name, rating, comment);
   res.json(publicFeedback({ ticket, customer: row.customer }));
 });

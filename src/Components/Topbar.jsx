@@ -18,6 +18,8 @@ import {
   LogOut,
   CalendarDays,
   AlarmClock,
+  BellRing,
+  Star,
   Bug,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
@@ -43,6 +45,8 @@ const NOTIFICATION_ICONS = {
   overdue: TriangleAlert,
   job: CalendarDays,
   jobNow: AlarmClock,
+  reminder: BellRing,
+  feedback: Star,
 };
 
 function IconButton({
@@ -128,6 +132,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
     // Jobs open the calendar (where you see when); the rest their ticket
     if (n.kind === "job" || n.kind === "jobNow") navigate("/calendar");
     else if (n.kind === "alert") navigate("/alerts");
+    else if (n.kind === "reminder") navigate("/reminders");
     else if (n.ticketId) navigate(`/tickets/${n.ticketId}`);
   }
 

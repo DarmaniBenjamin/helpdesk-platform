@@ -102,6 +102,11 @@ export const PERMISSIONS = [
     roles: STAFF_ROLES,
   },
   {
+    key: "reminders",
+    label: "Reminders: make, change and delete them (everyone sees them)",
+    roles: ADMINS_UP,
+  },
+  {
     key: "maintenance",
     label: "Maintenance: errors and bug reports",
     roles: ADMINS_UP,

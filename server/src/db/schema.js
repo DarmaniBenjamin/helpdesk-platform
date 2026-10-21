@@ -332,6 +332,39 @@ export const answers = pgTable("answers", {
   updatedAt: time("updated_at").notNull().defaultNow(),
 });
 
+// ---------- Reminders ----------
+
+// The Reminders page (reminders.js): Admins make them, everyone on the
+// team sees them, and the people they're for get a notification when
+// the time comes. A repeating one moves on to its next time after that.
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    title: text("title").notNull(),
+    notes: text("notes").notNull().default(""),
+    // The next time it goes off
+    remindAt: time("remind_at").notNull(),
+    // none, daily, weekdays, weekly, monthly or yearly
+    repeat: text("repeat").notNull().default("none"),
+    // Where it was made (e.g. America/Grenada), so "weekdays" means the
+    // weekdays there
+    timeZone: text("time_zone").notNull().default("UTC"),
+    // Who's told: everyone on the team, or only these people
+    everyone: boolean("everyone").notNull().default(true),
+    userIds: text("user_ids").array().notNull().default([]),
+    createdById: text("created_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdByName: text("created_by_name").notNull().default(""),
+    // When it last went off (a one-time reminder is then done)
+    sentAt: time("sent_at"),
+    createdAt: createdAt(),
+    updatedAt: time("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("reminders_at_idx").on(t.remindAt)],
+);
+
 // ---------- Assignment rules and automations ----------
 
 export const rules = pgTable("rules", {
@@ -392,7 +425,8 @@ export const notifications = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     // newTicket, assigned, customerReply, dueSoon, overdue, automation,
-    // alert (alerts.js) or activity (a change on your ticket, activity.js)
+    // alert (alerts.js), reminder (reminders.js), feedback or activity (a change on
+    // your ticket, activity.js)
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),

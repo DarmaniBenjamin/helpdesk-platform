@@ -438,7 +438,11 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
 
 // endpoint: where it's added (an agent adding their own uses
 // /email/mine/mailboxes: MyIntegrations.jsx)
-export function OtherMailbox({ onClose, onAdded, endpoint = "/email/mailboxes" }) {
+export function OtherMailbox({
+  onClose,
+  onAdded,
+  endpoint = "/email/mailboxes",
+}) {
   const [form, setForm] = useState({
     address: "",
     password: "",
@@ -1117,6 +1121,39 @@ export default function EmailIntegration() {
             </label>
           )}
 
+          {/* "Your ticket is closed" emails (server/src/notices.js) */}
+          {info.mailboxes.length > 0 && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={info.closedEmail}
+                onChange={async (e) => {
+                  try {
+                    setInfo(
+                      await api("/email/closed-email", {
+                        method: "PUT",
+                        body: { enabled: e.target.checked },
+                      }),
+                    );
+                  } catch (err) {
+                    setSignInError(err.message);
+                  }
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+              />
+              <span>
+                <span className="font-medium">
+                  Email customers when their ticket is closed
+                </span>
+                <span className="block text-muted">
+                  With the ticket number and title (and the rating link, if they
+                  weren't asked yet). Sent a minute after closing, so closing
+                  one by mistake and reopening it sends nothing.
+                </span>
+              </span>
+            </label>
+          )}
+
           {/* Add a mailbox */}
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium">
@@ -1152,8 +1189,8 @@ export default function EmailIntegration() {
             </div>
             {signInError && <Alert>{signInError}</Alert>}
             <p className="text-xs text-muted">
-              Sign in with email: the mailbox's address and password (for
-              Gmail, an app password).{" "}
+              Sign in with email: the mailbox's address and password (for Gmail,
+              an app password).{" "}
               {!info.apps.microsoft.ready &&
                 "Microsoft 365 / Outlook mailboxes need Sign in with Microsoft, which works once its sign-in is set up below (once per helpdesk)."}
             </p>

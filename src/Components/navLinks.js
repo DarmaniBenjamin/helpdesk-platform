@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Wrench,
   Siren,
+  BellRing,
 } from "lucide-react";
 import { can } from "./teamRoles";
 
@@ -27,6 +28,8 @@ export const mainLinks = [
   // Alerts from other systems (the backup gateway), not tickets
   { label: "Alerts", path: "/alerts", icon: Siren, permission: "alerts" },
   { label: "Calendar", path: "/calendar", icon: CalendarDays },
+  // Everyone sees them; only Admins make them (Reminders.jsx)
+  { label: "Reminders", path: "/reminders", icon: BellRing },
   { label: "Customers", path: "/customers", icon: BookUser },
   {
     label: "Ticket Assignment",

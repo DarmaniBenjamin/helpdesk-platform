@@ -25,6 +25,7 @@ import {
   onTicketCreated,
   onTicketAssigned,
   onCustomerReply,
+  onFeedback,
 } from "./notify.js";
 import { afterTicketEvent } from "./automation.js";
 import { getSla } from "./sla.js";
@@ -764,6 +765,7 @@ ticketsRouter.post(
         feedbackAt: new Date(),
       })
       .where(eq(tickets.id, ticket.id));
+    onFeedback(ticket, req.user.name, rating, comment);
     res.json(await loadTicket(ticket.id, req.user));
   },
 );

@@ -57,6 +57,7 @@
 //   PATCH  /api/email/mailboxes/:id         name, agent, team, on/off, password
 //   PUT    /api/email/default               { mailboxId } the company mailbox
 //   PUT    /api/email/feedback              { enabled } "how did we do?" emails
+//   PUT    /api/email/closed-email          { enabled } "ticket closed" emails
 //   PUT    /api/email/confirmations         which new tickets get "we got it"
 //   DELETE /api/email/mailboxes/:id
 //   POST   /api/email/mailboxes/:id/check   check for new emails now
@@ -1589,6 +1590,7 @@ async function overview() {
     defaultMailboxId: await defaultMailboxId(),
     // "How did we do?" emails when tickets are resolved (notices.js)
     feedbackEmail: (await feedbackSetting())?.enabled !== false,
+    closedEmail: (await closedEmailSetting())?.enabled !== false,
     // Which new tickets get a "we got your request" email
     confirmations: await confirmSettings(),
     filters: await emailFilters(),
@@ -1716,6 +1718,14 @@ async function startSignIn(req, { mine }) {
   return { url: url.toString() };
 }
 
+async function closedEmailSetting() {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, "closedEmail"));
+  return row?.value;
+}
+
 async function feedbackSetting() {
   const [row] = await db
     .select()
@@ -1777,6 +1787,16 @@ emailRouter.put("/feedback", async (req, res) => {
   await db
     .insert(settings)
     .values({ key: "feedbackEmail", value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  res.json(await overview());
+});
+
+// Turn the "your ticket is closed" emails on or off (on to start with)
+emailRouter.put("/closed-email", async (req, res) => {
+  const value = { enabled: Boolean(req.body?.enabled) };
+  await db
+    .insert(settings)
+    .values({ key: "closedEmail", value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
   res.json(await overview());
 });

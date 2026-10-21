@@ -42,6 +42,7 @@ import {
 } from "../../data";
 import Droplets from "../Droplets";
 import TicketJobs from "../TicketJobs";
+import AnswerModal from "../AnswerModal";
 import { directionsLink } from "../../location";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
@@ -89,7 +90,7 @@ const NOTE_CHANNEL_LABEL = {
 
 // One entry in the conversation. `onDelete` is only given for internal
 // notes this person may delete (their own, or any if they're an Admin).
-function Message({ message, onDelete }) {
+function Message({ message, onDelete, onSaveFix }) {
   // Deleting asks "are you sure?" right on the note first
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -134,6 +135,17 @@ function Message({ message, onDelete }) {
             <span className="hidden sm:inline">Only agents see this</span>
             <span className="sm:hidden">Internal</span>
           </span>
+        )}
+        {onSaveFix && message.body && (
+          <button
+            type="button"
+            aria-label="Save to Knowledge Base"
+            title="Save to Knowledge Base (it stays here too)"
+            onClick={() => onSaveFix(message.body)}
+            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted transition hover:bg-brand/10 hover:text-brand active:scale-[0.92]"
+          >
+            <BookOpen className="h-4 w-4" />
+          </button>
         )}
         {onDelete && !confirming && (
           <button
@@ -289,12 +301,11 @@ function Composer({ ticket, onSend }) {
   const [body, setBody] = useState("");
   const [thenStatus, setThenStatus] = useState(""); // "" = keep the current status
 
-  // Save the note to the Knowledge Base? null = decide automatically:
-  // yes when resolving or closing (the note is probably the fix), otherwise no.
-  // Once the checkbox is clicked, that choice is used instead.
-  const [saveChoice, setSaveChoice] = useState(null);
-  const resolving = thenStatus === "resolved" || thenStatus === "closed";
-  const saveToAnswers = saveChoice ?? resolving;
+  // Also save the note to the Knowledge Base? Ticked: the save box opens
+  // with the note in it, once it's added. (Resolving or closing the
+  // ticket opens that box anyway, if nothing was saved from it yet.)
+  const [saveChoice, setSaveChoice] = useState(false);
+  const saveToAnswers = saveChoice;
 
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -331,7 +342,7 @@ function Composer({ ticket, onSend }) {
       );
       setBody("");
       setThenStatus("");
-      setSaveChoice(null);
+      setSaveChoice(false);
       setNoteChannel("");
       attach.clear();
     } catch (err) {
@@ -823,6 +834,10 @@ export default function TicketDetail() {
   // A message if a change (status, assignee...) didn't save
   const [changeError, setChangeError] = useState("");
   const [savedAnswer, setSavedAnswer] = useState(null); // the answer just saved from a note
+  // The "save the fix to the Knowledge Base" box: { draft, resolved }
+  const [fixBox, setFixBox] = useState(null);
+  // Just closed here: say the customer is told, with a WhatsApp button
+  const [justClosed, setJustClosed] = useState(null); // ticket id
   const [deleting, setDeleting] = useState(false); // the "are you sure?" box
 
   const ticket = tickets.find((t) => t.id === Number(id));
@@ -885,6 +900,40 @@ export default function TicketDetail() {
     .slice(0, 3)
     .map((s) => s.answer);
 
+  const hasAnswer = answers.some((a) => a.ticketId === ticket.id);
+
+  // Opens the "save the fix" box, filled in from the ticket: its title,
+  // what the customer said, and the fix (the note given, or else the
+  // ticket's notes, or else the team's last reply)
+  function askToSaveFix(fix, { resolved = false } = {}) {
+    const said = (ticket.messages ?? []).filter((m) => m.body?.trim());
+    const notes = said.filter((m) => m.kind === "note").map((m) => m.body);
+    const lastReply = said.filter((m) => m.kind === "agent").at(-1)?.body;
+    const solution = fix?.trim() || notes.join("\n\n") || lastReply || "";
+    const problem = ticket.description?.trim() || ticket.subject;
+    setFixBox({
+      resolved,
+      draft: {
+        title: ticket.subject,
+        department: ticket.department,
+        problem,
+        solution,
+        keywords: extractKeywords(
+          `${ticket.subject} ${ticket.subject} ${problem} ${solution}`,
+        ),
+      },
+    });
+  }
+
+  // After the status changes here: finished now (and wasn't before)?
+  // Ask to save the fix (once per ticket), and if closed, say the
+  // customer is told
+  function afterStatus(status, before, fix) {
+    const finishing = isDone({ status }) && !isDone({ status: before });
+    if (finishing && !hasAnswer) askToSaveFix(fix, { resolved: true });
+    if (status === "closed") setJustClosed(ticket.id);
+  }
+
   // Sends a reply or note to the server (throws if it doesn't save, so
   // the reply box can keep what was written)
   async function handleSend(
@@ -895,35 +944,27 @@ export default function TicketDetail() {
     attachmentIds,
     channel,
   ) {
+    const before = ticket.status;
     await addMessage(ticket.id, kind, body, status, attachmentIds, channel);
-    if (saveToAnswers) {
-      // The ticket's subject becomes the title, the ticket's description the problem,
-      // and the note the fix. Keywords are picked from all three.
-      // The note is already saved, so if this part fails, say so
-      // instead of letting the note be sent twice
-      try {
-        const answer = await addAnswer({
-          title: ticket.subject,
-          problem: ticket.description,
-          solution: body,
-          department: ticket.department,
-          ticketId: ticket.id,
-          source: "note",
-          keywords: extractKeywords(
-            `${ticket.subject} ${ticket.subject} ${ticket.description} ${body}`,
-          ),
-        });
-        setSavedAnswer(answer);
-      } catch (err) {
-        setSavedAnswer(null);
-        setChangeError(
-          `The note was added, but it couldn't be saved to the Knowledge Base: ${err.message}`,
-        );
-      }
-    } else {
-      setSavedAnswer(null);
-    }
+    setSavedAnswer(null);
+    if (status) afterStatus(status, before, body);
+    // Ticked "Also save to Knowledge Base" (and not asked already above)
+    if (saveToAnswers && !(status && isDone({ status }) && !hasAnswer))
+      askToSaveFix(body);
   }
+
+  // Saves what's in the box. The notes on the ticket stay as they are.
+  async function saveFix(fields) {
+    const answer = await addAnswer({
+      ...fields,
+      ticketId: ticket.id,
+      source: "note",
+    });
+    setSavedAnswer(answer);
+  }
+
+  const closedNow = justClosed === ticket.id && ticket.status === "closed";
+  const closedText = `Hi ${customer.name.split(" ")[0]}, your request #${ticket.id} (${ticket.subject}) is now closed. If you need anything else, just let us know.`;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -1011,8 +1052,10 @@ export default function TicketDetail() {
                 me={me}
                 onChange={async (changes) => {
                   setChangeError("");
+                  const before = ticket.status;
                   try {
                     await updateTicket(ticket.id, changes);
+                    if (changes.status) afterStatus(changes.status, before);
                   } catch (err) {
                     setChangeError(err.message);
                   }
@@ -1079,6 +1122,12 @@ export default function TicketDetail() {
                   key={m.id}
                   message={m}
                   // Notes can be deleted by whoever wrote them, or an Admin
+                  // Notes and replies can be saved to the Knowledge Base
+                  onSaveFix={
+                    m.kind === "note" || m.kind === "agent"
+                      ? (body) => askToSaveFix(body)
+                      : undefined
+                  }
                   onDelete={
                     m.kind === "note" &&
                     (m.authorId === me.id || can(me.role, "deleteTickets"))
@@ -1105,10 +1154,59 @@ export default function TicketDetail() {
             </div>
           )}
 
+          {closedNow && (
+            <div className="flex flex-col gap-2 rounded-lg border border-line bg-white px-3 py-2.5 text-sm sm:flex-row sm:items-center">
+              <CircleCheck className="hidden h-4 w-4 shrink-0 text-brand sm:block" />
+              <p className="flex-1">
+                Ticket closed.{" "}
+                {customer.email && ticket.emailReady
+                  ? `${customer.name.split(" ")[0]} gets an email saying #${ticket.id} is closed, in about a minute.`
+                  : "The customer isn't emailed (no email address, or no company mailbox yet)."}
+              </p>
+              {whatsappLink(customer.phone) && (
+                <a
+                  href={whatsappLink(customer.phone, closedText)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-line px-3 font-medium text-brand transition hover:border-brand/40 hover:bg-brand/5 active:scale-[0.97]"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Tell them on WhatsApp
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setJustClosed(null)}
+                className="h-9 shrink-0 cursor-pointer rounded-lg px-3 text-muted transition hover:bg-line/50 hover:text-ink"
+              >
+                Done
+              </button>
+            </div>
+          )}
+
           {/* key: a fresh reply box for every ticket, so drafts never follow you */}
           <Composer key={ticket.id} ticket={ticket} onSend={handleSend} />
         </section>
       </div>
+
+      {fixBox && (
+        <AnswerModal
+          draft={fixBox.draft}
+          heading={
+            fixBox.resolved
+              ? "Save the fix to the Knowledge Base?"
+              : "Save to Knowledge Base"
+          }
+          intro={
+            fixBox.resolved
+              ? "This ticket is finished. Tidy up how it was fixed so the next person finds it. The notes on the ticket stay as they are."
+              : "Tidy it up for the Knowledge Base. The note on the ticket stays as it is."
+          }
+          cancelLabel={fixBox.resolved ? "Skip" : "Cancel"}
+          onSave={saveFix}
+          onClose={() => setFixBox(null)}
+        />
+      )}
 
       {deleting && (
         <DeleteTicketModal
