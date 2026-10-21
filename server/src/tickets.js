@@ -230,6 +230,13 @@ function shapeTicket({ ticket: t, customer, reviewer }) {
         }
       : null,
     review: t.reviewedAt ? { by: reviewer ?? "", at: ms(t.reviewedAt) } : null,
+    // QuickBooks (quickbooks.js): to bill, and the draft invoice once made
+    billInQuickbooks: t.billInQuickbooks,
+    invoice: t.qboInvoiceId
+      ? { number: t.qboInvoiceNumber }
+      : t.qboError
+        ? { error: t.qboError }
+        : null,
   };
 }
 
@@ -316,6 +323,10 @@ async function describeChange(field, value, actor, before) {
         hour: "numeric",
         minute: "2-digit",
       })}`;
+    case "billInQuickbooks":
+      return value
+        ? "marked the ticket to bill in QuickBooks"
+        : "marked the ticket as not billed in QuickBooks";
     default:
       return `updated ${field}`;
   }
@@ -435,6 +446,8 @@ ticketsRouter.post("/", requireAuth, async (req, res) => {
         : new Date(now.getTime() + SLA_HOURS[priority].resolve * HOUR),
       source: "agent",
       authorName: customer.name,
+      // A draft invoice in QuickBooks when it's closed (quickbooks.js)
+      billInQuickbooks: req.body?.billInQuickbooks === true,
     };
   } else if (req.user.role === "customer" && req.user.customerId) {
     const priority = 2; // Medium, until the team looks at it
@@ -529,6 +542,12 @@ ticketsRouter.patch("/:id", requireAuth, async (req, res) => {
     if ("assignee" in body)
       changes.assigneeId = await cleanAssignee(body.assignee);
     if ("dueBy" in body) changes.dueBy = cleanDate(body.dueBy);
+    // Bill it in QuickBooks: Admins only (quickbooks.js)
+    if ("billInQuickbooks" in body) {
+      if (!ADMINS.includes(req.user.role))
+        throw new BadInput("Only Admins choose what's billed.", 403);
+      changes.billInQuickbooks = body.billInQuickbooks === true;
+    }
   } else {
     if (
       Object.keys(body).some((k) => k !== "status") ||

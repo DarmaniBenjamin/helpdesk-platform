@@ -96,6 +96,12 @@ const IMPORTANT = [
     p: /^\/integrations\/backup(\/secret)?$/,
     what: "change the backup gateway connection",
   },
+  // QuickBooks: the app's keys, connecting, disconnecting
+  {
+    m: ["PUT", "POST", "DELETE"],
+    p: /^\/quickbooks(\/app|\/connect)?$/,
+    what: "change the QuickBooks connection",
+  },
   // Maintenance → AI & GitHub, and Domain & SSL
   {
     m: ["PUT", "POST", "DELETE"],

@@ -78,6 +78,14 @@ documentation are the exclusive property of the author.
   and ticket history.
 - **Customer portal:** customers can sign in to see their tickets, reply,
   and send new requests.
+- **Billing in QuickBooks Online:** tick **Bill in QuickBooks** when adding
+  a ticket (or later, on the ticket; Admins only). When the ticket is
+  closed, a **draft** invoice is made in QuickBooks for that customer
+  (matched by email or name, or added), with the ticket number, title and
+  the fix from the notes, on one $0.00 line. Nothing is sent to the
+  customer: open it in QuickBooks (the ticket links to it), add the hours,
+  parts and prices, and send it from there. Set up in
+  **Integrations → QuickBooks Online**.
 
 ### Alerts
 
@@ -479,6 +487,14 @@ Signed in as the Super Admin:
 3. **Team:** add your departments, then invite your Admins and agents.
 4. Optional: **Integrations → WhatsApp / Phone**, and **Settings → Import
    from Freshdesk**.
+   For **Integrations → QuickBooks Online**: make a free app at
+   developer.intuit.com (QuickBooks Online and Payments, Accounting
+   scope), add the Redirect URI the card shows
+   (`https://your-domain/api/quickbooks/callback`), and paste its Client ID
+   and Client Secret into the card. Development keys connect a test
+   (sandbox) company; the Production keys, for your real company, come
+   after Intuit approves the app (their questionnaire, usually 1–3
+   weeks).
 5. Allow notifications when the browser asks, on each computer and phone.
 
 ### Step 9. Moving an existing helpdesk (restoring from Backblaze)

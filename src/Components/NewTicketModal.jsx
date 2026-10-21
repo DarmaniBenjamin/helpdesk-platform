@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { CircleCheck, Plus } from "lucide-react";
+import { CircleCheck, Plus, Receipt } from "lucide-react";
 import Modal from "./Modal";
 import CustomerPicker from "./CustomerPicker";
 import CustomerFields from "./CustomerFields";
@@ -12,6 +12,7 @@ import {
 } from "./formStyles";
 import { SLA_HOURS, PRIORITIES, DEPARTMENTS, HOUR } from "../data";
 import useData from "../useData";
+import { api } from "../api";
 
 // Turns a time into the format a date-time input expects, e.g. "2026-09-24T17:30"
 function toInputValue(time) {
@@ -47,6 +48,15 @@ export default function NewTicketModal({ onClose }) {
   // Email the customer "we've logged your request #123"? (only if they
   // have an email; see server/src/email.js)
   const [confirm, setConfirm] = useState(true);
+  // Bill it in QuickBooks? (asked once here; only when QuickBooks is
+  // connected, see server/src/quickbooks.js)
+  const [bill, setBill] = useState(false);
+  const [quickbooks, setQuickbooks] = useState(null); // { connected, companyName }
+  useEffect(() => {
+    api("/quickbooks")
+      .then(setQuickbooks)
+      .catch(() => setQuickbooks(null));
+  }, []);
   const customerEmail =
     customerMode === "existing" ? selectedCustomer?.email : newCustomer.email;
   const customerFirstName = (
@@ -89,6 +99,7 @@ export default function NewTicketModal({ onClose }) {
     setDueBy(defaultDue(2));
     setDueEdited(false);
     setConfirm(true);
+    setBill(false);
     setNewCustomer(blankCustomer);
     if (customer) {
       setSelectedCustomer(customer);
@@ -154,6 +165,7 @@ export default function NewTicketModal({ onClose }) {
         priority,
         dueBy: new Date(dueBy).getTime(),
         confirm: confirm && Boolean(customer.email),
+        billInQuickbooks: Boolean(quickbooks?.connected) && bill,
       });
       document.activeElement?.blur();
       if (another) startAnother({ ticket, isNew }, customer);
@@ -439,6 +451,29 @@ export default function NewTicketModal({ onClose }) {
           className={`${inputClass} h-auto shrink-0 py-2.5`}
         />
       </label>
+
+      {/* Bill in QuickBooks: a draft invoice when it's closed */}
+      {quickbooks?.connected && (
+        <label className="flex cursor-pointer items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={bill}
+            onChange={(e) => setBill(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+          />
+          <span>
+            <span className="flex items-center gap-1.5">
+              <Receipt className="h-3.5 w-3.5 text-muted" />
+              Bill in QuickBooks
+            </span>
+            <span className="block text-xs text-muted">
+              When it's closed, a draft invoice is made in{" "}
+              {quickbooks.companyName || "QuickBooks"} for you to finish and
+              send. Leave it off for check-ups, reminders and internal work.
+            </span>
+          </span>
+        </label>
+      )}
 
       {/* "We've logged your request #123" (server/src/email.js) */}
       {customerEmail && (

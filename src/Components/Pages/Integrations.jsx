@@ -1,14 +1,10 @@
 import { useState } from "react";
-import {
-  Check,
-  Copy,
-  ExternalLink,
-  Globe,
-} from "lucide-react";
+import { Check, Copy, ExternalLink, Globe } from "lucide-react";
 import { copyText } from "../copyText";
 import BackupAlerts from "../BackupAlerts";
 import EmailIntegration from "../EmailIntegration";
 import PhoneIntegration from "../PhoneIntegration";
+import QuickBooksIntegration from "../QuickBooksIntegration";
 import WhatsAppIntegration from "../WhatsAppIntegration";
 import MyIntegrations from "../MyIntegrations";
 import { can } from "../teamRoles";
@@ -20,8 +16,8 @@ import { inputClass, labelClass, secondaryButton } from "../formStyles";
 // message, a phone call) into tickets in the same Inbox.
 //
 // Website form (here), email (EmailIntegration.jsx), WhatsApp
-// (WhatsAppIntegration.jsx), phone (PhoneIntegration.jsx) and backup
-// alerts (BackupAlerts.jsx).
+// (WhatsAppIntegration.jsx), phone (PhoneIntegration.jsx), QuickBooks
+// invoices (QuickBooksIntegration.jsx) and backup alerts (BackupAlerts.jsx).
 
 function CopyButton({ value, label }) {
   const [copied, setCopied] = useState(false);
@@ -206,6 +202,7 @@ export default function Integrations() {
       <EmailIntegration />
       <WhatsAppIntegration />
       <PhoneIntegration />
+      <QuickBooksIntegration />
       <BackupAlerts />
     </div>
   );

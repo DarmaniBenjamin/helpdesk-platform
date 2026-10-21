@@ -38,6 +38,11 @@ import { backupRouter, startAutomaticBackups } from "./backup.js";
 import { offsiteRouter, startOffsiteCopies } from "./offsite.js";
 import { setupOwnerRouter } from "./setup-owner.js";
 import { jobsRouter, startJobReminders } from "./jobs.js";
+import {
+  quickbooksRouter,
+  ticketInvoiceRouter,
+  startQuickbooksInvoices,
+} from "./quickbooks.js";
 import { remindersRouter, startReminders } from "./reminders.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
@@ -276,7 +281,9 @@ app.use("/api/team", teamRouter); // the team, invites, access levels
 app.use("/api/invites", inviteRouter); // accepting an invite
 app.use("/api/departments", departmentsRouter);
 app.use("/api/customers", customersRouter);
+app.use("/api/tickets/:id/quickbooks", ticketInvoiceRouter); // its QuickBooks invoice
 app.use("/api/tickets", ticketsRouter);
+app.use("/api/quickbooks", quickbooksRouter); // Integrations → QuickBooks
 app.use("/api/answers", answersRouter); // the Knowledge Base
 app.use("/api/jobs", jobsRouter); // the calendar: scheduled jobs
 app.use("/api/reminders", remindersRouter); // the Reminders page
@@ -421,6 +428,8 @@ app.listen(...target, () => {
   startFeedbackEmails();
   // Every minute: "your job starts in 30 minutes" reminders
   startJobReminders();
+  // Every minute: draft QuickBooks invoices for billable tickets just closed
+  startQuickbooksInvoices();
   startReminders();
   // Every minute: a copy to the cloud if anything changed (offsite.js)
   startOffsiteCopies();

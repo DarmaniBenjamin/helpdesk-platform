@@ -21,6 +21,7 @@ import {
   BellRing,
   Star,
   Bug,
+  Receipt,
 } from "lucide-react";
 import useDismiss from "./useDismiss";
 import useClosing from "./useClosing";
@@ -47,6 +48,7 @@ const NOTIFICATION_ICONS = {
   jobNow: AlarmClock,
   reminder: BellRing,
   feedback: Star,
+  quickbooks: Receipt,
 };
 
 function IconButton({

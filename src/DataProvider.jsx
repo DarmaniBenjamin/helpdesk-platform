@@ -918,6 +918,7 @@ export default function DataProvider({ children }) {
     description,
     attachmentIds = [],
     confirm = false,
+    billInQuickbooks = false,
   }) {
     // confirm: email the customer "we got your request" (Add Ticket).
     // The answer says whether it went: ticket.confirmation { sent, why }
@@ -933,6 +934,7 @@ export default function DataProvider({ children }) {
           description,
           attachmentIds,
           confirm,
+          billInQuickbooks,
         },
       }),
     );

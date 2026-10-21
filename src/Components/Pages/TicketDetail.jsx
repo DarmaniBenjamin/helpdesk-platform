@@ -42,6 +42,7 @@ import {
 } from "../../data";
 import Droplets from "../Droplets";
 import TicketJobs from "../TicketJobs";
+import TicketInvoice from "../TicketInvoice";
 import AnswerModal from "../AnswerModal";
 import { directionsLink } from "../../location";
 
@@ -1070,6 +1071,9 @@ export default function TicketDetail() {
             <p className="mb-2 font-semibold">Jobs</p>
             <TicketJobs ticket={ticket} />
           </div>
+
+          {/* Billing it in QuickBooks (TicketInvoice.jsx) */}
+          <TicketInvoice ticket={ticket} />
 
           {suggested.length > 0 && (
             <div className="rounded-xl border border-line bg-white p-4">

@@ -72,6 +72,9 @@ export const customers = pgTable("customers", {
   phone: text("phone").notNull().default(""),
   company: text("company"), // empty = an individual
   extraEmails: text("extra_emails").array().notNull().default([]),
+  // The same customer in QuickBooks Online, once one of their tickets
+  // has been billed there (quickbooks.js)
+  qboCustomerId: text("qbo_customer_id"),
   extraPhones: text("extra_phones").array().notNull().default([]),
   // Where they are, for site visits: saved on the spot by an agent's phone
   // ("I'm here"), or typed in / pasted from a maps link. Opens in the
@@ -177,6 +180,14 @@ export const tickets = pgTable(
       onDelete: "set null",
     }),
     reviewedAt: time("reviewed_at"),
+    // QuickBooks Online (quickbooks.js): ticked when the ticket is made
+    // (or later). A draft invoice is made when it's closed, for someone
+    // to finish and send in QuickBooks.
+    billInQuickbooks: boolean("bill_in_quickbooks").notNull().default(false),
+    qboInvoiceId: text("qbo_invoice_id"),
+    qboInvoiceNumber: text("qbo_invoice_number"),
+    // Why the draft invoice couldn't be made (cleared by "Try again")
+    qboError: text("qbo_error"),
     // When the "due soon" and "overdue" notifications went out, so each
     // is only sent once. Cleared when the due date changes.
     dueSoonNotifiedAt: time("due_soon_notified_at"),
