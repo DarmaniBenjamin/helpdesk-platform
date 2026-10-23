@@ -108,7 +108,7 @@ export default function AnswerModal({
               type="button"
               onClick={handleDelete}
               disabled={busy}
-              className="h-11 flex-1 cursor-pointer rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+              className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
             >
               {busy ? "Deleting…" : "Yes, delete it"}
             </button>

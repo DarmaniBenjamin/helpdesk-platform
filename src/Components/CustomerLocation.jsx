@@ -197,7 +197,7 @@ export default function CustomerLocation({ customer, onSave }) {
                   setNote("");
                 }
               }}
-              className="h-9 flex-1 cursor-pointer rounded-lg bg-red-500 px-3 font-medium text-white sm:flex-none"
+              className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 font-medium sm:flex-none transition"
             >
               Remove
             </button>

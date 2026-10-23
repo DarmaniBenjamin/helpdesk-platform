@@ -606,7 +606,7 @@ export default function Performance() {
           <button
             type="button"
             onClick={exportReport}
-            className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+            className="btn-clear flex h-8.5 sm:h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium"
           >
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>
@@ -899,7 +899,7 @@ export default function Performance() {
                     <button
                       type="button"
                       onClick={() => setFeedbackShown((n) => n + FEEDBACK_PAGE)}
-                      className="h-10 cursor-pointer self-center rounded-lg border border-line bg-white px-5 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+                      className="btn-clear h-8.5 sm:h-7 cursor-pointer self-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
                     >
                       Show more ({feedbackList.length - feedbackShown} left)
                     </button>

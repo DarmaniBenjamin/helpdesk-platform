@@ -90,7 +90,7 @@ function ConfirmRestore({ what, contents, onConfirm, onClose }) {
           <button
             type="submit"
             disabled={!ready || busy}
-            className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            className="btn-glass btn-glass-red flex h-8.5 sm:h-7 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
             {busy && <Droplets className="h-4 w-4" />}
             {busy ? "Restoring…" : "Restore"}
@@ -337,7 +337,7 @@ export default function BackupRestore() {
                         }),
                     })
                   }
-                  className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-500 px-4 text-sm font-medium text-white transition hover:bg-red-600 active:scale-[0.97]"
+                  className="btn-glass btn-glass-red flex h-8.5 sm:h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
                 >
                   <RotateCcw className="h-4 w-4" />
                   Restore this backup

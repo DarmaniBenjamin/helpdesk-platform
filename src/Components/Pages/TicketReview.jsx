@@ -305,7 +305,7 @@ function Closed({ tickets, onOpen, onReview }) {
         <button
           type="button"
           onClick={() => setVisible((v) => v + PAGE_SIZE)}
-          className="h-11 cursor-pointer self-center rounded-lg border border-line bg-white px-6 text-sm font-medium transition hover:border-brand/40 hover:text-brand active:scale-[0.97]"
+          className="btn-clear h-8.5 sm:h-7 cursor-pointer self-center rounded-md px-3.5 text-sm font-medium transition active:scale-[0.97]"
         >
           Show more ({tickets.length - visible} left)
         </button>

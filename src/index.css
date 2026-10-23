@@ -78,44 +78,80 @@ html.dark {
     box-shadow: var(--glow-card);
   }
 
-  /* The main button: glass. See-through blue with a glowing edge and a
-     light catching its top (formStyles.js: primaryButton) */
+  /* glass:start (made by a script: changed as a whole) */
+  /* Buttons are glass (formStyles.js, and buttons with their own sizes):
+       btn-glass        blue: the main button
+       btn-glass-red    red (with btn-glass): delete and other danger
+       btn-clear        clear: everything else (Cancel, Add a note...)
+     See-through colour, a glowing edge, and light catching the top. */
   .btn-glass {
-    color: var(--color-brand);
-    border: 1px solid color-mix(in srgb, var(--color-brand) 45%, transparent);
+    --glass: var(--color-brand);
+    color: var(--glass);
+    border: 1px solid color-mix(in srgb, var(--glass) 45%, transparent);
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-brand) 18%, transparent),
-      color-mix(in srgb, var(--color-brand) 8%, transparent)
+      color-mix(in srgb, var(--glass) 18%, transparent),
+      color-mix(in srgb, var(--glass) 8%, transparent)
     );
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.35),
-      0 0 18px -6px var(--color-brand);
+      0 0 18px -6px var(--glass);
     backdrop-filter: blur(6px);
   }
+  .btn-glass-red {
+    --glass: #e5484d;
+  }
   .btn-glass:hover {
-    border-color: color-mix(in srgb, var(--color-brand) 65%, transparent);
+    border-color: color-mix(in srgb, var(--glass) 65%, transparent);
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-brand) 26%, transparent),
-      color-mix(in srgb, var(--color-brand) 12%, transparent)
+      color-mix(in srgb, var(--glass) 26%, transparent),
+      color-mix(in srgb, var(--glass) 12%, transparent)
     );
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.4),
-      0 0 24px -6px var(--color-brand);
+      0 0 24px -6px var(--glass);
   }
   .dark .btn-glass {
-    color: #cfe0ff;
+    color: color-mix(in srgb, var(--glass) 35%, #fff);
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.08),
-      0 0 18px -6px var(--color-brand);
+      0 0 18px -6px var(--glass);
+  }
+  .dark .btn-glass-red {
+    --glass: #ff5c61;
   }
   .dark .btn-glass:hover {
     color: #fff;
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.12),
-      0 0 24px -6px var(--color-brand);
+      0 0 24px -6px var(--glass);
   }
+  .btn-clear {
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.55));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px rgb(11 22 48 / 0.06);
+    backdrop-filter: blur(6px);
+  }
+  .btn-clear:hover {
+    color: var(--color-brand);
+    border-color: color-mix(in srgb, var(--color-brand) 45%, transparent);
+  }
+  .dark .btn-clear {
+    border-color: #232c3d;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.025));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      0 0 14px -8px rgb(140 170 255 / 0.5);
+  }
+  .dark .btn-clear:hover {
+    color: #fff;
+    border-color: color-mix(in srgb, var(--color-brand) 55%, transparent);
+  }
+  /* glass:end */
 }
 
 /* White text stays white (buttons, avatars), even though "white"
