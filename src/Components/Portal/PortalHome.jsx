@@ -46,7 +46,7 @@ export default function PortalHome() {
         </div>
         <Link
           to="/portal/new"
-          className="btn-glass flex h-8.5 sm:h-7 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto"
+          className="btn-glass flex min-h-8.5 sm:min-h-7 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto py-0.5 leading-5 text-center sm:text-[13px]"
         >
           <Plus className="h-4 w-4" />
           New request

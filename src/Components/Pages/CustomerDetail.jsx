@@ -184,7 +184,7 @@ function ContactList({
                       const ok = await onRemove(item);
                       if (ok !== false) setRemoving(null);
                     }}
-                    className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 font-medium transition active:scale-[0.97] sm:flex-none"
+                    className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 font-medium transition active:scale-[0.97] sm:flex-none py-0.5 leading-5 text-center basis-auto"
                   >
                     Remove
                   </button>
@@ -284,7 +284,7 @@ function DeleteCustomerModal({ customer, ticketCount, onConfirm, onClose }) {
           <button
             type="submit"
             disabled={!matches || busy}
-            className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
           >
             {busy ? "Deleting…" : "Delete for good"}
           </button>

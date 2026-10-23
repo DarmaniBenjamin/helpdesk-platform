@@ -86,7 +86,7 @@ function Detail({ id, version, onBack }) {
       type="button"
       disabled={Boolean(busy)}
       onClick={() => act(what, path)}
-      className={`${primary ? primaryButton : secondaryButton} flex h-auto! min-h-11 basis-auto items-center justify-center gap-2 py-2 disabled:opacity-60`}
+      className={`${primary ? primaryButton : secondaryButton} flex basis-auto items-center justify-center gap-2 disabled:opacity-60`}
     >
       {busy === what ? <Droplets className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
       {label}
@@ -176,7 +176,7 @@ function Detail({ id, version, onBack }) {
         {alert.ticketId && (
           <Link
             to={`/tickets/${alert.ticketId}`}
-            className={`${secondaryButton} flex h-auto! min-h-11 basis-auto items-center justify-center gap-2 py-2`}
+            className={`${secondaryButton} flex basis-auto items-center justify-center gap-2`}
           >
             <Ticket className="h-4 w-4" /> Open ticket #{alert.ticketId}
           </Link>

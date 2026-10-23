@@ -152,7 +152,7 @@ export default function PasswordCard() {
             <button
               type="submit"
               disabled={!ready}
-              className={`${primaryButton} order-first disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand sm:order-last`}
+              className={`${primaryButton} order-first disabled:cursor-not-allowed disabled:opacity-50 sm:order-last`}
             >
               {busy ? "Saving…" : "Save new password"}
             </button>

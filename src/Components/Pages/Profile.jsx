@@ -303,7 +303,7 @@ export default function Profile() {
               <button
                 type="submit"
                 disabled={!changed || saving}
-                className={`${primaryButton} order-first sm:order-last disabled:cursor-default disabled:opacity-50 disabled:hover:bg-brand`}
+                className={`${primaryButton} order-first sm:order-last disabled:cursor-default disabled:opacity-50`}
               >
                 {saving ? "Saving…" : "Save changes"}
               </button>

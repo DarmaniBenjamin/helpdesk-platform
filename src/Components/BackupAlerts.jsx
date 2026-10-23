@@ -122,7 +122,7 @@ function LinkModal({ client, onClose, onSaved }) {
           <button
             type="submit"
             disabled={saving}
-            className="btn-glass h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 sm:flex-none"
+            className="btn-glass min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
           >
             {saving ? "Saving…" : "Link"}
           </button>
@@ -234,7 +234,7 @@ export default function BackupAlerts() {
             type="button"
             disabled={busy === "enable"}
             onClick={() => save("enable", { enabled: true })}
-            className="btn-glass h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60"
+            className="btn-glass min-h-8.5 sm:min-h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 py-0.5 leading-5 text-center sm:text-[13px]"
           >
             {busy === "enable" ? "Turning on…" : "Turn on backup alerts"}
           </button>
@@ -441,7 +441,7 @@ export default function BackupAlerts() {
               </button>
               <button
                 type="submit"
-                className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition sm:flex-none"
+                className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
               >
                 Make a new secret
               </button>

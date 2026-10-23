@@ -22,7 +22,7 @@ export default function NoAccess() {
       </p>
       <Link
         to="/inbox"
-        className="btn-glass mt-2 flex h-8.5 sm:h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
+        className="btn-glass mt-2 flex min-h-8.5 sm:min-h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97] py-0.5 leading-5 text-center sm:text-[13px]"
       >
         Go to the Inbox
       </Link>

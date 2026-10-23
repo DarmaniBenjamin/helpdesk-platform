@@ -90,7 +90,7 @@ export default function CustomerInviteModal({ onClose }) {
                 setTimeout(() => setCopied(false), 2000);
               }
             }}
-            className="btn-glass flex h-8.5 sm:h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium transition active:scale-[0.97]"
+            className="btn-glass flex min-h-8.5 sm:min-h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium transition active:scale-[0.97] py-0.5 leading-5 text-center"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5" />

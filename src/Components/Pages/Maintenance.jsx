@@ -387,7 +387,7 @@ function Detail({ id, ai, onBack, onChanged }) {
               type="button"
               disabled={busy === "investigate"}
               onClick={investigate}
-              className="btn-glass flex min-h-8.5 sm:min-h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-1.5 text-center text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 sm:w-auto"
+              className="btn-glass flex min-h-8.5 sm:min-h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-center text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 sm:w-auto py-0.5 leading-5 sm:text-[13px]"
             >
               {busy === "investigate" ? <Droplets className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
               {github.issueNumber ? "Investigate again" : "Investigate with AI"}

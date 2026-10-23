@@ -123,7 +123,7 @@ export default function PortalNewRequest() {
           <button
             type="submit"
             disabled={busy || attach.uploading > 0}
-            className="btn-glass order-first h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last"
+            className="btn-glass order-first min-h-8.5 sm:min-h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last py-0.5 leading-5 text-center sm:text-[13px]"
           >
             {busy ? "Sending…" : "Send request"}
           </button>

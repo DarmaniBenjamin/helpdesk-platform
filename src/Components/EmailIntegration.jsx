@@ -366,7 +366,7 @@ function MailboxCard({ box, agents, teams, onChange, onSignIn }) {
               </button>
               <button
                 type="submit"
-                className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition sm:flex-none"
+                className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
               >
                 Remove
               </button>

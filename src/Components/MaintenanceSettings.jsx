@@ -428,7 +428,7 @@ export default function MaintenanceSettings({ onChanged }) {
                         <PasswordInput value={client.clientSecret} onChange={(e) => setClient({ ...client, clientSecret: e.target.value.trim() })} autoComplete="off" />
                       </label>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
                         disabled={!client.clientId || busy === "client"}
@@ -438,11 +438,11 @@ export default function MaintenanceSettings({ onChanged }) {
                         Save
                       </button>
                       {info.openai.clientId ? (
-                        <a href="/api/maintenance/openai/signin" className={`${primaryButton} flex h-auto! min-h-11 items-center justify-center py-2 text-center`}>
+                        <a href="/api/maintenance/openai/signin" className={`${primaryButton} flex items-center justify-center text-center`}>
                           Continue with ChatGPT
                         </a>
                       ) : (
-                        <span className={`${primaryButton} flex h-auto! min-h-11 cursor-not-allowed items-center justify-center py-2 text-center opacity-50`}>Continue with ChatGPT</span>
+                        <span className={`${primaryButton} flex cursor-not-allowed items-center justify-center text-center opacity-50`}>Continue with ChatGPT</span>
                       )}
                     </div>
                   </>

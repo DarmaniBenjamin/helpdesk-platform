@@ -1000,7 +1000,7 @@ export default function FreshdeskImport() {
                 type="button"
                 onClick={runImport}
                 disabled={nothingToImport || Boolean(importing)}
-                className={`${primaryButton} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand`}
+                className={`${primaryButton} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {importing ? "Importing…" : "Import"}
               </button>

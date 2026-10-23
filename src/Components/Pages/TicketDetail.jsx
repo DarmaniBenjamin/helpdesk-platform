@@ -183,7 +183,7 @@ function Message({ message, onDelete, onSaveFix }) {
               type="button"
               onClick={confirmDelete}
               disabled={deleting}
-              className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+              className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
             >
               {deleting ? "Deleting…" : "Delete note"}
             </button>
@@ -766,7 +766,7 @@ function DeleteTicketModal({ ticket, onConfirm, onClose }) {
           <button
             type="submit"
             disabled={!matches || busy}
-            className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
           >
             {busy ? "Deleting…" : "Delete for good"}
           </button>

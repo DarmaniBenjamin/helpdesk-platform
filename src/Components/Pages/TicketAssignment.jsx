@@ -240,7 +240,7 @@ export default function TicketAssignment() {
         <button
           type="button"
           onClick={() => exportRules(rules)}
-          className="btn-clear flex h-8.5 sm:h-7 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium"
+          className="btn-clear flex min-h-8.5 sm:min-h-7 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium py-0.5 leading-5 text-center sm:text-[13px]"
         >
           <Download className="h-4 w-4" />
           Export
@@ -267,7 +267,7 @@ export default function TicketAssignment() {
           <button
             type="button"
             onClick={() => setEditing("new")}
-            className="btn-glass flex h-8.5 sm:h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto"
+            className="btn-glass flex min-h-8.5 sm:min-h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto py-0.5 leading-5 text-center sm:text-[13px]"
           >
             <Plus className="h-4 w-4" />
             New Rule

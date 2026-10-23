@@ -83,7 +83,8 @@ html.dark {
        btn-glass        blue: the main button
        btn-glass-red    red (with btn-glass): delete and other danger
        btn-clear        clear: everything else (Cancel, Add a note...)
-     See-through colour, a glowing edge, and light catching the top. */
+     See-through colour, a glowing edge, and light catching the top.
+     A greyed-out (disabled) button doesn't light up on hover. */
   .btn-glass {
     --glass: var(--color-brand);
     color: var(--glass);
@@ -101,7 +102,7 @@ html.dark {
   .btn-glass-red {
     --glass: #e5484d;
   }
-  .btn-glass:hover {
+  .btn-glass:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--glass) 65%, transparent);
     background: linear-gradient(
       180deg,
@@ -121,7 +122,7 @@ html.dark {
   .dark .btn-glass-red {
     --glass: #ff5c61;
   }
-  .dark .btn-glass:hover {
+  .dark .btn-glass:hover:not(:disabled) {
     color: #fff;
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.12),
@@ -136,7 +137,7 @@ html.dark {
       0 1px 2px rgb(11 22 48 / 0.06);
     backdrop-filter: blur(6px);
   }
-  .btn-clear:hover {
+  .btn-clear:hover:not(:disabled) {
     color: var(--color-brand);
     border-color: color-mix(in srgb, var(--color-brand) 45%, transparent);
   }
@@ -147,7 +148,7 @@ html.dark {
       inset 0 1px 0 rgb(255 255 255 / 0.07),
       0 0 14px -8px rgb(140 170 255 / 0.5);
   }
-  .dark .btn-clear:hover {
+  .dark .btn-clear:hover:not(:disabled) {
     color: #fff;
     border-color: color-mix(in srgb, var(--color-brand) 55%, transparent);
   }

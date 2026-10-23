@@ -152,7 +152,7 @@ export default function PhoneIntegration() {
             type="button"
             disabled={busy === "enable"}
             onClick={() => save("enable", { enabled: true })}
-            className="btn-glass flex h-8.5 sm:h-7 cursor-pointer items-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60"
+            className="btn-glass flex min-h-8.5 sm:min-h-7 cursor-pointer items-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 py-0.5 leading-5 text-center sm:text-[13px]"
           >
             {busy === "enable" && <Droplets className="h-4 w-4" />}
             Turn on phone calls

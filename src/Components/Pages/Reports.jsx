@@ -553,7 +553,7 @@ export default function Reports() {
           <button
             type="button"
             onClick={exportReport}
-            className="btn-clear flex h-8.5 sm:h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium"
+            className="btn-clear flex min-h-8.5 sm:min-h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium py-0.5 leading-5 text-center sm:text-[13px]"
           >
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>

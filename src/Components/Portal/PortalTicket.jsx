@@ -135,7 +135,7 @@ function Rating({ ticket }) {
             <button
               type="submit"
               disabled={busy}
-              className="btn-glass h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
+              className="btn-glass min-h-8.5 sm:min-h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 py-0.5 leading-5 text-center sm:text-[13px]"
             >
               {busy ? "Sending…" : "Send feedback"}
             </button>
@@ -271,7 +271,7 @@ export default function PortalTicket() {
             <button
               type="button"
               onClick={markFixed}
-              className="btn-clear flex h-8.5 sm:h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium"
+              className="btn-clear flex min-h-8.5 sm:min-h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm transition active:scale-[0.97] font-medium py-0.5 leading-5 text-center sm:text-[13px]"
             >
               <CircleCheck className="h-4 w-4" />
               My issue is fixed
@@ -297,7 +297,7 @@ export default function PortalTicket() {
               </p>
               <Link
                 to="/portal/new"
-                className="btn-glass flex h-8.5 sm:h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
+                className="btn-glass flex min-h-8.5 sm:min-h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97] py-0.5 leading-5 text-center sm:text-[13px]"
               >
                 New request
               </Link>
@@ -335,7 +335,7 @@ export default function PortalTicket() {
                     attach.uploading > 0 ||
                     busy
                   }
-                  className="btn-glass flex h-8.5 sm:h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-glass flex min-h-8.5 sm:min-h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 py-0.5 leading-5 text-center sm:text-[13px]"
                 >
                   <Send className="h-4 w-4" />
                   {busy ? "Sending…" : "Send reply"}

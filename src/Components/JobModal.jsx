@@ -155,7 +155,7 @@ export default function JobModal({ job, onClose, onSaved, onDeleted }) {
               type="button"
               onClick={remove}
               disabled={Boolean(busy)}
-              className="btn-glass btn-glass-red flex h-8.5 sm:h-7 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:opacity-60 sm:flex-none"
+              className="btn-glass btn-glass-red flex min-h-8.5 sm:min-h-7 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:opacity-60 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
             >
               {busy === "delete" && <Droplets className="h-4 w-4" />}
               Remove job

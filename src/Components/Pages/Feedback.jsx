@@ -169,7 +169,7 @@ export default function Feedback() {
         <button
           type="submit"
           disabled={!stars || busy}
-          className="btn-glass h-8.5 sm:h-7 w-full cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn-glass min-h-8.5 sm:min-h-7 w-full cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 py-0.5 leading-5 text-center sm:text-[13px]"
         >
           {busy ? "Sending…" : "Send feedback"}
         </button>

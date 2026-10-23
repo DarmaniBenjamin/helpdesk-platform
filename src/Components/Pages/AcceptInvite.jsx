@@ -109,7 +109,7 @@ export default function AcceptInvite() {
           </p>
           <Link
             to="/login"
-            className="btn-glass mt-2 flex h-8.5 sm:h-7 w-full items-center justify-center rounded-md text-sm font-medium transition"
+            className="btn-glass mt-2 flex min-h-8.5 sm:min-h-7 w-full items-center justify-center rounded-md text-sm font-medium transition py-0.5 leading-5 text-center sm:text-[13px]"
           >
             Go to sign in
           </Link>

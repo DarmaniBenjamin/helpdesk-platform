@@ -204,7 +204,7 @@ function RemoveModal({ member, openTickets, onConfirm, onClose }) {
                 setBusy(false);
               }
             }}
-            className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none"
+            className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
           >
             {busy ? "Saving…" : isInvite ? "Cancel invite" : "Remove"}
           </button>
@@ -477,7 +477,7 @@ export default function Team() {
         <button
           type="button"
           onClick={() => setModal({ type: "invite" })}
-          className="btn-glass flex h-8.5 sm:h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto"
+          className="btn-glass flex min-h-8.5 sm:min-h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto py-0.5 leading-5 text-center sm:text-[13px]"
         >
           <UserPlus className="h-4 w-4" />
           Invite member

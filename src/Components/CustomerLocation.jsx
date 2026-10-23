@@ -97,7 +97,7 @@ export default function CustomerLocation({ customer, onSave }) {
               href={directionsLink(place)}
               target="_blank"
               rel="noreferrer"
-              className="btn-glass flex h-8.5 sm:h-7 flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition sm:flex-none"
+              className="btn-glass flex min-h-8.5 sm:min-h-7 flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
             >
               <Navigation className="h-4 w-4" />
               Directions
@@ -171,7 +171,7 @@ export default function CustomerLocation({ customer, onSave }) {
             <button
               type="submit"
               disabled={busy}
-              className="btn-glass flex h-8.5 sm:h-7 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:opacity-60 sm:flex-none"
+              className="btn-glass flex min-h-8.5 sm:min-h-7 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:opacity-60 sm:flex-none py-0.5 leading-5 text-center sm:text-[13px] basis-auto"
             >
               {busy && <Droplets className="h-4 w-4" />}
               Save location
@@ -197,7 +197,7 @@ export default function CustomerLocation({ customer, onSave }) {
                   setNote("");
                 }
               }}
-              className="btn-glass btn-glass-red h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 font-medium sm:flex-none transition"
+              className="btn-glass btn-glass-red min-h-8.5 sm:min-h-7 flex-1 cursor-pointer rounded-md px-3 font-medium sm:flex-none transition py-0.5 leading-5 text-center basis-auto"
             >
               Remove
             </button>
