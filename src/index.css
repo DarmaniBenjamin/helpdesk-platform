@@ -1,12 +1,14 @@
 @import "tailwindcss";
+/* Protonic Solutions' colours: white and blue, and in dark mode true
+   black and blue, with a blue glow (see "The glow" below) */
 @theme {
   --font-sans: "Poppins", system-ui, sans-serif;
-  --color-brand: #00b67a;
-  --color-brand-soft: #e8f7ef;
-  --color-page: #f5f7f8;
-  --color-line: #eaecf0;
-  --color-ink: #101828;
-  --color-muted: #667085;
+  --color-brand: #1f5eff;
+  --color-brand-soft: #e9efff;
+  --color-page: #f4f7fd;
+  --color-line: #e2e8f4;
+  --color-ink: #0b1630;
+  --color-muted: #5a6a86;
 }
 
 /* The page colour behind everything, including when you pull past the
@@ -45,12 +47,36 @@ body {
    ============================================================ */
 html.dark {
   color-scheme: dark; /* dark scrollbars, dropdowns and date pickers */
-  --color-page: #0f141a;
-  --color-white: #161d25; /* cards, menus, inputs */
-  --color-line: #27313c;
-  --color-ink: #e7ecf2;
-  --color-muted: #93a1b1;
-  --color-brand-soft: rgb(0 182 122 / 0.14);
+  --color-page: #000000; /* true black */
+  --color-white: #07090e; /* cards, menus, inputs: just above black */
+  --color-line: #171e2c;
+  --color-ink: #e8edf8;
+  --color-muted: #8794ae;
+  /* A little brighter, so it glows on black */
+  --color-brand: #3d7eff;
+  --color-brand-soft: rgb(61 126 255 / 0.14);
+}
+
+/* ============================================================
+   The glow
+   Cards get a faint blue edge glow. The page you're on in the
+   sidebar, the main buttons and the field you're typing in get a
+   stronger one (Sidebar.jsx, formStyles.js). Utilities win over this
+   layer, so a card with its own shadow (pop-ups, menus) keeps it.
+   ============================================================ */
+:root {
+  --glow-card:
+    0 1px 2px rgb(11 22 48 / 0.04), 0 14px 34px -20px rgb(31 94 255 / 0.3);
+}
+html.dark {
+  --glow-card:
+    0 0 0 1px rgb(61 126 255 / 0.05), 0 12px 40px -24px rgb(61 126 255 / 0.42);
+}
+@layer components {
+  .rounded-xl.border-line.bg-white,
+  .rounded-2xl.border-line.bg-white {
+    box-shadow: var(--glow-card);
+  }
 }
 
 /* White text stays white (buttons, avatars), even though "white"

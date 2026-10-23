@@ -35,7 +35,7 @@ function apply(theme, animate, then) {
     // The colour of the browser bar on phones
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", theme === "dark" ? "#0f141a" : "#ffffff");
+      ?.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
     then?.();
   }
 

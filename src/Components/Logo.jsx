@@ -2,9 +2,9 @@
 // rounded square. Drawn in code (no image file), so it's sharp at any
 // size. The same drawing is in public/favicon.svg for the browser tab.
 //   className  its size, e.g. "h-8 w-8"
-//   light      a white square with a green arrow, for green backgrounds
+//   light      a white square with a blue arrow, for blue backgrounds
 export default function Logo({ className = "h-8 w-8", light = false }) {
-  const fg = light ? "#00a874" : "#fff";
+  const fg = light ? "#1f5eff" : "#fff";
   return (
     <svg
       viewBox="0 0 64 64"
@@ -14,8 +14,8 @@ export default function Logo({ className = "h-8 w-8", light = false }) {
     >
       <defs>
         <linearGradient id="uplink-logo-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#19d193" />
-          <stop offset="1" stopColor="#00976a" />
+          <stop offset="0" stopColor="#4d8bff" />
+          <stop offset="1" stopColor="#1747d9" />
         </linearGradient>
       </defs>
       <rect

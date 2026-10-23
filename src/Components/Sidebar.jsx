@@ -26,7 +26,7 @@ function SidebarLink({ link, onClick, collapsed, badge }) {
             collapsed ? "lg:justify-center" : ""
           } ${
             isActive
-              ? "bg-brand/10 font-medium text-brand"
+              ? "bg-brand/10 font-medium text-brand shadow-[0_0_22px_-8px_var(--color-brand)] ring-1 ring-brand/30"
               : "text-muted hover:bg-brand/10 hover:text-brand"
           }`
         }
