@@ -249,14 +249,32 @@ STAGE="checking the website and the API"
 answers / 200
 answers /api/tickets 401 403
 ok "The website and the API answer"
-STAGE="watching it for $WATCH_SECONDS seconds"
+# Watching: rolled back if it stops, crashes and restarts, stops answering,
+# or logs too many errors. The message says which. A health check that
+# fails is tried again twice first (a freshly started app on a busy or
+# low-memory server can be slow to answer once); a real failure fails all
+# three times.
+watch_health() {
+  curl -fsS --max-time 10 "$URL/api/health" 2>/dev/null | grep -q '"database":"connected"'
+}
 for i in $(seq 1 $((WATCH_SECONDS / 5))); do
   sleep 5
-  health
+  STAGE="watching it for $WATCH_SECONDS seconds: it stopped running"
   systemctl is-active --quiet "$SERVICE"
+  STAGE="watching it for $WATCH_SECONDS seconds: it crashed and restarted"
   [[ "$(systemctl show -p NRestarts --value "$SERVICE" 2>/dev/null || echo 0)" == "$RESTARTS_BEFORE" ]]
+  if ! watch_health; then
+    warn "It didn't answer its health check in time; trying again..."
+    sleep 3
+    if ! watch_health; then
+      sleep 5
+      STAGE="watching it for $WATCH_SECONDS seconds: it stopped answering its health check (3 tries)"
+      watch_health
+    fi
+  fi
 done
 ERRORS="$(sudo journalctl -u "$SERVICE" --since "$SINCE" -o cat 2>/dev/null | grep -c '"level":"error"' || true)"
+STAGE="watching it for $WATCH_SECONDS seconds: it logged ${ERRORS:-0} errors (the limit is $MAX_ERRORS)"
 [[ "${ERRORS:-0}" -lt "$MAX_ERRORS" ]]
 ok "No crashes, and ${ERRORS:-0} error(s) logged since the restart"
 
