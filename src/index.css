@@ -77,6 +77,45 @@ html.dark {
   .rounded-2xl.border-line.bg-white {
     box-shadow: var(--glow-card);
   }
+
+  /* The main button: glass. See-through blue with a glowing edge and a
+     light catching its top (formStyles.js: primaryButton) */
+  .btn-glass {
+    color: var(--color-brand);
+    border: 1px solid color-mix(in srgb, var(--color-brand) 45%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-brand) 18%, transparent),
+      color-mix(in srgb, var(--color-brand) 8%, transparent)
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      0 0 18px -6px var(--color-brand);
+    backdrop-filter: blur(6px);
+  }
+  .btn-glass:hover {
+    border-color: color-mix(in srgb, var(--color-brand) 65%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-brand) 26%, transparent),
+      color-mix(in srgb, var(--color-brand) 12%, transparent)
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.4),
+      0 0 24px -6px var(--color-brand);
+  }
+  .dark .btn-glass {
+    color: #cfe0ff;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 0 18px -6px var(--color-brand);
+  }
+  .dark .btn-glass:hover {
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 0 24px -6px var(--color-brand);
+  }
 }
 
 /* White text stays white (buttons, avatars), even though "white"
