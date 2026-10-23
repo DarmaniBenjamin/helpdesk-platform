@@ -169,7 +169,7 @@ export default function Feedback() {
         <button
           type="submit"
           disabled={!stars || busy}
-          className="h-11 w-full cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn-glass h-8.5 sm:h-7 w-full cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Sending…" : "Send feedback"}
         </button>

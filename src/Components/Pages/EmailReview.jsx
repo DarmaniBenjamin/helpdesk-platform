@@ -138,7 +138,7 @@ export default function EmailReview() {
               type="button"
               disabled={!picked.size || Boolean(busy)}
               onClick={() => act("accept")}
-              className={`${actionButton} bg-brand font-medium text-white hover:bg-brand/90`}
+              className={`${actionButton} btn-glass font-medium transition`}
             >
               {busy === "accept" ? (
                 <Droplets className="h-4 w-4" />

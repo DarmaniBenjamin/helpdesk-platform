@@ -114,7 +114,7 @@ function ContactList({
         <button
           type="submit"
           aria-label="Save"
-          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand/90 active:scale-[0.95]"
+          className="btn-glass flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md transition active:scale-[0.95]"
         >
           <Check className="h-5 w-5" />
         </button>

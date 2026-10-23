@@ -233,7 +233,7 @@ export default function RequestForm() {
         <button
           type="submit"
           disabled={busy}
-          className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-6 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
+          className="btn-glass flex h-8.5 sm:h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3.5 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
         >
           <Send className="h-4 w-4" />
           {busy ? "Sending…" : "Send request"}

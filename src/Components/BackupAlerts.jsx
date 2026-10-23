@@ -122,7 +122,7 @@ function LinkModal({ client, onClose, onSaved }) {
           <button
             type="submit"
             disabled={saving}
-            className="h-11 flex-1 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:opacity-60 sm:flex-none"
+            className="btn-glass h-8.5 sm:h-7 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60 sm:flex-none"
           >
             {saving ? "Saving…" : "Link"}
           </button>
@@ -234,7 +234,7 @@ export default function BackupAlerts() {
             type="button"
             disabled={busy === "enable"}
             onClick={() => save("enable", { enabled: true })}
-            className="h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:opacity-60"
+            className="btn-glass h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:opacity-60"
           >
             {busy === "enable" ? "Turning on…" : "Turn on backup alerts"}
           </button>

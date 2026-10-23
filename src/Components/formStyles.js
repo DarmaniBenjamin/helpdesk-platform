@@ -6,11 +6,11 @@ export const inputClass =
 
 export const labelClass = "flex flex-col gap-1.5 text-sm font-medium";
 
-// Buttons: slim (30px on computers, 36px on phones), with crisp corners.
+// Buttons: slim (28px on computers, 34px on phones), with crisp corners.
 // The main one is glass: see-through blue with a glowing edge (btn-glass,
 // in index.css, with its dark-mode version).
 export const primaryButton =
-  "btn-glass h-9 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.98] sm:h-7.5 sm:flex-none";
+  "btn-glass h-8.5 flex-1 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.98] sm:h-7 sm:flex-none";
 
 export const secondaryButton =
-  "h-9 flex-1 cursor-pointer rounded-md border border-line bg-white px-3 text-sm font-medium shadow-[0_1px_2px_rgb(11_22_48/0.05)] transition hover:border-brand/50 hover:text-brand active:scale-[0.98] sm:h-7.5 sm:flex-none";
+  "h-8.5 flex-1 cursor-pointer rounded-md border border-line bg-white px-2.5 text-sm font-medium shadow-[0_1px_2px_rgb(11_22_48/0.05)] transition hover:border-brand/50 hover:text-brand active:scale-[0.98] sm:h-7 sm:flex-none";

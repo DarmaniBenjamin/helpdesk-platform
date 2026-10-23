@@ -22,7 +22,7 @@ export default function NoAccess() {
       </p>
       <Link
         to="/inbox"
-        className="mt-2 flex h-11 items-center rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+        className="btn-glass mt-2 flex h-8.5 sm:h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
       >
         Go to the Inbox
       </Link>

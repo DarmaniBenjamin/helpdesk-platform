@@ -363,7 +363,7 @@ function IpAccessNotice({ info }) {
         </p>
         <a
           href={`https://${working.name}/settings?tab=domain`}
-          className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+          className="btn-glass flex h-8.5 sm:h-7 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
         >
           <ExternalLink className="h-4 w-4" />
           Open {working.name}
@@ -492,7 +492,7 @@ function ConfirmRemove({ domain, others, mode, onConfirm, onClose }) {
           goTo ? (
             <button
               type="submit"
-              className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] sm:w-auto"
+              className="btn-glass flex h-8.5 sm:h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto"
             >
               <ExternalLink className="h-4 w-4" />
               Open {goTo.replace(/^https?:\/\//, "")}
@@ -786,7 +786,7 @@ export default function DomainSettings() {
               <button
                 type="submit"
                 disabled={adding || !name.trim()}
-                className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                className="btn-glass flex h-8.5 sm:h-7 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {adding ? (
                   <Droplets className="h-4 w-4" />

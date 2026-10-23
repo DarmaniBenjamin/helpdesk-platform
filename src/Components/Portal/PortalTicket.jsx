@@ -135,7 +135,7 @@ function Rating({ ticket }) {
             <button
               type="submit"
               disabled={busy}
-              className="h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
+              className="btn-glass h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70"
             >
               {busy ? "Sending…" : "Send feedback"}
             </button>
@@ -297,7 +297,7 @@ export default function PortalTicket() {
               </p>
               <Link
                 to="/portal/new"
-                className="flex h-11 items-center rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97]"
+                className="btn-glass flex h-8.5 sm:h-7 items-center rounded-md px-3 text-sm font-medium transition active:scale-[0.97]"
               >
                 New request
               </Link>
@@ -335,7 +335,7 @@ export default function PortalTicket() {
                     attach.uploading > 0 ||
                     busy
                   }
-                  className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-glass flex h-8.5 sm:h-7 cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" />
                   {busy ? "Sending…" : "Send reply"}

@@ -123,7 +123,7 @@ export default function PortalNewRequest() {
           <button
             type="submit"
             disabled={busy || attach.uploading > 0}
-            className="order-first h-11 cursor-pointer rounded-lg bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last"
+            className="btn-glass order-first h-8.5 sm:h-7 cursor-pointer rounded-md px-3 text-sm font-medium transition active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 sm:order-last"
           >
             {busy ? "Sending…" : "Send request"}
           </button>

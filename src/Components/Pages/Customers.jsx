@@ -116,7 +116,7 @@ export default function Customers() {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand/90 active:scale-[0.97] sm:w-auto"
+          className="btn-glass flex h-8.5 sm:h-7 w-full cursor-pointer items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition active:scale-[0.97] sm:w-auto"
         >
           <UserPlus className="h-4 w-4" />
           Add customer

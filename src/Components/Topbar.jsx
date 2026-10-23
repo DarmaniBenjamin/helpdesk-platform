@@ -270,7 +270,7 @@ export default function Topbar({ onMenuClick, onToggleSidebar }) {
           <button
             type="button"
             onClick={() => setNewTicketOpen(true)}
-            className="group flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-brand px-3 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand/30 active:translate-y-0 active:scale-[0.97] sm:px-4"
+            className="btn-glass group flex h-8.5 sm:h-7 cursor-pointer items-center gap-2 rounded-md px-3 text-sm font-medium active:scale-[0.97] transition"
           >
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
             <span className="hidden sm:inline">Add Ticket</span>

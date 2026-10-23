@@ -167,7 +167,7 @@ export default function JobAlert() {
               type="button"
               onClick={saveLocation}
               disabled={Boolean(busy)}
-              className={`${big} bg-brand text-white hover:bg-brand/90`}
+              className={`${big} btn-glass transition`}
             >
               {busy === "location" ? (
                 <Droplets className="h-5 w-5" />
@@ -231,7 +231,7 @@ export default function JobAlert() {
                 type="button"
                 onClick={imHere}
                 disabled={Boolean(busy)}
-                className={`${big} bg-brand text-white hover:bg-brand/90`}
+                className={`${big} btn-glass transition`}
               >
                 {busy === "answer" ? (
                   <Droplets className="h-5 w-5" />

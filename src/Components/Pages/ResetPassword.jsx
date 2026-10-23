@@ -102,7 +102,7 @@ export default function ResetPassword() {
           </p>
           <Link
             to="/login"
-            className="mt-2 flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-medium text-white transition hover:bg-brand/90"
+            className="btn-glass mt-2 flex h-8.5 sm:h-7 w-full items-center justify-center rounded-md text-sm font-medium transition"
           >
             Go to sign in
           </Link>
