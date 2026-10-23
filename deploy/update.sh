@@ -92,7 +92,10 @@ git merge-base --is-ancestor "$PREV" "$TARGET" ||
   die "GitHub's $BRANCH doesn't follow on from the version running here (its history was rewritten). Not updating: ask for help."
 COUNT="$(git rev-list --count "$PREV..$TARGET")"
 ok "$COUNT new change(s): $(short "$PREV") → $(short "$TARGET")"
-git log --oneline --no-decorate "$PREV..$TARGET" | head -n 15 | sed 's/^/      /'
+# (--max-count, not "| head": cutting git log short makes it fail, which
+# stopped the script here when there were more than 15 changes)
+git log --oneline --no-decorate --max-count=15 "$PREV..$TARGET" | sed 's/^/      /'
+[[ $COUNT -le 15 ]] || echo "      ...and $((COUNT - 15)) more"
 
 # ---------------------------------------------------------------------
 # 3. CI
@@ -129,7 +132,7 @@ if [[ -n "$MIGRATIONS" ]]; then
     grep -iE '\b(DROP[[:space:]]+(TABLE|COLUMN|TYPE|SCHEMA|INDEX)|TRUNCATE|DELETE[[:space:]]+FROM|RENAME[[:space:]]+(COLUMN|TO)|ALTER[[:space:]]+COLUMN.*[[:space:]]TYPE)\b' || true)"
   if [[ -n "$DESTRUCTIVE" ]]; then
     warn "A migration in this update can delete or reshape data:"
-    echo "$DESTRUCTIVE" | head -n 10 | sed 's/^/      /'
+    printf '%s\n' "$DESTRUCTIVE" | sed -n '1,10s/^/      /p'
     confirm "The code can be rolled back, but these database changes can't, except by restoring the backup." ||
       die "Not updating."
   fi
