@@ -6,10 +6,11 @@ export const inputClass =
 
 export const labelClass = "flex flex-col gap-1.5 text-sm font-medium";
 
-// Buttons: slimmer on computers (36px), still easy to tap on phones
-// (40px). The main one is blue with a soft blue glow under it.
+// Buttons: slim (32px on computers, 36px on phones), with crisp corners.
+// The main one is blue, with a thin highlight along its top edge and a
+// soft blue glow under it.
 export const primaryButton =
-  "h-10 flex-1 cursor-pointer rounded-lg bg-brand px-4 text-sm font-medium text-white shadow-[0_6px_20px_-8px_var(--color-brand)] transition hover:shadow-[0_8px_26px_-6px_var(--color-brand)] hover:brightness-110 active:scale-[0.98] sm:h-9 sm:flex-none";
+  "h-9 flex-1 cursor-pointer rounded-md bg-brand px-3.5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_4px_14px_-6px_var(--color-brand)] transition hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_6px_20px_-6px_var(--color-brand)] hover:brightness-110 active:scale-[0.98] sm:h-8 sm:flex-none";
 
 export const secondaryButton =
-  "h-10 flex-1 cursor-pointer rounded-lg border border-line bg-white px-3.5 text-sm transition hover:border-brand/50 hover:text-brand active:scale-[0.98] sm:h-9 sm:flex-none";
+  "h-9 flex-1 cursor-pointer rounded-md border border-line bg-white px-3 text-sm font-medium shadow-[0_1px_2px_rgb(11_22_48/0.05)] transition hover:border-brand/50 hover:text-brand active:scale-[0.98] sm:h-8 sm:flex-none";
