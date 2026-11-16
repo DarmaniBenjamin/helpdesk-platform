@@ -80,9 +80,11 @@ async function get(connection, path, { signal, onWait } = {}) {
 
     const perMinute = Number(response.headers.get("x-ratelimit-total"));
     if (perMinute > 0) pace.perMinute = perMinute;
-    const used = Number(response.headers.get("x-ratelimit-used-currentrequest")) || 1;
+    const used =
+      Number(response.headers.get("x-ratelimit-used-currentrequest")) || 1;
     // A little under the limit (95%), so other apps on the account get a share
-    if (pace.perMinute) pace.nextAt = Date.now() + (60_000 / (pace.perMinute * 0.95)) * used;
+    if (pace.perMinute)
+      pace.nextAt = Date.now() + (60_000 / (pace.perMinute * 0.95)) * used;
 
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after")) || 60;
@@ -247,7 +249,9 @@ export async function fetchEverything(
       }),
     );
     onProgress({ message: "Getting companies…" });
-    companies = await part("companies", () => getAll(connection, "/companies", options));
+    companies = await part("companies", () =>
+      getAll(connection, "/companies", options),
+    );
   } else {
     contacts = await store?.part("contacts");
   }
@@ -268,6 +272,24 @@ export async function fetchEverything(
       }
     }
     await store?.savePart("contacts", contacts);
+  }
+  // Freshdesk's contacts list leaves out deleted contacts, and agents who
+  // made a ticket themselves (reminders, internal jobs). Their tickets
+  // still say who asked: those people come over from the ticket instead,
+  // so no ticket is left behind with "customer not found".
+  // (Tickets an agent opened become reminders instead: freshdeskMapping.js)
+  const known = new Set(contacts.map((c) => c.id));
+  const agentEmails = new Set(
+    agents.map((a) => a.contact?.email?.toLowerCase()).filter(Boolean),
+  );
+  for (const t of tickets) {
+    const byAgent =
+      agentNames.has(t.requester_id) ||
+      agentEmails.has(t.requester?.email?.toLowerCase());
+    if (t.requester?.id && !known.has(t.requester.id) && !byAgent) {
+      contacts.push({ ...t.requester, from_ticket: true });
+      known.add(t.requester.id);
+    }
   }
   if (companies === undefined) companies = await store?.part("companies");
   if (companies === undefined) {
@@ -297,7 +319,9 @@ export async function fetchEverything(
         : undefined;
       if (conversations === undefined) {
         const perMinute = freshdeskPerMinute();
-        const minutes = perMinute ? Math.ceil(left() / (perMinute * 0.95)) : null;
+        const minutes = perMinute
+          ? Math.ceil(left() / (perMinute * 0.95))
+          : null;
         onProgress({
           message: `Getting notes and replies… ticket ${i + 1} of ${tickets.length}${
             minutes
@@ -307,11 +331,56 @@ export async function fetchEverything(
           done: i,
           total: tickets.length,
         });
-        conversations = await getAll(connection, `/tickets/${ticket.id}/conversations`, options);
+        conversations = await getAll(
+          connection,
+          `/tickets/${ticket.id}/conversations`,
+          options,
+        );
         await store?.saveConversation(ticket.id, conversations);
         already.add(ticket.id);
       }
-      ticket.conversations = conversations.map((c) => ({
+      ticket.conversations = conversations;
+    }
+
+    // Who wrote each reply and note. The agent list only has today's
+    // agents: anyone who has left (Freshdesk turns them into contacts)
+    // or isn't in it is looked up once by their ID, so their notes show
+    // their name instead of the support mailbox.
+    const missing = [
+      ...new Set(
+        tickets.flatMap((t) =>
+          (t.conversations ?? [])
+            .filter(
+              (c) => !c.incoming && c.user_id && !agentNames.has(c.user_id),
+            )
+            .map((c) => c.user_id),
+        ),
+      ),
+    ];
+    const kept = (await store?.part("people")) ?? {};
+    for (const [i, id] of missing.entries()) {
+      if (id in kept) continue;
+      onProgress({
+        message: `Finding who wrote the notes… ${i + 1} of ${missing.length}`,
+      });
+      let name = null;
+      for (const path of [`/agents/${id}`, `/contacts/${id}`]) {
+        try {
+          const person = await get(connection, path, options);
+          name = person.contact?.name ?? person.name ?? null;
+          if (name) break;
+        } catch (err) {
+          if (err.name === "AbortError") throw err;
+        }
+      }
+      kept[id] = name;
+      await store?.savePart("people", kept);
+    }
+    for (const [id, name] of Object.entries(kept))
+      if (name) agentNames.set(Number(id), name);
+
+    for (const ticket of tickets) {
+      ticket.conversations = (ticket.conversations ?? []).map((c) => ({
         ...c,
         from_name: c.incoming ? undefined : agentNames.get(c.user_id),
       }));

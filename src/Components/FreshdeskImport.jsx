@@ -391,7 +391,9 @@ export default function FreshdeskImport() {
   const [includeTickets, setIncludeTickets] = useState(true);
   // "" = No team yet
   const [department, setDepartment] = useState(() => departments[0]?.id ?? "");
-  const [replace, setReplace] = useState(false);
+  // If it's already here: false = keep it, "newer" = take Freshdesk's
+  // version only where it changed after the one here, true = replace it
+  const [replace, setReplace] = useState("newer");
   const [result, setResult] = useState(null);
   const [importing, setImporting] = useState(null); // progress message
   const [importError, setImportError] = useState("");
@@ -513,8 +515,16 @@ export default function FreshdeskImport() {
   const plan = useMemo(() => {
     if (!source) return null;
 
+    // Someone on the team who only opened tickets for themselves (those
+    // become reminders) isn't added as a customer
+    const teamEmails = new Set(
+      team.map((m) => m.email?.toLowerCase()).filter(Boolean),
+    );
+    const contactList = source.contacts.filter(
+      (c) => !(c.from_ticket && teamEmails.has(c.email?.toLowerCase())),
+    );
     const contacts = includeContacts
-      ? convertContacts(source.contacts, contactMapping, source.companies)
+      ? convertContacts(contactList, contactMapping, source.companies)
       : { contacts: [], skipped: [] };
     const customerMerge = mergeCustomers(customers, contacts.contacts, replace);
 
@@ -524,8 +534,10 @@ export default function FreshdeskImport() {
           people: matching?.people,
           teams: matching?.teams,
           department,
+          agents: source.agents ?? [],
+          teamEmails: team.map((m) => m.email).filter(Boolean),
         })
-      : { tickets: [], skipped: [] };
+      : { tickets: [], reminders: [], skipped: [] };
     const ticketMerge = mergeTickets(tickets, converted.tickets, replace);
 
     return {
@@ -546,6 +558,7 @@ export default function FreshdeskImport() {
     matching,
     department,
     replace,
+    team,
   ]);
 
   // Saves everything to the database, in batches, showing how far it got
@@ -557,11 +570,13 @@ export default function FreshdeskImport() {
         plan.contacts.contacts,
         plan.converted.tickets,
         replace,
+        plan.converted.reminders,
         setImporting,
       );
       setResult({
         customers: saved.customers,
         tickets: saved.tickets,
+        reminders: saved.reminders,
         problems: [...plan.problems, ...saved.problems],
       });
       setSource(null);
@@ -577,7 +592,8 @@ export default function FreshdeskImport() {
   const nothingToImport =
     !plan ||
     (plan.contacts.contacts.length === 0 &&
-      plan.converted.tickets.length === 0);
+      plan.converted.tickets.length === 0 &&
+      plan.converted.reminders.length === 0);
 
   const firstContact = plan?.contacts.contacts[0];
   const firstTicket = plan?.converted.tickets[0];
@@ -675,6 +691,15 @@ export default function FreshdeskImport() {
             <ul className="flex flex-col gap-1 text-sm text-muted">
               <li>{countLine("Customers", result.customers)}</li>
               <li>{countLine("Tickets", result.tickets)}</li>
+              {result.reminders.added + result.reminders.skipped > 0 && (
+                <li>
+                  Reminders (tickets your team opened for themselves):{" "}
+                  {result.reminders.added} added
+                  {result.reminders.skipped
+                    ? `, ${result.reminders.skipped} already there`
+                    : ""}
+                </li>
+              )}
             </ul>
             {result.problems.length > 0 && (
               <details className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
@@ -851,6 +876,11 @@ export default function FreshdeskImport() {
                   If a ticket or customer already exists
                 </legend>
                 {[
+                  [
+                    "newer",
+                    "Take the newer one",
+                    "Tickets changed in Freshdesk since they were last changed here get Freshdesk's status, details and new replies and notes. Anything added here stays. The rest are left as they are, and customers already here aren't changed.",
+                  ],
                   [false, "Keep what's here", "Skip it and leave it as it is"],
                   [
                     true,
@@ -956,6 +986,15 @@ export default function FreshdeskImport() {
             <ul className="flex flex-col gap-1 text-sm text-muted">
               <li>{countLine("Customers", plan.customerMerge)}</li>
               <li>{countLine("Tickets", plan.ticketMerge)}</li>
+              {plan.converted.reminders.length > 0 && (
+                <li>
+                  {plan.converted.reminders.length} ticket
+                  {plan.converted.reminders.length === 1 ? "" : "s"} opened by
+                  your team for themselves (e.g. "
+                  {plan.converted.reminders[0].title}") will be reminders, not
+                  tickets
+                </li>
+              )}
             </ul>
             {plan.problems.length > 0 && (
               <details className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">

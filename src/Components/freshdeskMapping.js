@@ -528,12 +528,28 @@ function convertMessages(list, customerName) {
 //   people      Freshdesk agent key -> your team member's ID ("" = nobody)
 //   teams       Freshdesk group key -> your department's ID ("" = no team)
 //   department  the team for tickets that have no Freshdesk group
+//   agents      the Freshdesk agents ({ id, name, email }) and
+//   teamEmails  your team's emails: a ticket one of them opened is their
+//               own job, not a customer's, so it becomes a reminder
 export function convertTickets(
   records,
   mapping,
   customers,
-  { aliases = new Map(), people = {}, teams = {}, department = "" } = {},
+  {
+    aliases = new Map(),
+    people = {},
+    teams = {},
+    department = "",
+    agents = [],
+    teamEmails = [],
+  } = {},
 ) {
+  const agentById = new Map(agents.map((a) => [Number(a.id), a]));
+  const agentByEmail = new Map(
+    agents.filter((a) => a.email).map((a) => [a.email.toLowerCase(), a]),
+  );
+  const team = new Set(teamEmails.map((e) => String(e).toLowerCase()));
+  const reminders = [];
   const byId = new Map(customers.map((c) => [c.id, c]));
   for (const [id, customer] of aliases) byId.set(id, customer);
   const byEmail = new Map();
@@ -559,6 +575,38 @@ export function convertTickets(
       skipped.push(`${subject || "A ticket"} (missing number or subject)`);
       continue;
     }
+
+    // Opened by someone on the team (a reminder to themselves, an
+    // internal job): a reminder, not a ticket
+    const asked = r.requester ?? {};
+    const askedEmail = String(asked.email ?? "").toLowerCase();
+    const openedBy =
+      agentById.get(Number(r.requester_id ?? asked.id)) ??
+      agentByEmail.get(askedEmail) ??
+      (askedEmail && team.has(askedEmail)
+        ? { name: asked.name ?? "", email: askedEmail }
+        : null);
+    if (openedBy) {
+      const createdAt = toTime(pick(r, mapping, "createdAt"), now);
+      const status = mapping.status.on
+        ? toStatus(pick(r, mapping, "status"))
+        : "open";
+      const description = String(pick(r, mapping, "description") ?? "").trim();
+      const notes = convertMessages(pick(r, mapping, "messages"), "")
+        .map((m) => m.body)
+        .filter(Boolean);
+      reminders.push({
+        freshdeskId: id,
+        title: subject,
+        notes: [description, ...notes].filter(Boolean).join("\n\n"),
+        remindAt: toTime(pick(r, mapping, "dueBy"), createdAt),
+        done: status === "resolved" || status === "closed",
+        by: openedBy.name || asked.name || "",
+        byEmail: (openedBy.email ?? askedEmail) || "",
+      });
+      continue;
+    }
+
     if (!customer) {
       skipped.push(
         `#${id} ${subject} (customer not found, import contacts too)`,
@@ -636,7 +684,7 @@ export function convertTickets(
     }
     result.push(ticket);
   }
-  return { tickets: result, skipped };
+  return { tickets: result, reminders, skipped };
 }
 
 // ---------- A small example file, to test with ----------
@@ -724,6 +772,8 @@ export const EXAMPLE_EXPORT = {
 // replace = true: update the existing customer. false: leave it alone.
 // Returns the new customer list, the counts, and `aliases`: which existing
 // customer each Freshdesk contact ID ended up as, so tickets can find them.
+// replace: true = overwrite customers already here; false or "newer" =
+// leave them as they are (Freshdesk doesn't say which is newer)
 export function mergeCustomers(existing, incoming, replace) {
   const list = [...existing];
   // Quick lookups: ID -> position in the list, email -> position
@@ -751,7 +801,7 @@ export function mergeCustomers(existing, incoming, replace) {
       index = list.length;
       list.push(contact);
       added += 1;
-    } else if (replace) {
+    } else if (replace === true) {
       // Keep the existing ID so their other tickets stay linked
       list[index] = { ...list[index], ...contact, id: list[index].id };
       updated += 1;
@@ -764,7 +814,9 @@ export function mergeCustomers(existing, incoming, replace) {
   return { list, aliases, added, updated, skipped };
 }
 
-// Tickets are matched by ticket number
+// Tickets are matched by ticket number. replace: true = overwrite,
+// false = keep what's here, "newer" = take Freshdesk's only where it was
+// changed after the one here
 export function mergeTickets(existing, incoming, replace) {
   const byId = new Map(existing.map((t) => [t.id, t]));
   let added = 0;
@@ -775,7 +827,11 @@ export function mergeTickets(existing, incoming, replace) {
     if (!byId.has(ticket.id)) {
       byId.set(ticket.id, ticket);
       added += 1;
-    } else if (replace) {
+    } else if (
+      replace === true ||
+      (replace === "newer" &&
+        (ticket.updatedAt ?? 0) > (byId.get(ticket.id).updatedAt ?? 0))
+    ) {
       byId.set(ticket.id, ticket);
       updated += 1;
     } else {

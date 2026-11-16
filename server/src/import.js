@@ -5,7 +5,12 @@
 // The page sends them in batches, customers first, then tickets:
 //   POST /api/import/customers  { customers: [...], replace }
 //   POST /api/import/tickets    { tickets: [...], replace }
+//   POST /api/import/reminders  { reminders: [...] }  tickets the team
+//        opened for themselves: they go on the Reminders page instead
 // replace = true: overwrite ones that are already here. false: skip them.
+// "newer": a ticket already here is updated only if Freshdesk changed it
+// after it was last changed here; its new replies and notes are added and
+// anything added here is kept. Customers already here are left as they are.
 //
 // Every record is checked again here, so nothing odd gets into the
 // database even if the page sent it. One bad record is skipped (with a
@@ -19,6 +24,7 @@ import {
   messages,
   departments,
   users,
+  reminders,
 } from "./db/schema.js";
 import { requireRole } from "./auth.js";
 import { ADMINS, STAFF } from "./permissions.js";
@@ -160,6 +166,7 @@ importRouter.post("/customers", requireRole(...ADMINS), async (req, res) => {
 importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
   const incoming = req.body?.tickets;
   const replace = req.body?.replace === true;
+  const newer = req.body?.replace === "newer";
   checkBatch(incoming, "tickets");
   // How fast each priority must be answered / fixed, in hours (sla.js),
   // for tickets that don't bring their own due times
@@ -268,10 +275,52 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
       // The ticket and its conversation are saved together: all or nothing
       const outcome = await db.transaction(async (tx) => {
         const [existing] = await tx
-          .select({ id: tickets.id })
+          .select({ id: tickets.id, updatedAt: tickets.updatedAt })
           .from(tickets)
           .where(eq(tickets.id, id));
 
+        // The newer one: Freshdesk's details, and only the replies and
+        // notes that aren't here yet (anything added here stays)
+        if (existing && newer) {
+          const key = (m) => `${m.createdAt.getTime()}|${m.body}`;
+          const here = new Map(
+            (
+              await tx
+                .select({
+                  id: messages.id,
+                  createdAt: messages.createdAt,
+                  body: messages.body,
+                  authorName: messages.authorName,
+                })
+                .from(messages)
+                .where(eq(messages.ticketId, id))
+            ).map((m) => [key(m), m]),
+          );
+          // Replies and notes already here: put right who wrote them (an
+          // earlier import could only show the support mailbox for agents
+          // who had left)
+          for (const m of conversation) {
+            const old = here.get(key(m));
+            if (
+              old &&
+              m.kind !== "customer" &&
+              old.authorName !== m.authorName &&
+              // only a real name, never back to a mailbox
+              !m.authorName.includes("@") &&
+              m.authorName !== "Freshdesk agent"
+            )
+              await tx
+                .update(messages)
+                .set({ authorName: m.authorName })
+                .where(eq(messages.id, old.id));
+          }
+          if (values.updatedAt.getTime() <= existing.updatedAt.getTime())
+            return "skipped";
+          await tx.update(tickets).set(values).where(eq(tickets.id, id));
+          const fresh = conversation.filter((m) => !here.has(key(m)));
+          if (fresh.length) await tx.insert(messages).values(fresh);
+          return "updated";
+        }
         if (existing && !replace) return "skipped";
         if (existing) {
           // Ratings and Ticket Review ticks aren't touched
@@ -297,4 +346,92 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
   // the next new one is #8124, and never clash with an imported one
 
   res.json({ added, updated, skipped, problems });
+});
+
+// ================================================================
+// POST /api/import/reminders
+// ================================================================
+// A Freshdesk ticket that someone on the team opened for themselves (a
+// reminder to renew something, an internal job) isn't a customer's
+// ticket: it becomes a reminder, for the person who opened it if they're
+// on the team here, otherwise for everyone. Done in Freshdesk = done
+// here. Still open: it goes off at its Freshdesk due time (straight away
+// if that has passed). Importing again never doubles one: each starts
+// with "Freshdesk ticket #N".
+
+function cleanTimeZone(value) {
+  const tz = String(value ?? "UTC");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}
+
+importRouter.post("/reminders", requireRole(...ADMINS), async (req, res) => {
+  const incoming = req.body?.reminders;
+  checkBatch(incoming, "reminders");
+
+  const team = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(and(eq(users.status, "active"), inArray(users.role, STAFF)));
+  const byEmail = new Map(
+    team.map((u) => [String(u.email).toLowerCase(), u.id]),
+  );
+
+  let added = 0;
+  let skipped = 0;
+  const problems = [];
+  const now = new Date();
+
+  for (const r of incoming) {
+    const id = positiveId(r?.freshdeskId);
+    const title = text(r?.title, 200);
+    if (!id || !title) {
+      problems.push(`${title || "A reminder"} (missing number or title)`);
+      continue;
+    }
+    const marker = `Freshdesk ticket #${id}`;
+    try {
+      const [already] = await db
+        .select({ id: reminders.id })
+        .from(reminders)
+        .where(
+          // "#59" mustn't match "#5969"
+          sql`${reminders.notes} ~ ${`^Freshdesk ticket #${id}([^0-9]|$)`}`,
+        )
+        .limit(1);
+      if (already) {
+        skipped += 1;
+        continue;
+      }
+      const remindAt = date(r.remindAt, now);
+      const by = text(r.by, 100);
+      const forId = byEmail.get(String(r.byEmail ?? "").toLowerCase());
+      await db.insert(reminders).values({
+        title,
+        notes:
+          `${marker}${by ? ` (opened by ${by})` : ""}\n${text(r.notes, 1900)}`
+            .trim()
+            .slice(0, 2000),
+        remindAt,
+        allDay: false,
+        repeat: "none",
+        timeZone: cleanTimeZone(r.timeZone),
+        everyone: !forId,
+        userIds: forId ? [forId] : [],
+        createdById: req.user.id,
+        createdByName: by || req.user.name || "",
+        // Done in Freshdesk: done here too (it never goes off)
+        sentAt: r.done === true ? remindAt : null,
+      });
+      added += 1;
+    } catch (err) {
+      console.error("Import reminder", id, err.message);
+      problems.push(`#${id} ${title} (couldn't be saved as a reminder)`);
+    }
+  }
+  res.json({ added, updated: 0, skipped, problems });
 });

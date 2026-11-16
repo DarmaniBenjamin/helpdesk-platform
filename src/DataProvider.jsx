@@ -583,10 +583,17 @@ export default function DataProvider({ children }) {
   // Returns the counts from the server and anything it couldn't save.
   // Afterwards the customers and tickets are loaded again, so the page
   // shows exactly what's in the database.
-  async function saveImport(newCustomers, newTickets, replace, onProgress) {
+  async function saveImport(
+    newCustomers,
+    newTickets,
+    replace,
+    newReminders = [],
+    onProgress,
+  ) {
     const totals = {
       customers: { added: 0, updated: 0, skipped: 0 },
       tickets: { added: 0, updated: 0, skipped: 0 },
+      reminders: { added: 0, updated: 0, skipped: 0 },
       problems: [],
     };
 
@@ -623,6 +630,17 @@ export default function DataProvider({ children }) {
     );
     // Tickets with their whole conversation, so smaller batches
     await send("/import/tickets", "tickets", ticketsToSend, 50, "tickets");
+    // Tickets the team opened for themselves: on the Reminders page
+    await send(
+      "/import/reminders",
+      "reminders",
+      newReminders.map((r) => ({
+        ...r,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })),
+      200,
+      "reminders",
+    );
 
     onProgress?.("Loading what was saved…");
     const [customerList, ticketList] = await Promise.all([
