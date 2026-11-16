@@ -33,7 +33,8 @@ import { getSla } from "./sla.js";
 
 export const importRouter = Router();
 
-const HOUR = 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
 const STATUSES = ["open", "pending", "waiting", "resolved", "closed"];
 const SOURCES = ["email", "portal", "phone", "agent"];
 const MESSAGE_KINDS = ["customer", "agent", "note", "event"];
@@ -275,9 +276,23 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
       // The ticket and its conversation are saved together: all or nothing
       const outcome = await db.transaction(async (tx) => {
         const [existing] = await tx
-          .select({ id: tickets.id, updatedAt: tickets.updatedAt })
+          .select({
+            id: tickets.id,
+            updatedAt: tickets.updatedAt,
+            createdAt: tickets.createdAt,
+          })
           .from(tickets)
           .where(eq(tickets.id, id));
+
+        // The same number but not the same ticket: one made here in Uplink
+        // took that number while Freshdesk was still in use. (An imported
+        // ticket keeps Freshdesk's creation time.) Never overwrite it.
+        if (
+          existing &&
+          (replace || newer) &&
+          Math.abs(existing.createdAt.getTime() - createdAt.getTime()) > MINUTE
+        )
+          return "clash";
 
         // The newer one: Freshdesk's details, and only the replies and
         // notes that aren't here yet (anything added here stays)
@@ -332,7 +347,11 @@ importRouter.post("/tickets", requireRole(...ADMINS), async (req, res) => {
         if (conversation.length) await tx.insert(messages).values(conversation);
         return existing ? "updated" : "added";
       });
-      if (outcome === "added") added += 1;
+      if (outcome === "clash")
+        problems.push(
+          `#${id} ${subject} (a ticket made here in Uplink already has #${id}, so it was left alone)`,
+        );
+      else if (outcome === "added") added += 1;
       else if (outcome === "updated") updated += 1;
       else skipped += 1;
     } catch (err) {

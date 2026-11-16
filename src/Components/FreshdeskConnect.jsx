@@ -6,6 +6,7 @@ import {
   EyeOff,
   History,
   Link2,
+  RefreshCw,
   TriangleAlert,
 } from "lucide-react";
 import Card from "./Card";
@@ -36,7 +37,7 @@ const AMOUNTS = [
 // Connect with the address + API key, then pull the data.
 // `onFetched(data, label)` gets { tickets, contacts, companies }.
 export default function FreshdeskConnect({ onFetched }) {
-  const { settings, updateSettings } = useData();
+  const { settings, updateSettings, tickets } = useData();
   const domain = settings.freshdesk.domain;
 
   // The key only lives here while the page is open. It's never saved.
@@ -49,6 +50,7 @@ export default function FreshdeskConnect({ onFetched }) {
   const [amount, setAmount] = useState("1");
   const [withConversations, setWithConversations] = useState(true);
   const [progress, setProgress] = useState(null);
+  const [notice, setNotice] = useState("");
   const cancelRef = useRef(null);
 
   const connection = { domain, apiKey: apiKey.trim() };
@@ -88,10 +90,13 @@ export default function FreshdeskConnect({ onFetched }) {
     setError("");
   }
 
-  async function fetchData() {
+  // onlyChanged: just the tickets that are new, or changed in Freshdesk
+  // after they were last changed here
+  async function fetchData(onlyChanged = false) {
     const controller = new AbortController();
     cancelRef.current = controller;
     setError("");
+    setNotice("");
     setProgress({ message: "Starting…" });
     try {
       const data = await fetchEverything(connection, {
@@ -100,8 +105,20 @@ export default function FreshdeskConnect({ onFetched }) {
         signal: controller.signal,
         onProgress: setProgress,
         store: downloadStore(key),
+        known: onlyChanged
+          ? new Map(
+              tickets.map((t) => [
+                t.id,
+                { createdAt: t.createdAt, updatedAt: t.updatedAt },
+              ]),
+            )
+          : undefined,
       });
-      onFetched(data, `${domain}.freshdesk.com`);
+      if (onlyChanged && data.tickets.length === 0)
+        setNotice(
+          "Nothing new or changed in Freshdesk: everything here is up to date.",
+        );
+      else onFetched(data, `${domain}.freshdesk.com`);
     } catch (err) {
       if (err.name !== "AbortError")
         setError(
@@ -217,6 +234,37 @@ export default function FreshdeskConnect({ onFetched }) {
               </button>
             </div>
 
+            {/* The quick way, once tickets have been imported */}
+            {tickets.length > 0 && !progress && (
+              <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3 sm:flex-row sm:items-center">
+                <p className="min-w-0 flex-1 text-sm">
+                  <span className="block font-medium">
+                    Get only what's new or changed
+                  </span>
+                  <span className="block text-xs text-muted">
+                    Compares Freshdesk with the tickets here, then brings in new
+                    tickets and ones changed in Freshdesk since they were last
+                    changed here, with their notes and replies. A few minutes,
+                    however many there are.
+                  </span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fetchData(true)}
+                  className={`${primaryButton} flex shrink-0 items-center justify-center gap-2`}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Get what changed
+                </button>
+              </div>
+            )}
+            {notice && (
+              <p className="flex items-start gap-2 text-sm text-brand">
+                <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                {notice}
+              </p>
+            )}
+
             {/* What to get */}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>
@@ -259,8 +307,8 @@ export default function FreshdeskConnect({ onFetched }) {
                 Freshdesk only allows a set number of requests a minute (50 on a
                 trial, 200 to 700 on paid plans), so with thousands of tickets
                 this takes a while: it shows how long. If it stops (the tab is
-                closed, the connection drops), nothing is lost: come back and
-                it carries on from where it got to.
+                closed, the connection drops), nothing is lost: come back and it
+                carries on from where it got to.
               </p>
             )}
 
@@ -271,7 +319,9 @@ export default function FreshdeskConnect({ onFetched }) {
                   {saved.finished
                     ? `A finished download from ${when(saved.finishedAt ?? saved.startedAt)} is kept in this browser: the button uses it again, without asking Freshdesk.`
                     : `A download from ${when(saved.startedAt)} stopped part-way${
-                        saved.parts.includes("tickets") ? " after the ticket list" : ""
+                        saved.parts.includes("tickets")
+                          ? " after the ticket list"
+                          : ""
                       }${
                         saved.conversations
                           ? `, with notes and replies for ${saved.conversations.toLocaleString()} tickets`
@@ -319,7 +369,7 @@ export default function FreshdeskConnect({ onFetched }) {
               <div className="grid sm:flex">
                 <button
                   type="button"
-                  onClick={fetchData}
+                  onClick={() => fetchData()}
                   className={`${primaryButton} flex items-center justify-center gap-2`}
                 >
                   <CloudDownload className="h-4 w-4" />

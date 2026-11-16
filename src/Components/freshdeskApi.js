@@ -169,10 +169,20 @@ export async function testConnection(connection) {
 // `onProgress` gets a short message to show while it works.
 // `store`: where the download is kept as it goes (freshdeskStore.js), so a
 // download that stopped carries on where it got to.
+// `known` (ticket number -> { createdAt, updatedAt } here, from the
+// tickets already in Uplink): "Get only what's new or changed". The whole
+// ticket list is still read (quick: 100 a request), but only tickets that
+// aren't here yet, or that Freshdesk changed after they were last changed
+// here, are kept, and only their notes and replies are downloaded (the
+// slow part). Not kept in the browser: it's quick.
 export async function fetchEverything(
   connection,
-  { maxTickets, withConversations, signal, onProgress, store },
+  { maxTickets, withConversations, signal, onProgress, store, known },
 ) {
+  if (known) {
+    store = undefined;
+    maxTickets = Infinity;
+  }
   const onWait = (seconds) =>
     onProgress({
       message: `Freshdesk's limit for this kind of request is used up for this minute. Carrying on in ${seconds} seconds, then at a steady pace…`,
@@ -204,6 +214,27 @@ export async function fetchEverything(
       },
     ),
   );
+
+  // Only the new and changed ones
+  if (known) {
+    const all = tickets.length;
+    tickets.splice(
+      0,
+      tickets.length,
+      ...tickets.filter((t) => {
+        const here = known.get(t.id);
+        if (!here) return true;
+        // The same number, but a different ticket (made here in Uplink):
+        // kept, so the import can say so instead of quietly missing it
+        const created = Date.parse(t.created_at) || 0;
+        if (Math.abs(created - here.createdAt) > 60_000) return true;
+        return (Date.parse(t.updated_at) || 0) > here.updatedAt;
+      }),
+    );
+    onProgress({
+      message: `${tickets.length} of ${all.toLocaleString()} tickets are new or changed in Freshdesk…`,
+    });
+  }
 
   // 2. Agents: who wrote each reply and note, and who each ticket was
   // assigned to (matched to your team by email). Non-admin keys often
@@ -278,7 +309,7 @@ export async function fetchEverything(
   // still say who asked: those people come over from the ticket instead,
   // so no ticket is left behind with "customer not found".
   // (Tickets an agent opened become reminders instead: freshdeskMapping.js)
-  const known = new Set(contacts.map((c) => c.id));
+  const knownContacts = new Set(contacts.map((c) => c.id));
   const agentEmails = new Set(
     agents.map((a) => a.contact?.email?.toLowerCase()).filter(Boolean),
   );
@@ -286,9 +317,9 @@ export async function fetchEverything(
     const byAgent =
       agentNames.has(t.requester_id) ||
       agentEmails.has(t.requester?.email?.toLowerCase());
-    if (t.requester?.id && !known.has(t.requester.id) && !byAgent) {
+    if (t.requester?.id && !knownContacts.has(t.requester.id) && !byAgent) {
       contacts.push({ ...t.requester, from_ticket: true });
-      known.add(t.requester.id);
+      knownContacts.add(t.requester.id);
     }
   }
   if (companies === undefined) companies = await store?.part("companies");
