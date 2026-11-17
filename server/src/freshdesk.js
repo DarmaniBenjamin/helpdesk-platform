@@ -39,6 +39,8 @@ freshdeskRouter.get("/*path", requireRole(...ADMINS), async (req, res) => {
           Authorization: `Basic ${Buffer.from(`${key}:X`).toString("base64")}`,
           "Content-Type": "application/json",
         },
+        // Don't let a slow or hung Freshdesk hold a request open forever
+        signal: AbortSignal.timeout(30 * 1000),
       },
     );
     res.status(answer.status);

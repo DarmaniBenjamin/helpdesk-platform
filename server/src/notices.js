@@ -57,11 +57,40 @@ const HOUR = 60 * 60 * 1000;
 // e.g. https://uplinkdarmani.mooo.com (links in emails go there)
 export const siteAddress = (req) => `${req.protocol}://${req.get("host")}`;
 
+// The site's main domain(s) from SITE_DOMAIN, as the server itself was
+// told them (never from a request's headers). When this is set, links in
+// emails use it, so no request can make an email link point anywhere else
+// by claiming a different address in its Host header.
+function configuredSites() {
+  return (process.env.SITE_DOMAIN ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+}
+const canonicalSite = () => {
+  const [main] = configuredSites();
+  return main ? `https://${main}` : null;
+};
+
+// The base address for links in emails the server sends on its own (no
+// request to take it from): the configured main domain if there is one,
+// else the address staff actually use (remembered below). Null if neither.
+export async function siteForBackground() {
+  return canonicalSite() ?? (await setting("siteAddress"))?.url ?? null;
+}
+
+// The base address for links in emails sent while answering a request:
+// the trusted one above, and only as a last resort the request's own
+// address (so a request's Host header can't choose where a link points).
+export async function emailBaseUrl(req) {
+  return (await siteForBackground()) ?? siteAddress(req);
+}
+
 // ---------- Invites ----------
 
 // Emails an invite link. Returns { sent, why } (see sendSystemEmail).
-export function emailInvite(req, user, token) {
-  const link = `${siteAddress(req)}/welcome/${token}`;
+export async function emailInvite(req, user, token) {
+  const link = `${await emailBaseUrl(req)}/welcome/${token}`;
   const customer = user.role === "customer";
   const hello = user.name ? `Hi ${user.name.split(" ")[0]},` : "Hi,";
   return sendSystemEmail({
@@ -130,7 +159,7 @@ passwordRouter.post("/forgot", async (req, res) => {
       user.name ? `Hi ${user.name.split(" ")[0]},` : "Hi,",
       "",
       "Someone (hopefully you) asked to reset your password. Open this link to choose a new one:",
-      `${await siteForEmails(req)}/reset/${token}`,
+      `${await emailBaseUrl(req)}/reset/${token}`,
       "",
       "The link works once, for 1 hour. If you didn't ask for this, you can ignore this email: your password stays the same.",
     ].join("\n"),
@@ -206,18 +235,13 @@ async function saveSetting(key, value) {
 // Remembered each time staff open the app (index.js calls this).
 let knownSite = null;
 export async function rememberSite(req) {
+  // When a main domain is configured, that's what emails use (emailBaseUrl),
+  // so there's nothing to remember and nothing a request's Host can poison.
+  if (canonicalSite()) return;
   const url = siteAddress(req);
   if (url === knownSite) return;
   knownSite = url;
   await saveSetting("siteAddress", { url }).catch(() => {});
-}
-
-// The address for a link in an email asked for by someone who isn't
-// signed in (e.g. "forgot password"): the one staff use, not whatever
-// address the request claims to be for, so a request made to look like
-// it came through another website can't put that website in the link.
-async function siteForEmails(req) {
-  return (await setting("siteAddress"))?.url ?? siteAddress(req);
 }
 
 // The link in the email: the ticket number and a signature, so it only
@@ -247,7 +271,7 @@ async function askForFeedback() {
   try {
     if ((await setting("feedbackEmail"))?.enabled === false) return;
     const closedEmailOn = (await setting("closedEmail"))?.enabled !== false;
-    const site = (await setting("siteAddress"))?.url;
+    const site = await siteForBackground();
     if (!site) return; // nobody has opened the app yet
     let since = (await setting("feedbackSince"))?.at;
     if (!since) {
@@ -334,7 +358,7 @@ async function tellClosed() {
       await saveSetting("closedEmailAfter", { id: row?.id ?? 0 });
       return;
     }
-    const site = (await setting("siteAddress"))?.url;
+    const site = await siteForBackground();
     const askFeedback = (await setting("feedbackEmail"))?.enabled !== false;
     const closes = await db
       .select({ id: messages.id, ticket: tickets, customer: customers })

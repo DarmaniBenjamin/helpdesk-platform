@@ -103,6 +103,21 @@ liveRouter.get("/", requireAuth, (req, res) => {
 
   const id = crypto.randomUUID();
   const staff = STAFF.includes(req.user.role);
+  // One person's open tabs each keep a connection, but cap how many one
+  // account can hold at once, so a misbehaving (or malicious) client can't
+  // tie up the server's memory with endless connections. Oldest goes first.
+  const MAX_PER_USER = 25;
+  const mine = [...connections.entries()]
+    .filter(([, c]) => c.userId === req.user.id)
+    .sort((a, b) => a[1].since - b[1].since);
+  for (const [oldId, c] of mine.slice(0, mine.length - (MAX_PER_USER - 1))) {
+    try {
+      c.res.end();
+    } catch {
+      // already gone
+    }
+    connections.delete(oldId);
+  }
   connections.set(id, {
     userId: req.user.id,
     staff,
