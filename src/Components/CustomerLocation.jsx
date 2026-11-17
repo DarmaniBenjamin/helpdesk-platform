@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Droplets from "./Droplets";
 import { inputClass, labelClass, secondaryButton } from "./formStyles";
+import { api } from "../api";
 import {
   currentPosition,
   directionsLink,
@@ -51,12 +52,27 @@ export default function CustomerLocation({ customer, onSave }) {
     e.preventDefault();
     setError("");
     setDone("");
-    const at = link.trim() ? parseLocation(link) : place;
+    const typed = link.trim();
+    let at = typed ? parseLocation(typed) : place;
+    // A short share link (maps.app.goo.gl, an Apple Maps link…) has no
+    // coordinates in it: the server opens it and reads them out.
+    if (!at && /^https?:\/\//i.test(typed)) {
+      setBusy(true);
+      try {
+        at = await api("/location/resolve", {
+          method: "POST",
+          body: { url: typed },
+        });
+      } catch (err) {
+        setBusy(false);
+        setError(err.message);
+        return;
+      }
+      setBusy(false);
+    }
     if (!at) {
       setError(
-        /goo\.gl|maps\.app/i.test(link)
-          ? "Short share links don't include the place itself. Open the link, then copy the numbers from the address bar, or press and hold the spot on the map to copy its coordinates."
-          : "That doesn't look like a location. Paste a Google or Apple Maps link, or coordinates like 12.0561, -61.7486.",
+        "That doesn't look like a location. Paste a Google or Apple Maps link, or coordinates like 12.0561, -61.7486.",
       );
       return;
     }

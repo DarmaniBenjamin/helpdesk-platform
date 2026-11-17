@@ -44,6 +44,7 @@ import {
   startQuickbooksInvoices,
 } from "./quickbooks.js";
 import { remindersRouter, startReminders } from "./reminders.js";
+import { locationRouter } from "./location.js";
 import { freshdeskRouter } from "./freshdesk.js";
 import { slaRouter } from "./sla.js";
 import { requestsRouter } from "./requests.js";
@@ -287,6 +288,7 @@ app.use("/api/quickbooks", quickbooksRouter); // Integrations → QuickBooks
 app.use("/api/answers", answersRouter); // the Knowledge Base
 app.use("/api/jobs", jobsRouter); // the calendar: scheduled jobs
 app.use("/api/reminders", remindersRouter); // the Reminders page
+app.use("/api/location", locationRouter); // a maps link → coordinates (staff)
 app.use("/api/rules", rulesRouter); // assignment rules
 app.use("/api/automations", automationsRouter);
 app.use("/api/settings", settingsRouter); // Super Admin only
