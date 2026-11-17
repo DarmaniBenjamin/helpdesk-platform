@@ -27,27 +27,99 @@ export function directionsLink({ lat, lng }) {
   return `https://www.google.com/maps/dir/?api=1&destination=${where}`;
 }
 
-// Coordinates from what someone pasted: "12.0561, -61.7486", or a
-// Google Maps / Apple Maps link (…/@12.05,-61.74,17z, ?q=12.05,-61.74,
-// ?ll=…, !3d12.05!4d-61.74). Returns { lat, lng } or null.
+// { lat, lng } if they're real coordinates, else null (rejects 0,0 too)
+function coords(lat, lng) {
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    (lat || lng)
+    ? { lat, lng }
+    : null;
+}
+
+// A number with an optional compass letter: "61.40 W" → -61.40, "12.06 N"
+// → 12.06. With no letter, the sign it already has is kept.
+function signed(num, dir) {
+  const d = (dir || "").toUpperCase();
+  if (d === "S" || d === "W") return -Math.abs(Number(num));
+  if (d === "N" || d === "E") return Math.abs(Number(num));
+  return Number(num);
+}
+
+// Coordinates from what someone pasted. Handles:
+//   - "12.0561, -61.7486"              plain decimal
+//   - "12.0561° N, 61.7486° W"         with a degree sign and compass letter
+//   - 12°03'22"N 61°44'55"W            degrees, minutes, seconds
+//   - geo:12.0561,-61.7486             a geo link
+//   - a Google/Apple Maps link that has the numbers in it
+//     (…/@12.05,-61.74, ?q=…, ?ll=…, ?coordinate=…, !3d12.05!4d-61.74)
+// A short share link has no numbers in it: looksLikeMapsLink() says when to
+// hand it to the server to open instead. Returns { lat, lng } or null.
 export function parseLocation(text) {
-  const t = decodeURIComponent(String(text ?? "").trim());
-  const patterns = [
-    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/, // Google Maps place links
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  let t;
+  try {
+    t = decodeURIComponent(raw);
+  } catch {
+    t = raw;
+  }
+
+  // 1. Numbers inside a maps or geo link
+  const inLink = [
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/, // Google place
     /@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/, // …/@lat,lng,zoom
-    /[?&](?:q|ll|query|daddr|destination|sll)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
-    /^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/, // plain "lat, lng"
+    /[?&](?:q|ll|query|daddr|destination|sll|center|coordinate|near)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+    /^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
   ];
-  for (const p of patterns) {
+  for (const p of inLink) {
     const m = t.match(p);
     if (m) {
-      const lat = Number(m[1]);
-      const lng = Number(m[2]);
-      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng))
-        return { lat, lng };
+      const at = coords(Number(m[1]), Number(m[2]));
+      if (at) return at;
     }
   }
+  // It's a link but the numbers weren't in it (a short share link): don't
+  // guess from stray digits — the server opens it instead
+  if (looksLikeMapsLink(t)) return null;
+
+  // 2. Degrees, minutes, seconds: 12°03'48.0"N 61°24'13.7"W
+  const dms = t.match(
+    /(\d+)\s*[°\s]\s*(\d+)\s*['’\s]\s*([\d.]+)\s*["”\s]*\s*([NSEW])[,\s]+\s*(\d+)\s*[°\s]\s*(\d+)\s*['’\s]\s*([\d.]+)\s*["”\s]*\s*([NSEW])/i,
+  );
+  if (dms) {
+    const dec = (deg, min, sec, dir) =>
+      signed(Number(deg) + Number(min) / 60 + Number(sec) / 3600, dir);
+    const at = coords(
+      dec(dms[1], dms[2], dms[3], dms[4]),
+      dec(dms[5], dms[6], dms[7], dms[8]),
+    );
+    if (at) return at;
+  }
+
+  // 3. A decimal pair, each with an optional degree sign and compass letter
+  const dec = t.match(
+    /(-?\d+(?:\.\d+)?)\s*°?\s*([NSEW])?[,\s]+\s*(-?\d+(?:\.\d+)?)\s*°?\s*([NSEW])?/i,
+  );
+  if (dec) {
+    const at = coords(signed(dec[1], dec[2]), signed(dec[3], dec[4]));
+    if (at) return at;
+  }
   return null;
+}
+
+// Does this look like a maps link to hand to the server to open — even if
+// it's a short share link, or is missing the https:// in front?
+export function looksLikeMapsLink(text) {
+  const t = String(text ?? "").trim();
+  return (
+    /^https?:\/\//i.test(t) ||
+    /(?:^|\/\/|\.)(?:goo\.gl|maps\.app\.goo\.gl|maps\.apple\.com|maps\.google\.|g\.co)\b/i.test(
+      t,
+    ) ||
+    /\bgoogle\.[a-z.]+\/maps\b/i.test(t)
+  );
 }
 
 // This phone's position, as exact as it can get (GPS). The browser asks

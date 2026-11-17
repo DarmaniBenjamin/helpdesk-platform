@@ -13,6 +13,7 @@ import { api } from "../api";
 import {
   currentPosition,
   directionsLink,
+  looksLikeMapsLink,
   mapsLink,
   parseLocation,
 } from "../location";
@@ -54,15 +55,14 @@ export default function CustomerLocation({ customer, onSave }) {
     setDone("");
     const typed = link.trim();
     let at = typed ? parseLocation(typed) : place;
-    // A short share link (maps.app.goo.gl, an Apple Maps link…) has no
-    // coordinates in it: the server opens it and reads them out.
-    if (!at && /^https?:\/\//i.test(typed)) {
+    // A share link (maps.app.goo.gl, an Apple Maps link…) has no coordinates
+    // in it: the server opens it and reads them out. Works even if the
+    // https:// in front got left off when it was copied.
+    if (!at && typed && looksLikeMapsLink(typed)) {
+      const url = /^https?:\/\//i.test(typed) ? typed : `https://${typed}`;
       setBusy(true);
       try {
-        at = await api("/location/resolve", {
-          method: "POST",
-          body: { url: typed },
-        });
+        at = await api("/location/resolve", { method: "POST", body: { url } });
       } catch (err) {
         setBusy(false);
         setError(err.message);

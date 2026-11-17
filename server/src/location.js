@@ -91,9 +91,12 @@ locationRouter.post("/resolve", requireRole(...STAFF), async (req, res) => {
   if (tooMany(req.user.id))
     throw new BadInput("That's a lot of links at once. Wait a moment.", 429);
 
+  let input = String(req.body?.url ?? "").trim();
+  // Accept a link that was copied without the https:// in front
+  if (input && !/^[a-z][a-z0-9+.-]*:\/\//i.test(input)) input = `https://${input}`;
   let url;
   try {
-    url = new URL(String(req.body?.url ?? "").trim());
+    url = new URL(input);
   } catch {
     throw new BadInput("Paste a Google or Apple Maps link.");
   }
