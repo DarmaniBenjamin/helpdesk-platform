@@ -232,7 +232,7 @@ export default function CustomerLocation({ customer, onSave }) {
             ) : (
               <Crosshair className="h-4 w-4" />
             )}
-            {place ? "I'm here: update it" : "I'm here: save it"}
+            {place ? "I'm here" : "I'm here: save it"}
           </button>
           <button
             type="button"
